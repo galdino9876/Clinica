@@ -12,62 +12,68 @@ import Users from "./pages/Users";
 import Finance from "./pages/Finance";
 import NotFound from "./pages/NotFound";
 import Confirmations from "./pages/Confirmations";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+// Criando a instância do QueryClient
+const queryClient = new QueryClient();
 
 const App = () => {
   return (
     <ThemeProvider defaultTheme="light" storageKey="vite-ui-theme">
-      <Router>
-        <AuthProvider>
-          <AppointmentProvider>
-            <Routes>
-              <Route path="/login" element={<LoginPage />} />
-              <Route
-                path="/"
-                element={
-                  <PrivateRoute>
-                    <Index />
-                  </PrivateRoute>
-                }
-              />
-              <Route
-                path="/patients"
-                element={
-                  <PrivateRoute>
-                    <Patients />
-                  </PrivateRoute>
-                }
-              />
-              <Route
-                path="/users"
-                element={
-                  <PrivateRoute allowedRoles={["admin"]}>
-                    <Users />
-                  </PrivateRoute>
-                }
-              />
-              <Route
-                path="/finance"
-                element={
-                  <PrivateRoute allowedRoles={["admin", "receptionist", "psychologist"]}>
-                    <Finance />
-                  </PrivateRoute>
-                }
-              />
-              <Route
-                path="/confirmations"
-                element={
-                  <PrivateRoute allowedRoles={["admin"]}>
-                    <Confirmations />
-                  </PrivateRoute>
-                }
-              />
-              <Route path="/404" element={<NotFound />} />
-              <Route path="*" element={<Navigate to="/404" replace />} />
-            </Routes>
-            <Toaster />
-          </AppointmentProvider>
-        </AuthProvider>
-      </Router>
+      <QueryClientProvider client={queryClient}>
+        <Router>
+          <AuthProvider>
+            <AppointmentProvider>
+              <Routes>
+                <Route path="/login" element={<LoginPage />} />
+                <Route
+                  path="/"
+                  element={
+                    <PrivateRoute>
+                      <Index />
+                    </PrivateRoute>
+                  }
+                />
+                <Route
+                  path="/patients"
+                  element={
+                    <PrivateRoute>
+                      <Patients />
+                    </PrivateRoute>
+                  }
+                />
+                <Route
+                  path="/users"
+                  element={
+                    <PrivateRoute allowedRoles={["admin"]}>
+                      <Users />
+                    </PrivateRoute>
+                  }
+                />
+                <Route
+                  path="/finance"
+                  element={
+                    <PrivateRoute allowedRoles={["admin", "receptionist", "psychologist"]}>
+                      <Finance />
+                    </PrivateRoute>
+                  }
+                />
+                <Route
+                  path="/confirmations"
+                  element={
+                    <PrivateRoute allowedRoles={["admin"]}>
+                      <Confirmations />
+                    </PrivateRoute>
+                  }
+                />
+                <Route path="/404" element={<NotFound />} />
+                <Route path="*" element={<Navigate to="/404" replace />} />
+              </Routes>
+              <Toaster />
+            </AppointmentProvider>
+          </AuthProvider>
+        </Router>
+      </QueryClientProvider>
     </ThemeProvider>
   );
 };

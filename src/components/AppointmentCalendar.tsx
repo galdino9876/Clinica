@@ -234,6 +234,17 @@ const AppointmentCalendar = () => {
           height: 6px;
           border-radius: 50%;
         }
+        .react-calendar__tile {
+          color: black !important;
+          font-weight: 500;
+        }
+        .react-calendar__tile--active {
+          background-color: #007bff !important;
+          color: white !important;
+        }
+        .react-calendar__tile:disabled {
+          color: #757575 !important;
+        }
         `}
       </style>
     </div>
