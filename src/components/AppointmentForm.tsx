@@ -32,7 +32,7 @@ const AppointmentForm = ({
   existingAppointment,
   onPsychologistSelected 
 }: AppointmentFormProps) => {
-  const { addAppointment, updateAppointment, patients, rooms, findNextAvailableSlot } = useAppointments();
+  const { addAppointment, updateAppointment, patients, rooms, findNextAvailableSlot, appointments } = useAppointments();
   const { getPsychologists } = useAuth();
   const [isPatientFormOpen, setIsPatientFormOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<string>(existingAppointment?.patient.id || "");
@@ -47,6 +47,7 @@ const AppointmentForm = ({
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const [nextAvailableSlot, setNextAvailableSlot] = useState<{ date: Date, startTime: string, endTime: string } | null>(null);
   const [appointmentType, setAppointmentType] = useState(existingAppointment?.appointmentType || "presential");
+  const [conflictError, setConflictError] = useState<string | null>(null);
   
   // Obter a lista de psicólogos do sistema
   const psychologists = getPsychologists();
@@ -79,6 +80,39 @@ const AppointmentForm = ({
     }
   }, [psychologistId, findNextAvailableSlot, existingAppointment]);
 
+  // Função para verificar se um horário já está ocupado pelo psicólogo
+  const isTimeSlotOccupied = (psychologistId: string, date: Date, startTime: string, endTime: string) => {
+    const dateString = format(date, 'yyyy-MM-dd');
+    
+    // Ignorar o próprio agendamento se estiver editando
+    const existingAppointments = appointments.filter(app => 
+      app.psychologistId === psychologistId && 
+      app.date === dateString && 
+      (existingAppointment ? app.id !== existingAppointment.id : true)
+    );
+
+    // Verifica se há sobreposição com algum agendamento existente
+    return existingAppointments.some(app => {
+      const appStartMinutes = timeToMinutes(app.startTime);
+      const appEndMinutes = timeToMinutes(app.endTime);
+      const newStartMinutes = timeToMinutes(startTime);
+      const newEndMinutes = timeToMinutes(endTime);
+
+      // Verifica se há sobreposição
+      return (
+        (newStartMinutes >= appStartMinutes && newStartMinutes < appEndMinutes) || // Novo início dentro de existente
+        (newEndMinutes > appStartMinutes && newEndMinutes <= appEndMinutes) || // Novo fim dentro de existente
+        (newStartMinutes <= appStartMinutes && newEndMinutes >= appEndMinutes) // Novo engloba existente
+      );
+    });
+  };
+
+  // Helper function to convert time strings to minutes for comparison
+  const timeToMinutes = (time: string): number => {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+
   // Função para calcular horários disponíveis com base no psicólogo selecionado
   useEffect(() => {
     if (!psychologistId) {
@@ -106,27 +140,60 @@ const AppointmentForm = ({
 
     // Gera opções de horário dentro do intervalo de trabalho do psicólogo
     const times = generateTimeOptionsInRange(availability.startTime, availability.endTime);
-    setAvailableTimes(times);
     
-    // Define um horário inicial válido
-    if (times.length > 0 && !times.includes(startTime)) {
-      setStartTime(times[0]);
+    // Filtra os horários ocupados
+    const dateString = format(date, 'yyyy-MM-dd');
+    const occupiedSlots = appointments
+      .filter(app => 
+        app.psychologistId === psychologistId && 
+        app.date === dateString && 
+        (existingAppointment ? app.id !== existingAppointment.id : true)
+      )
+      .map(app => ({ start: app.startTime, end: app.endTime }));
+    
+    // Atualiza a lista de horários disponíveis excluindo os já ocupados
+    const availableSlots = times.filter(time => {
+      // Assume uma consulta de 1 hora para simplificar
+      const startHour = parseInt(time.split(':')[0]);
+      const startMinute = parseInt(time.split(':')[1]);
+      let endHour = startHour + 1;
+      const endTimeStr = `${endHour.toString().padStart(2, "0")}:${startMinute.toString().padStart(2, "0")}`;
+      
+      return !isTimeSlotOccupied(psychologistId, date, time, endTimeStr);
+    });
+    
+    setAvailableTimes(availableSlots);
+    
+    // Define um horário inicial válido se necessário
+    if (availableSlots.length > 0 && !availableSlots.includes(startTime)) {
+      setStartTime(availableSlots[0]);
       
       // Define o horário de término como 1 hora após o início
-      const startHour = parseInt(times[0].split(':')[0]);
-      const startMinute = parseInt(times[0].split(':')[1]);
+      const startHour = parseInt(availableSlots[0].split(':')[0]);
+      const startMinute = parseInt(availableSlots[0].split(':')[1]);
       let endHour = startHour + 1;
       const endTimeString = `${endHour.toString().padStart(2, "0")}:${startMinute.toString().padStart(2, "0")}`;
       
-      // Verifica se o horário de término está dentro do intervalo disponível
-      if (times.includes(endTimeString)) {
-        setEndTime(endTimeString);
-      } else {
-        // Se não estiver, usa o último horário disponível
-        setEndTime(times[times.length - 1]);
-      }
+      setEndTime(endTimeString);
     }
-  }, [psychologistId, dayOfWeek, date, psychologists]);
+  }, [psychologistId, dayOfWeek, date, psychologists, appointments, existingAppointment]);
+
+  // Efeito para verificar conflitos de horário quando mudam os horários selecionados
+  useEffect(() => {
+    if (!psychologistId || !startTime || !endTime) {
+      setConflictError(null);
+      return;
+    }
+
+    // Verifica se o horário selecionado já está ocupado
+    const hasConflict = isTimeSlotOccupied(psychologistId, date, startTime, endTime);
+    
+    if (hasConflict) {
+      setConflictError(`O psicólogo já possui um agendamento entre ${startTime} e ${endTime} nesta data.`);
+    } else {
+      setConflictError(null);
+    }
+  }, [psychologistId, date, startTime, endTime]);
 
   // Função para gerar opções de horário padrão (das 8:00 às 20:00)
   const generateDefaultTimeOptions = () => {
@@ -170,6 +237,12 @@ const AppointmentForm = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Verifica novamente se há conflitos de horário
+    if (isTimeSlotOccupied(psychologistId, date, startTime, endTime)) {
+      setConflictError(`O psicólogo já possui um agendamento entre ${startTime} e ${endTime} nesta data.`);
+      return;
+    }
+
     const selectedPatientData = patients.find((p) => p.id === selectedPatient);
     if (!selectedPatientData) return;
 
@@ -198,7 +271,7 @@ const AppointmentForm = ({
       date: format(date, "yyyy-MM-dd"),
       startTime,
       endTime,
-      status: "pending" as AppointmentStatus, // Fix: cast to AppointmentStatus
+      status: "pending" as AppointmentStatus,
       paymentMethod: paymentMethod as "private" | "insurance",
       insuranceType: paymentMethod === "insurance" ? insuranceType as any : null,
       value: parseFloat(value),
@@ -390,6 +463,14 @@ const AppointmentForm = ({
           </Select>
         </div>
 
+        {conflictError && (
+          <div className="col-span-2">
+            <Alert variant="destructive">
+              <AlertDescription>{conflictError}</AlertDescription>
+            </Alert>
+          </div>
+        )}
+
         <div className="space-y-2">
           <Label htmlFor="paymentMethod">Método de Pagamento</Label>
           <Select value={paymentMethod} onValueChange={setPaymentMethod} required>
@@ -444,7 +525,7 @@ const AppointmentForm = ({
         </Button>
         <Button 
           type="submit"
-          disabled={availableTimes.length === 0 || !startTime || !endTime}
+          disabled={availableTimes.length === 0 || !startTime || !endTime || !!conflictError}
         >
           {existingAppointment ? "Atualizar" : "Agendar"} Consulta
         </Button>
