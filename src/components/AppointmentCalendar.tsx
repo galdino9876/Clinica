@@ -110,7 +110,7 @@ const AppointmentCalendar = () => {
       
       {/* Modal for appointment details */}
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="w-full max-w-3xl max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold capitalize">
               {formatSelectedDate(selectedDate)}

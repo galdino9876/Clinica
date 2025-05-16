@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,10 +38,10 @@ const PatientForm = ({ patient, onSave, onCancel }: PatientFormProps) => {
       updatePatient(updatedPatient);
       onSave(updatedPatient);
     } else {
-      // Don't check the return value for truthiness since addPatient might be void
+      // Create a new patient and ensure we return a Patient object
       const newPatient = addPatient(patientData);
-      // Just pass the result of addPatient directly
-      onSave(newPatient);
+      // TypeScript requires explicit typing here to prevent void error
+      onSave(newPatient as Patient);
     }
   };
 
