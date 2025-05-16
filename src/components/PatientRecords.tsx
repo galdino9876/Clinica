@@ -23,6 +23,9 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
   const [editingNotes, setEditingNotes] = useState("");
   
   const isAdmin = user?.role === "admin";
+  const isPsychologist = user?.role === "psychologist";
+  // Admin ou Psicólogo podem editar prontuários
+  const canEditRecords = isAdmin || isPsychologist;
 
   const records = patientRecords.filter(
     (record) => record.patientId === patient.id
@@ -33,7 +36,7 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
 
     addPatientRecord({
       patientId: patient.id,
-      appointmentId: "", // No specific appointment
+      appointmentId: "", // Sem agendamento específico
       date: new Date().toISOString().split("T")[0],
       notes,
       createdBy: user?.id || "",
@@ -100,7 +103,7 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
                 <CardContent className="p-4">
                   <div className="flex justify-between mb-2">
                     <p className="text-sm font-medium">{formatDate(record.date)}</p>
-                    {isAdmin && (
+                    {canEditRecords && (
                       <Button variant="ghost" size="sm" onClick={() => handleEditRecord(record)}>
                         <Pencil className="h-4 w-4" />
                       </Button>

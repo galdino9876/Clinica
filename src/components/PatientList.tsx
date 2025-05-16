@@ -23,11 +23,12 @@ const PatientList = () => {
   const isReceptionist = user?.role === "receptionist";
   const isPsychologist = user?.role === "psychologist";
   const canManagePatients = isAdmin || isReceptionist;
+  const canViewRecords = isAdmin || isPsychologist; // Admin agora também pode visualizar prontuários
 
-  // For psychologists, filter patients that are related to their appointments
+  // Para psicólogos, filtrar pacientes relacionados aos seus agendamentos
   let filteredPatients = patients;
   
-  // Apply search filter
+  // Aplicar filtro de pesquisa
   filteredPatients = filteredPatients.filter(
     (patient) =>
       patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -129,7 +130,7 @@ const PatientList = () => {
                     </td>
                     <td className="px-4 py-4 whitespace-nowrap text-right">
                       <div className="flex justify-end space-x-2">
-                        {isPsychologist && (
+                        {canViewRecords && (
                           <Button
                             variant="ghost"
                             size="sm"
