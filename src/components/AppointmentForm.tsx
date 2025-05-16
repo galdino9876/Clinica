@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,9 +22,15 @@ interface AppointmentFormProps {
   selectedDate: Date;
   onClose: () => void;
   existingAppointment?: any; // Para edição de agendamentos existentes
+  onPsychologistSelected?: (psychologistId: string) => void;
 }
 
-const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: AppointmentFormProps) => {
+const AppointmentForm = ({ 
+  selectedDate, 
+  onClose, 
+  existingAppointment,
+  onPsychologistSelected 
+}: AppointmentFormProps) => {
   const { addAppointment, updateAppointment, patients, rooms, findNextAvailableSlot } = useAppointments();
   const { getPsychologists } = useAuth();
   const [isPatientFormOpen, setIsPatientFormOpen] = useState(false);
@@ -45,6 +52,14 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
 
   // Determinar o dia da semana da data selecionada (0-6, onde 0 é domingo)
   const dayOfWeek = date.getDay();
+
+  // Handle psychologist selection for calendar highlighting
+  const handlePsychologistChange = (value: string) => {
+    setPsychologistId(value);
+    if (onPsychologistSelected) {
+      onPsychologistSelected(value);
+    }
+  };
 
   // Efeito para encontrar o próximo horário disponível quando o psicólogo é selecionado
   useEffect(() => {
@@ -251,7 +266,7 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
 
         <div className="space-y-2">
           <Label htmlFor="psychologist">Psicólogo</Label>
-          <Select value={psychologistId} onValueChange={setPsychologistId} required>
+          <Select value={psychologistId} onValueChange={handlePsychologistChange} required>
             <SelectTrigger id="psychologist">
               <SelectValue placeholder="Selecione o psicólogo" />
             </SelectTrigger>

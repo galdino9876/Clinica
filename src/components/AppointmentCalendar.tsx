@@ -20,8 +20,9 @@ const AppointmentCalendar = () => {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const { appointments } = useAppointments();
-  const { user } = useAuth();
-
+  const { user, getPsychologists } = useAuth();
+  const [selectedPsychologistId, setSelectedPsychologistId] = useState<string | null>(null);
+  
   // Filter appointments based on user role and selected date
   const getAppointmentsForDate = (date: Date) => {
     const dateStr = date.toISOString().split('T')[0];
@@ -47,13 +48,43 @@ const AppointmentCalendar = () => {
   const formatSelectedDate = (date: Date) => {
     return format(date, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR });
   };
+  
+  // Get list of all psychologists
+  const psychologists = getPsychologists();
+  
+  // Determine if a date is available for the selected psychologist
+  const isPsychologistAvailableOnDate = (date: Date) => {
+    if (!selectedPsychologistId) return false;
+    
+    const psychologist = psychologists.find(p => p.id === selectedPsychologistId);
+    if (!psychologist || !psychologist.workingHours) return false;
+    
+    const dayOfWeek = date.getDay();
+    
+    // Check if the psychologist works on this day of the week
+    const workingHoursForDay = psychologist.workingHours.find(wh => wh.dayOfWeek === dayOfWeek);
+    if (!workingHoursForDay) return false;
+    
+    // Check if there's any availability on this date
+    const dateStr = date.toISOString().split('T')[0];
+    const psychologistAppointmentsOnDate = appointments.filter(
+      app => app.psychologistId === selectedPsychologistId && app.date === dateStr
+    );
+    
+    // If no appointments or some free time slots, mark as available
+    if (psychologistAppointmentsOnDate.length === 0) return true;
+    
+    // More complex check can be added here to determine if there are free time slots
+    // based on working hours and existing appointments
+    return true; // Simplified for now, just showing working days
+  };
 
   // Custom tile content to show appointment indicators
   const tileContent = ({ date, view }: { date: Date; view: string }) => {
     if (view !== "month") return null;
     
     const appointmentsForDate = getAppointmentsForDate(date);
-    if (appointmentsForDate.length === 0) return null;
+    if (appointmentsForDate.length === 0 && !isPsychologistAvailableOnDate(date)) return null;
     
     // Count appointments by status
     const confirmedCount = appointmentsForDate.filter(app => app.status === "confirmed").length;
@@ -72,11 +103,27 @@ const AppointmentCalendar = () => {
             className="appointment-dot bg-yellow-500"
           />
         )}
+        {isPsychologistAvailableOnDate(date) && (
+          <div
+            className="appointment-dot bg-emerald-400"
+            style={{ marginRight: "3px" }}
+          />
+        )}
         {appointmentsForDate.length > (confirmedCount + pendingCount) && (
           <span className="text-xs text-gray-500">+{appointmentsForDate.length - (confirmedCount + pendingCount)}</span>
         )}
       </div>
     );
+  };
+  
+  const tileClassName = ({ date, view }: { date: Date; view: string }) => {
+    if (view !== "month") return null;
+    
+    if (isPsychologistAvailableOnDate(date)) {
+      return "available-date";
+    }
+    
+    return null;
   };
 
   const handleDateChange = (value: Value) => {
@@ -85,6 +132,22 @@ const AppointmentCalendar = () => {
       setIsDetailsOpen(true);
     }
   };
+  
+  // Update the selected psychologist when the form modal opens
+  const handleCreateModalOpen = () => {
+    setIsCreateModalOpen(true);
+  };
+  
+  // Update selectedPsychologistId when form closes
+  const handleFormClose = () => {
+    setIsCreateModalOpen(false);
+    setSelectedPsychologistId(null);
+  };
+  
+  // Function to update selected psychologist from the form
+  const handlePsychologistSelected = (psychologistId: string) => {
+    setSelectedPsychologistId(psychologistId);
+  };
 
   return (
     <div className="w-full max-w-4xl mx-auto">
@@ -92,7 +155,7 @@ const AppointmentCalendar = () => {
         <h1 className="text-2xl font-bold">Agenda</h1>
         {(user?.role === "admin" || user?.role === "receptionist") && (
           <Button 
-            onClick={() => setIsCreateModalOpen(true)} 
+            onClick={handleCreateModalOpen} 
             className="bg-clinic-600 hover:bg-clinic-700"
           >
             <Plus className="h-4 w-4 mr-1" /> Novo Agendamento
@@ -105,6 +168,7 @@ const AppointmentCalendar = () => {
           onChange={handleDateChange}
           value={selectedDate}
           tileContent={tileContent}
+          tileClassName={tileClassName}
           prevLabel={<ChevronLeft className="h-5 w-5" />}
           nextLabel={<ChevronRight className="h-5 w-5" />}
           prev2Label={null}
@@ -117,9 +181,13 @@ const AppointmentCalendar = () => {
             <div className="w-3 h-3 rounded-full bg-green-500 mr-1"></div>
             <span className="text-xs">Confirmadas</span>
           </div>
-          <div className="flex items-center">
+          <div className="flex items-center mr-4">
             <div className="w-3 h-3 rounded-full bg-yellow-500 mr-1"></div>
             <span className="text-xs">Pendentes</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-3 h-3 rounded-full bg-emerald-400 mr-1"></div>
+            <span className="text-xs">Disponibilidade do psicólogo</span>
           </div>
         </div>
       </div>
@@ -147,10 +215,22 @@ const AppointmentCalendar = () => {
           </DialogHeader>
           <AppointmentForm
             selectedDate={selectedDate}
-            onClose={() => setIsCreateModalOpen(false)}
+            onClose={handleFormClose}
+            onPsychologistSelected={handlePsychologistSelected}
           />
         </DialogContent>
       </Dialog>
+
+      <style jsx global>{`
+        .available-date {
+          background-color: rgba(52, 211, 153, 0.15);
+        }
+        .appointment-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+        }
+      `}</style>
     </div>
   );
 };
