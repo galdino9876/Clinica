@@ -23,6 +23,14 @@ const AppointmentCalendar = () => {
   const { user, getPsychologists } = useAuth();
   const [selectedPsychologistId, setSelectedPsychologistId] = useState<string | null>(null);
   
+  // Force re-render when appointments change
+  const [, setForceUpdate] = useState<number>(0);
+
+  useEffect(() => {
+    // Force component to re-render when appointments change
+    setForceUpdate(prev => prev + 1);
+  }, [appointments]);
+  
   // Filter appointments based on user role and selected date
   const getAppointmentsForDate = (date: Date) => {
     const dateStr = date.toISOString().split('T')[0];
