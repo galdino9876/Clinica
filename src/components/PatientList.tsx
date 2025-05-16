@@ -1,3 +1,4 @@
+
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAppointments } from "@/context/AppointmentContext";
@@ -11,7 +12,7 @@ import PatientRecords from "./PatientRecords";
 import { Textarea } from "@/components/ui/textarea";
 
 const PatientList = () => {
-  const { patients, deactivatePatient, reactivatePatient } = useAppointments();
+  const { patients, deactivatePatient, reactivatePatient, appointments } = useAppointments();
   const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddPatientOpen, setIsAddPatientOpen] = useState(false);
@@ -37,6 +38,16 @@ const PatientList = () => {
   // Para psicólogos, filtrar pacientes relacionados aos seus agendamentos
   let filteredPatients = patients;
 
+  // Se for psicólogo, filtrar apenas pacientes vinculados a seus agendamentos
+  if (isPsychologist && user) {
+    // Primeiro, pegamos todos os IDs de pacientes vinculados ao psicólogo
+    const psychologistAppointments = appointments.filter(app => app.psychologistId === user.id);
+    const patientIds = new Set(psychologistAppointments.map(app => app.patient.id));
+    
+    // Filtramos apenas os pacientes cujos IDs estão no conjunto
+    filteredPatients = patients.filter(patient => patientIds.has(patient.id));
+  }
+  
   // Para admin, mostrar todos os pacientes incluindo inativos
   // Para recepcionista e psicólogo, mostrar apenas pacientes ativos
   if (!isAdmin) {
@@ -141,6 +152,12 @@ const PatientList = () => {
           onChange={(e) => setSearchTerm(e.target.value)}
         />
       </div>
+
+      {isPsychologist && filteredPatients.length === 0 && (
+        <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-md p-4 mt-4">
+          <p>Você ainda não possui pacientes vinculados. Os pacientes serão exibidos aqui quando forem agendados para consulta com você.</p>
+        </div>
+      )}
 
       <div className="bg-white rounded-lg shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
