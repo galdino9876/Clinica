@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +12,7 @@ import {
 import { useAppointments } from "@/context/AppointmentContext";
 import { useAuth } from "@/context/AuthContext";
 import { format } from "date-fns";
-import { Patient } from "@/types/appointment";
+import { Patient, AppointmentStatus } from "@/types/appointment";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import PatientForm from "./PatientForm";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -39,7 +38,7 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
   const [value, setValue] = useState(existingAppointment?.value?.toString() || "200");
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const [nextAvailableSlot, setNextAvailableSlot] = useState<{ date: Date, startTime: string, endTime: string } | null>(null);
-  const [status, setStatus] = useState<"scheduled" | "pending" | "confirmed">(existingAppointment?.status || "pending");
+  const [status, setStatus] = useState<AppointmentStatus>(existingAppointment?.status || "pending");
   
   // Obter a lista de psicólogos do sistema
   const psychologists = getPsychologists();
@@ -215,6 +214,15 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
     if (!psychologist || !psychologist.workingHours) return true;
     
     return psychologist.workingHours.some(wh => wh.dayOfWeek === dayOfWeek);
+  };
+
+  // This function handles the status change properly with type safety
+  const handleStatusChange = (value: string) => {
+    // Only accept values that conform to AppointmentStatus
+    if (value === "pending" || value === "confirmed" || value === "scheduled" || 
+        value === "cancelled" || value === "completed") {
+      setStatus(value);
+    }
   };
 
   return (
@@ -393,7 +401,7 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
 
         <div className="space-y-2">
           <Label htmlFor="status">Status</Label>
-          <Select value={status} onValueChange={setStatus} required>
+          <Select value={status} onValueChange={handleStatusChange} required>
             <SelectTrigger id="status">
               <SelectValue placeholder="Selecione o status" />
             </SelectTrigger>
