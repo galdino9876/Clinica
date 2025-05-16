@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import Calendar from "react-calendar";
 import { useAppointments } from "@/context/AppointmentContext";
@@ -221,7 +220,8 @@ const AppointmentCalendar = () => {
         </DialogContent>
       </Dialog>
 
-      <style jsx global>{`
+      <style>
+        {`
         .available-date {
           background-color: rgba(52, 211, 153, 0.15);
         }
@@ -230,7 +230,8 @@ const AppointmentCalendar = () => {
           height: 6px;
           border-radius: 50%;
         }
-      `}</style>
+        `}
+      </style>
     </div>
   );
 };
