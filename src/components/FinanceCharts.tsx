@@ -23,6 +23,10 @@ import {
 } from "@/components/ui/select";
 import { format, subDays, startOfWeek, startOfMonth, startOfYear } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { jsPDF } from "jspdf";
+import 'jspdf-autotable';
+import { Download } from "lucide-react";
 
 type FilterPeriod = "day" | "week" | "month" | "year";
 
@@ -39,6 +43,7 @@ const FinanceCharts = () => {
   const [selectedPsychologist, setSelectedPsychologist] = useState<string>(
     user?.role === "psychologist" ? user.id : "all"
   );
+  const [showReportTable, setShowReportTable] = useState(false);
 
   const isAdmin = user?.role === "admin";
   const isPsychologist = user?.role === "psychologist";
@@ -46,7 +51,7 @@ const FinanceCharts = () => {
   // If user is a psychologist, they can only see their own data
   const effectivePsychologist = isPsychologist ? user?.id : selectedPsychologist;
 
-  // Filter appointments based on date and psychologist
+  // Filter appointments based on date, psychologist, and status
   const getFilteredAppointments = () => {
     let startDate: Date;
     const today = new Date();
@@ -75,7 +80,10 @@ const FinanceCharts = () => {
         effectivePsychologist === "all" || 
         app.psychologistId === effectivePsychologist;
       
-      return matchesDate && matchesPsychologist;
+      // Only include confirmed appointments
+      const isConfirmed = app.status === "confirmed";
+      
+      return matchesDate && matchesPsychologist && isConfirmed;
     });
   };
   
@@ -160,6 +168,57 @@ const FinanceCharts = () => {
         return "";
     }
   };
+
+  // Generate PDF report
+  const generateReport = () => {
+    const doc = new jsPDF();
+    
+    // Add title
+    const title = `Relatório Financeiro - ${getPeriodName()}`;
+    doc.setFontSize(18);
+    doc.text(title, 14, 20);
+    
+    // Add subtitle with psychologist info if applicable
+    let subtitle = "Todos os Psicólogos";
+    if (effectivePsychologist !== "all") {
+      const psych = psychologists.find(p => p.id === effectivePsychologist);
+      subtitle = psych ? psych.name : "Psicólogo";
+    }
+    doc.setFontSize(14);
+    doc.text(subtitle, 14, 30);
+    
+    // Add summary
+    doc.setFontSize(12);
+    doc.text(`Total de Consultas: ${filteredAppointments.length}`, 14, 40);
+    doc.text(`Receita Total: R$ ${totalRevenue.toFixed(2)}`, 14, 47);
+
+    // Add date of generation
+    const generationDate = format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR });
+    doc.text(`Data de Geração: ${generationDate}`, 14, 54);
+    
+    // Generate table data
+    const tableData = filteredAppointments.map(app => [
+      app.patient.name,
+      format(new Date(app.date), "dd/MM/yyyy", { locale: ptBR }),
+      `${app.startTime} - ${app.endTime}`,
+      `R$ ${app.value.toFixed(2)}`,
+      app.psychologistName
+    ]);
+    
+    // Add table
+    (doc as any).autoTable({
+      startY: 60,
+      head: [['Paciente', 'Data', 'Horário', 'Valor', 'Psicólogo']],
+      body: tableData,
+      theme: 'grid',
+      headStyles: { fillColor: [0, 123, 255], textColor: 255 },
+      styles: { fontSize: 10 },
+    });
+    
+    // Save the document
+    const reportName = `relatorio-financeiro-${filterPeriod}-${format(new Date(), 'yyyyMMdd', { locale: ptBR })}.pdf`;
+    doc.save(reportName);
+  };
   
   return (
     <div className="space-y-4">
@@ -233,7 +292,7 @@ const FinanceCharts = () => {
               R$ {totalRevenue.toFixed(2)}
             </div>
             <p className="text-xs text-gray-500">
-              {filteredAppointments.length} consultas
+              {filteredAppointments.length} consultas confirmadas
             </p>
           </CardContent>
         </Card>
@@ -270,6 +329,70 @@ const FinanceCharts = () => {
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </CardContent>
+      </Card>
+      
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Relatório de Atendimentos</CardTitle>
+          <div className="flex space-x-2">
+            <Button 
+              variant="outline" 
+              size="sm"
+              onClick={() => setShowReportTable(!showReportTable)}
+            >
+              {showReportTable ? "Ocultar Detalhes" : "Mostrar Detalhes"}
+            </Button>
+            <Button 
+              onClick={generateReport} 
+              className="flex items-center gap-1" 
+              size="sm"
+            >
+              <Download className="h-4 w-4" /> Exportar PDF
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {showReportTable && (
+            <div className="rounded-md border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Paciente</TableHead>
+                    <TableHead>Data</TableHead>
+                    <TableHead>Horário</TableHead>
+                    <TableHead>Psicólogo</TableHead>
+                    <TableHead className="text-right">Valor</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredAppointments.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={5} className="text-center py-4 text-gray-500">
+                        Nenhuma consulta confirmada encontrada para este período
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    filteredAppointments.map((app) => (
+                      <TableRow key={app.id}>
+                        <TableCell>{app.patient.name}</TableCell>
+                        <TableCell>
+                          {format(new Date(app.date), "dd/MM/yyyy", { locale: ptBR })}
+                        </TableCell>
+                        <TableCell>
+                          {app.startTime} - {app.endTime}
+                        </TableCell>
+                        <TableCell>{app.psychologistName}</TableCell>
+                        <TableCell className="text-right font-medium">
+                          R$ {app.value.toFixed(2)}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
       
