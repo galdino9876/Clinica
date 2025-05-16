@@ -13,7 +13,7 @@ import {
 import { useAppointments } from "@/context/AppointmentContext";
 import { useAuth } from "@/context/AuthContext";
 import { format } from "date-fns";
-import { Patient } from "@/types/appointment";
+import { Patient, AppointmentStatus } from "@/types/appointment";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import PatientForm from "./PatientForm";
 import { Alert, AlertDescription } from "@/components/ui/alert";

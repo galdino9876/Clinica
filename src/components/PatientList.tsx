@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAppointments } from "@/context/AppointmentContext";
@@ -117,6 +116,11 @@ const PatientList = () => {
     }
   };
 
+  const handleAttendanceButtonClick = (patient: Patient) => {
+    setSelectedPatient(patient);
+    setIsAttendanceOpen(true);
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
@@ -217,10 +221,10 @@ const PatientList = () => {
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleAttendanceOpen(patient)}
+                              onClick={() => handleAttendanceButtonClick(patient)}
                               title="Atestado de Comparecimento"
                             >
-                              <FileArrowUp className="h-4 w-4" />
+                              <CircleArrowUp className="h-4 w-4" />
                             </Button>
                           </>
                         )}

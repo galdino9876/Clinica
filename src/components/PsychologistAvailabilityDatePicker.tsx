@@ -65,7 +65,7 @@ const PsychologistAvailabilityDatePicker = ({
     if (isPsychologistAvailable(date)) {
       return "bg-emerald-100 hover:bg-emerald-200";
     }
-    return "";  // Return empty string instead of undefined
+    return "";
   };
 
   return (
