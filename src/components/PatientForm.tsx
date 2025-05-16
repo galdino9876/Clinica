@@ -38,8 +38,11 @@ const PatientForm = ({ patient, onSave, onCancel }: PatientFormProps) => {
       updatePatient(updatedPatient);
       onSave(updatedPatient);
     } else {
-      const newPatient = addPatient(patientData) as Patient;
-      onSave(newPatient);
+      const newPatient = addPatient(patientData);
+      // Fix: Type safety for newPatient
+      if (newPatient) {
+        onSave(newPatient as Patient);
+      }
     }
   };
 

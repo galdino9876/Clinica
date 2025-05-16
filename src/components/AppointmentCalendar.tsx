@@ -6,6 +6,9 @@ import { useAuth } from "@/context/AuthContext";
 import AppointmentTimeSlots from "./AppointmentTimeSlots";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 import "react-calendar/dist/Calendar.css";
 
 type ValuePiece = Date | null;
@@ -13,6 +16,7 @@ type Value = ValuePiece | [ValuePiece, ValuePiece];
 
 const AppointmentCalendar = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const { appointments } = useAppointments();
   const { user } = useAuth();
 
@@ -35,6 +39,11 @@ const AppointmentCalendar = () => {
   const hasAppointments = (date: Date) => {
     const appointmentsForDate = getAppointmentsForDate(date);
     return appointmentsForDate.length > 0;
+  };
+
+  // Format date for display
+  const formatSelectedDate = (date: Date) => {
+    return format(date, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR });
   };
 
   // Custom tile content to show appointment indicators
@@ -66,42 +75,53 @@ const AppointmentCalendar = () => {
     );
   };
 
+  const handleDateChange = (value: Value) => {
+    if (value instanceof Date) {
+      setSelectedDate(value);
+      setIsDetailsOpen(true);
+    }
+  };
+
   return (
-    <div className="flex flex-col md:flex-row gap-6">
-      <div className="w-full md:w-1/2 lg:w-1/3">
-        <div className="bg-white p-4 rounded-lg shadow-sm">
-          <Calendar
-            onChange={(value: Value) => {
-              if (value instanceof Date) {
-                setSelectedDate(value);
-              }
-            }}
-            value={selectedDate}
-            tileContent={tileContent}
-            prevLabel={<ChevronLeft className="h-5 w-5" />}
-            nextLabel={<ChevronRight className="h-5 w-5" />}
-            prev2Label={null}
-            next2Label={null}
-          />
-          <div className="mt-4 flex flex-wrap gap-2">
-            <p className="text-sm text-gray-500 w-full">Legenda:</p>
-            <div className="flex items-center mr-4">
-              <div className="w-3 h-3 rounded-full bg-blue-500 mr-1"></div>
-              <span className="text-xs">Consultas</span>
-            </div>
-            <div className="flex items-center">
-              <div className="w-3 h-3 rounded-full bg-green-500 mr-1"></div>
-              <span className="text-xs">Avaliações</span>
-            </div>
+    <div className="w-full max-w-4xl mx-auto">
+      <div className="bg-white p-6 rounded-lg shadow-sm">
+        <Calendar
+          onChange={handleDateChange}
+          value={selectedDate}
+          tileContent={tileContent}
+          prevLabel={<ChevronLeft className="h-5 w-5" />}
+          nextLabel={<ChevronRight className="h-5 w-5" />}
+          prev2Label={null}
+          next2Label={null}
+          className="w-full"
+        />
+        <div className="mt-4 flex flex-wrap gap-2">
+          <p className="text-sm text-gray-500 w-full">Legenda:</p>
+          <div className="flex items-center mr-4">
+            <div className="w-3 h-3 rounded-full bg-blue-500 mr-1"></div>
+            <span className="text-xs">Consultas</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-3 h-3 rounded-full bg-green-500 mr-1"></div>
+            <span className="text-xs">Avaliações</span>
           </div>
         </div>
       </div>
-      <div className="w-full md:w-1/2 lg:w-2/3">
-        <AppointmentTimeSlots 
-          selectedDate={selectedDate}
-          appointments={getAppointmentsForDate(selectedDate)}
-        />
-      </div>
+      
+      {/* Modal for appointment details */}
+      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-semibold capitalize">
+              {formatSelectedDate(selectedDate)}
+            </DialogTitle>
+          </DialogHeader>
+          <AppointmentTimeSlots 
+            selectedDate={selectedDate}
+            appointments={getAppointmentsForDate(selectedDate)}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
