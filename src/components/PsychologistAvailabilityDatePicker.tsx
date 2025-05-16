@@ -95,7 +95,9 @@ const PsychologistAvailabilityDatePicker = ({
             className={cn("p-3 pointer-events-auto")}
             classNames={{
               day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
-              day: (date) => cn(getDayClassName(date))
+              day: cn("p-0", {
+                "bg-emerald-100 hover:bg-emerald-200": false  // This forces it to be a static value, not a function
+              })
             }}
           />
           <div className="p-3 border-t">
