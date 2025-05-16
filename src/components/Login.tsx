@@ -1,87 +1,77 @@
 
 import { useState } from "react";
-import { useAuth } from "@/context/AuthContext";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useNavigate } from "react-router-dom";
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { useAuth } from "@/context/AuthContext";
 
-const Login = () => {
-  const [email, setEmail] = useState("");
+export default function Login() {
+  const [usernameOrEmail, setUsernameOrEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const success = await login(email, password);
-    if (success) {
-      navigate("/");
+    setIsLoading(true);
+    
+    try {
+      const success = await login(usernameOrEmail, password);
+      if (success) {
+        navigate("/");
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <h1 className="text-center text-3xl font-extrabold text-gray-900">
-            Clínica de Psicologia
-          </h1>
-          <h2 className="mt-6 text-center text-2xl font-bold text-gray-900">
-            Acesso ao Sistema
-          </h2>
-        </div>
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
-          <div className="rounded-md shadow-sm space-y-4">
-            <div>
-              <Label htmlFor="email-address">Email</Label>
+    <div className="flex items-center justify-center min-h-screen bg-gray-50">
+      <Card className="w-full max-w-md">
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl font-bold text-center">Clínica Psicológica</CardTitle>
+          <CardDescription className="text-center">
+            Entre com suas credenciais para acessar o sistema
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="usernameOrEmail">Nome de usuário ou E-mail</Label>
               <Input
-                id="email-address"
-                name="email"
-                type="email"
-                autoComplete="email"
+                id="usernameOrEmail"
+                type="text"
+                placeholder="Digite seu nome de usuário ou e-mail"
+                value={usernameOrEmail}
+                onChange={(e) => setUsernameOrEmail(e.target.value)}
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
               />
             </div>
-            <div>
+            <div className="space-y-2">
               <Label htmlFor="password">Senha</Label>
               <Input
                 id="password"
-                name="password"
                 type="password"
-                autoComplete="current-password"
-                required
+                placeholder="Digite sua senha"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                required
               />
             </div>
-          </div>
-
-          <div className="flex items-center justify-center">
-            <div className="text-sm">
-              <p className="text-gray-500">
-                Usuários para testes:
-                <br />
-                admin@example.com / password
-                <br />
-                receptionist@example.com / password
-                <br />
-                john@example.com / password
-              </p>
-            </div>
-          </div>
-
-          <div>
-            <Button type="submit" className="w-full">
-              Entrar
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? "Entrando..." : "Entrar"}
             </Button>
-          </div>
-        </form>
-      </div>
+          </form>
+        </CardContent>
+        <CardFooter>
+          <p className="text-xs text-center w-full text-gray-500">
+            Esqueceu sua senha? Entre em contato com o administrador do sistema.
+          </p>
+        </CardFooter>
+      </Card>
     </div>
   );
-};
-
-export default Login;
+}

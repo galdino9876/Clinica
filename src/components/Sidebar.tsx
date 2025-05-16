@@ -1,11 +1,14 @@
 
+import { useState } from "react";
 import { NavLink } from "react-router-dom";
-import { Calendar, Users, BarChart3, LogOut, User } from "lucide-react";
+import { Calendar, Users, BarChart3, LogOut, User, Key } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
+import ChangePasswordModal from "./ChangePasswordModal";
 
 const Sidebar = () => {
   const { user, logout } = useAuth();
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
   const getNavItems = () => {
     const baseItems = [
@@ -71,6 +74,13 @@ const Sidebar = () => {
         </div>
         <div className="p-4 border-t border-gray-200">
           <button
+            onClick={() => setIsPasswordModalOpen(true)}
+            className="flex w-full items-center px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-md mb-2"
+          >
+            <Key className="mr-2 h-5 w-5" />
+            Alterar Senha
+          </button>
+          <button
             onClick={logout}
             className="flex w-full items-center px-3 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-md"
           >
@@ -79,6 +89,11 @@ const Sidebar = () => {
           </button>
         </div>
       </div>
+
+      <ChangePasswordModal 
+        isOpen={isPasswordModalOpen} 
+        onClose={() => setIsPasswordModalOpen(false)} 
+      />
     </div>
   );
 };

@@ -35,6 +35,21 @@ const AppointmentTimeSlots = ({ selectedDate, appointments }: AppointmentTimeSlo
     setSelectedAppointment(appointment);
   };
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "confirmed":
+        return "border-green-300 bg-green-50";
+      case "pending":
+        return "border-yellow-300 bg-yellow-50";
+      case "cancelled":
+        return "border-red-300 bg-red-50";
+      case "completed":
+        return "border-blue-300 bg-blue-50";
+      default:
+        return "border-gray-300 bg-gray-50";
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm p-4">
       <div className="flex justify-between items-center mb-4">
@@ -69,7 +84,7 @@ const AppointmentTimeSlots = ({ selectedDate, appointments }: AppointmentTimeSlo
                     <button
                       key={app.id}
                       onClick={() => openAppointmentModal(app)}
-                      className="w-full text-left bg-clinic-50 hover:bg-clinic-100 p-3 rounded-md flex justify-between"
+                      className={`w-full text-left border p-3 rounded-md flex justify-between ${getStatusColor(app.status)}`}
                     >
                       <div>
                         <p className="font-medium">{app.patient.name}</p>

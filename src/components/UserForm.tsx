@@ -29,6 +29,8 @@ const UserForm = ({ user, onSave, onCancel }: UserFormProps) => {
   const [workingHours, setWorkingHours] = useState<WorkingHours[]>(
     user?.workingHours || []
   );
+  const [username, setUsername] = useState(user?.username || "");
+  const [password, setPassword] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,6 +40,8 @@ const UserForm = ({ user, onSave, onCancel }: UserFormProps) => {
       email,
       role,
       phone,
+      username,
+      ...(password && { password }),
       ...(role === "psychologist" && { workingHours }),
     };
 
@@ -97,6 +101,25 @@ const UserForm = ({ user, onSave, onCancel }: UserFormProps) => {
               <SelectItem value="psychologist">Psicólogo</SelectItem>
             </SelectContent>
           </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="username">Nome de Usuário</Label>
+          <Input
+            id="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="password">Senha{user ? " (deixe em branco para manter)" : ""}</Label>
+          <Input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required={!user}
+          />
         </div>
       </div>
 

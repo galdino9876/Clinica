@@ -13,5 +13,7 @@ export interface User {
   email: string;
   role: UserRole;
   phone?: string;
+  username?: string;
+  password?: string; // Apenas para transferência, não será armazenado no estado
   workingHours?: WorkingHours[]; // Disponibilidade para psicólogos
 }

@@ -6,7 +6,7 @@ import { useToast } from "@/components/ui/use-toast";
 interface AuthContextType {
   user: User | null;
   users: User[];
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (usernameOrEmail: string, password: string) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
   addUser: (userData: Omit<User, "id">) => User;
@@ -14,20 +14,23 @@ interface AuthContextType {
   deleteUser: (id: string) => void;
   getUserById: (id: string) => User | undefined;
   getPsychologists: () => User[];
+  changePassword: (userId: string, newPassword: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 // Mock users for demonstration
 const initialUsers: User[] = [
-  { id: "1", name: "Admin User", email: "admin@example.com", role: "admin" },
-  { id: "2", name: "Receptionist User", email: "receptionist@example.com", role: "receptionist" },
+  { id: "1", name: "Admin User", email: "admin@example.com", role: "admin", username: "admin", password: "password" },
+  { id: "2", name: "Receptionist User", email: "receptionist@example.com", role: "receptionist", username: "recepcao", password: "password" },
   { 
     id: "3", 
     name: "Dr. John Smith", 
     email: "john@example.com", 
     role: "psychologist",
     phone: "(11) 99999-8888",
+    username: "drjohn",
+    password: "password",
     workingHours: [
       { dayOfWeek: 1, startTime: "09:00", endTime: "18:00" },
       { dayOfWeek: 3, startTime: "09:00", endTime: "18:00" }
@@ -39,6 +42,8 @@ const initialUsers: User[] = [
     email: "sarah@example.com", 
     role: "psychologist",
     phone: "(11) 99888-7777",
+    username: "drsarah",
+    password: "password",
     workingHours: [
       { dayOfWeek: 2, startTime: "13:00", endTime: "19:00" },
       { dayOfWeek: 4, startTime: "13:00", endTime: "19:00" }
@@ -57,22 +62,26 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   const [users, setUsers] = useState<User[]>(initialUsers);
   const { toast } = useToast();
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (usernameOrEmail: string, password: string): Promise<boolean> => {
     // In a real app, this would be an API call
-    const foundUser = users.find(u => u.email === email);
+    const foundUser = users.find(u => 
+      (u.email === usernameOrEmail || u.username === usernameOrEmail)
+    );
     
-    if (foundUser && password === "password") { // Simple mock password
-      setUser(foundUser);
-      localStorage.setItem("user", JSON.stringify(foundUser));
+    if (foundUser && foundUser.password === password) {
+      // Remove senha antes de salvar no estado
+      const { password: _, ...userWithoutPassword } = foundUser;
+      setUser(userWithoutPassword);
+      localStorage.setItem("user", JSON.stringify(userWithoutPassword));
       toast({
-        title: "Login successful",
-        description: `Welcome, ${foundUser.name}!`,
+        title: "Login realizado com sucesso",
+        description: `Bem-vindo(a), ${foundUser.name}!`,
       });
       return true;
     } else {
       toast({
-        title: "Login failed",
-        description: "Invalid email or password",
+        title: "Falha no login",
+        description: "Usuário ou senha inválidos",
         variant: "destructive",
       });
       return false;
@@ -83,8 +92,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUser(null);
     localStorage.removeItem("user");
     toast({
-      title: "Logged out",
-      description: "You have been logged out successfully",
+      title: "Desconectado",
+      description: "Você foi desconectado com sucesso",
     });
   };
 
@@ -95,19 +104,28 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     };
     setUsers(prev => [...prev, newUser]);
     toast({
-      title: "User added",
-      description: `User ${userData.name} has been added.`
+      title: "Usuário adicionado",
+      description: `O usuário ${userData.name} foi adicionado.`
     });
     return newUser;
   };
 
   const updateUser = (user: User) => {
     setUsers(prev => 
-      prev.map(u => u.id === user.id ? user : u)
+      prev.map(u => {
+        if (u.id === user.id) {
+          // Se a senha não estiver presente no objeto user, mantenha a senha atual
+          if (!user.password && u.password) {
+            return { ...user, password: u.password };
+          }
+          return user;
+        }
+        return u;
+      })
     );
     toast({
-      title: "User updated",
-      description: `User ${user.name} has been updated.`
+      title: "Usuário atualizado",
+      description: `O usuário ${user.name} foi atualizado.`
     });
   };
 
@@ -117,8 +135,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     setUsers(prev => prev.filter(u => u.id !== id));
     if (userToDelete) {
       toast({
-        title: "User deleted",
-        description: `User ${userToDelete.name} has been removed.`
+        title: "Usuário excluído",
+        description: `O usuário ${userToDelete.name} foi removido.`
       });
     }
   };
@@ -129,6 +147,34 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const getPsychologists = () => {
     return users.filter(user => user.role === "psychologist");
+  };
+
+  const changePassword = (userId: string, newPassword: string): boolean => {
+    const userIndex = users.findIndex(u => u.id === userId);
+    
+    if (userIndex === -1) {
+      toast({
+        title: "Erro",
+        description: "Usuário não encontrado",
+        variant: "destructive",
+      });
+      return false;
+    }
+    
+    const updatedUsers = [...users];
+    updatedUsers[userIndex] = {
+      ...updatedUsers[userIndex],
+      password: newPassword
+    };
+    
+    setUsers(updatedUsers);
+    
+    toast({
+      title: "Senha alterada",
+      description: "A senha foi alterada com sucesso",
+    });
+    
+    return true;
   };
 
   return (
@@ -144,6 +190,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         deleteUser,
         getUserById,
         getPsychologists,
+        changePassword,
       }}
     >
       {children}

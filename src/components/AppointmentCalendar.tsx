@@ -5,11 +5,12 @@ import { useAppointments } from "@/context/AppointmentContext";
 import { useAuth } from "@/context/AuthContext";
 import AppointmentTimeSlots from "./AppointmentTimeSlots";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import "react-calendar/dist/Calendar.css";
+import AppointmentForm from "./AppointmentForm";
 
 type ValuePiece = Date | null;
 type Value = ValuePiece | [ValuePiece, ValuePiece];
@@ -17,6 +18,7 @@ type Value = ValuePiece | [ValuePiece, ValuePiece];
 const AppointmentCalendar = () => {
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const { appointments } = useAppointments();
   const { user } = useAuth();
 
@@ -53,23 +55,25 @@ const AppointmentCalendar = () => {
     const appointmentsForDate = getAppointmentsForDate(date);
     if (appointmentsForDate.length === 0) return null;
     
-    // Generate different colors based on number of appointments
-    const getColor = (index: number) => {
-      const colors = ["appointment-blue", "appointment-green", "appointment-red", "appointment-yellow", "appointment-purple"];
-      return colors[index % colors.length];
-    };
+    // Count appointments by status
+    const confirmedCount = appointmentsForDate.filter(app => app.status === "confirmed").length;
+    const pendingCount = appointmentsForDate.filter(app => app.status === "pending").length;
     
     return (
       <div className="flex justify-center mt-1">
-        {appointmentsForDate.slice(0, 3).map((_, index) => (
+        {confirmedCount > 0 && (
           <div
-            key={index}
-            className={`appointment-dot ${getColor(index)}`}
-            style={{ left: `${(index * 6) + 45}%` }}
+            className="appointment-dot bg-green-500"
+            style={{ marginRight: "3px" }}
           />
-        ))}
-        {appointmentsForDate.length > 3 && (
-          <span className="text-xs text-gray-500">+{appointmentsForDate.length - 3}</span>
+        )}
+        {pendingCount > 0 && (
+          <div
+            className="appointment-dot bg-yellow-500"
+          />
+        )}
+        {appointmentsForDate.length > (confirmedCount + pendingCount) && (
+          <span className="text-xs text-gray-500">+{appointmentsForDate.length - (confirmedCount + pendingCount)}</span>
         )}
       </div>
     );
@@ -84,6 +88,18 @@ const AppointmentCalendar = () => {
 
   return (
     <div className="w-full max-w-4xl mx-auto">
+      <div className="flex justify-between items-center mb-4">
+        <h1 className="text-2xl font-bold">Agenda</h1>
+        {(user?.role === "admin" || user?.role === "receptionist") && (
+          <Button 
+            onClick={() => setIsCreateModalOpen(true)} 
+            className="bg-clinic-600 hover:bg-clinic-700"
+          >
+            <Plus className="h-4 w-4 mr-1" /> Novo Agendamento
+          </Button>
+        )}
+      </div>
+      
       <div className="bg-white p-6 rounded-lg shadow-sm">
         <Calendar
           onChange={handleDateChange}
@@ -98,12 +114,12 @@ const AppointmentCalendar = () => {
         <div className="mt-4 flex flex-wrap gap-2">
           <p className="text-sm text-gray-500 w-full">Legenda:</p>
           <div className="flex items-center mr-4">
-            <div className="w-3 h-3 rounded-full bg-blue-500 mr-1"></div>
-            <span className="text-xs">Consultas</span>
+            <div className="w-3 h-3 rounded-full bg-green-500 mr-1"></div>
+            <span className="text-xs">Confirmadas</span>
           </div>
           <div className="flex items-center">
-            <div className="w-3 h-3 rounded-full bg-green-500 mr-1"></div>
-            <span className="text-xs">Avaliações</span>
+            <div className="w-3 h-3 rounded-full bg-yellow-500 mr-1"></div>
+            <span className="text-xs">Pendentes</span>
           </div>
         </div>
       </div>
@@ -119,6 +135,19 @@ const AppointmentCalendar = () => {
           <AppointmentTimeSlots 
             selectedDate={selectedDate}
             appointments={getAppointmentsForDate(selectedDate)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Appointment Modal */}
+      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Novo Agendamento</DialogTitle>
+          </DialogHeader>
+          <AppointmentForm
+            selectedDate={selectedDate}
+            onClose={() => setIsCreateModalOpen(false)}
           />
         </DialogContent>
       </Dialog>

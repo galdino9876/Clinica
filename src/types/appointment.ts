@@ -17,6 +17,7 @@ export interface Patient {
 
 export type PaymentMethod = 'private' | 'insurance';
 export type InsuranceType = 'Unimed' | 'SulAmérica' | 'Fusex' | 'Other' | null;
+export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'confirmed' | 'pending';
 
 export interface Appointment {
   id: string;
@@ -28,7 +29,7 @@ export interface Appointment {
   date: string; // ISO date string
   startTime: string; // format: "HH:MM"
   endTime: string; // format: "HH:MM"
-  status: 'scheduled' | 'completed' | 'cancelled';
+  status: AppointmentStatus;
   paymentMethod: PaymentMethod;
   insuranceType: InsuranceType;
   value: number;

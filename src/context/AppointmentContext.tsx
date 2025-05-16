@@ -3,9 +3,13 @@ import {
   Appointment, 
   ConsultingRoom, 
   Patient,
-  PatientRecord
+  PatientRecord,
+  AppointmentStatus
 } from '@/types/appointment';
 import { useToast } from '@/components/ui/use-toast';
+import { format, addDays, parse, isAfter, isBefore, isEqual } from 'date-fns';
+import { useAuth } from './AuthContext';
+import { User } from '@/types/user';
 
 // Function to generate random ID
 const generateId = (): string => Math.random().toString(36).substring(2, 11);
@@ -35,7 +39,7 @@ const initialAppointments: Appointment[] = [
     date: new Date().toISOString().split('T')[0],
     startTime: "09:00",
     endTime: "10:00",
-    status: "scheduled",
+    status: "confirmed",
     paymentMethod: "private",
     insuranceType: null,
     value: 200.0,
@@ -50,7 +54,7 @@ const initialAppointments: Appointment[] = [
     date: new Date().toISOString().split('T')[0],
     startTime: "10:00",
     endTime: "11:00",
-    status: "scheduled",
+    status: "pending",
     paymentMethod: "insurance",
     insuranceType: "Unimed",
     value: 150.0,
@@ -79,7 +83,7 @@ interface AppointmentContextType {
   addRoom: (room: Omit<ConsultingRoom, 'id'>) => void;
   updateRoom: (room: ConsultingRoom) => void;
   deleteRoom: (id: string) => void;
-  addPatient: (patient: Omit<Patient, 'id'>) => Patient; // Updated return type to Patient
+  addPatient: (patient: Omit<Patient, 'id'>) => Patient;
   updatePatient: (patient: Patient) => void;
   deletePatient: (id: string) => void;
   addPatientRecord: (record: Omit<PatientRecord, 'id'>) => void;
@@ -89,6 +93,9 @@ interface AppointmentContextType {
   getPatientById: (id: string) => Patient | undefined;
   getRoomById: (id: string) => ConsultingRoom | undefined;
   getPsychologistAppointments: (psychologistId: string) => Appointment[];
+  updateAppointmentStatus: (appointmentId: string, status: AppointmentStatus) => void;
+  findNextAvailableSlot: (psychologistId: string) => { date: Date, startTime: string, endTime: string } | null;
+  rescheduleAppointment: (appointmentId: string, newDate: string, newStartTime: string, newEndTime: string) => void;
 }
 
 const AppointmentContext = createContext<AppointmentContextType | undefined>(undefined);
@@ -99,16 +106,18 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [patients, setPatients] = useState<Patient[]>(initialPatients);
   const [patientRecords, setPatientRecords] = useState<PatientRecord[]>(initialPatientRecords);
   const { toast } = useToast();
+  const { users } = useAuth();
 
   const addAppointment = (appointmentData: Omit<Appointment, 'id'>) => {
     const newAppointment: Appointment = {
       id: generateId(),
-      ...appointmentData
+      ...appointmentData,
+      status: appointmentData.status || "pending", // Default to pending if not provided
     };
     setAppointments(prev => [...prev, newAppointment]);
     toast({
-      title: "Appointment created",
-      description: `Appointment for ${appointmentData.patient.name} has been scheduled.`
+      title: "Consulta agendada",
+      description: `Agendamento para ${appointmentData.patient.name} foi criado.`
     });
   };
 
@@ -117,8 +126,8 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
       prev.map(a => a.id === appointment.id ? appointment : a)
     );
     toast({
-      title: "Appointment updated",
-      description: `Appointment for ${appointment.patient.name} has been updated.`
+      title: "Agendamento atualizado",
+      description: `Agendamento para ${appointment.patient.name} foi atualizado.`
     });
   };
 
@@ -127,10 +136,162 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
     setAppointments(prev => prev.filter(a => a.id !== id));
     if (appointmentToDelete) {
       toast({
-        title: "Appointment deleted",
-        description: `Appointment for ${appointmentToDelete.patient.name} has been removed.`
+        title: "Agendamento excluído",
+        description: `Agendamento para ${appointmentToDelete.patient.name} foi removido.`
       });
     }
+  };
+
+  const updateAppointmentStatus = (appointmentId: string, status: AppointmentStatus) => {
+    const appointment = appointments.find(a => a.id === appointmentId);
+    if (!appointment) return;
+    
+    const updatedAppointment = { ...appointment, status };
+    updateAppointment(updatedAppointment);
+    
+    toast({
+      title: "Status atualizado",
+      description: `O status do agendamento foi alterado para ${status === 'confirmed' ? 'confirmado' : status === 'pending' ? 'pendente' : status}.`
+    });
+  };
+
+  const findNextAvailableSlot = (psychologistId: string) => {
+    // Encontre o psicólogo
+    const psychologist = users.find(u => u.id === psychologistId) as User;
+    if (!psychologist || !psychologist.workingHours || psychologist.workingHours.length === 0) {
+      return null;
+    }
+
+    const today = new Date();
+    let currentDate = today;
+    let found = false;
+    let resultDate, resultStartTime, resultEndTime;
+
+    // Verifica por até 60 dias no futuro
+    for (let dayOffset = 0; dayOffset < 60 && !found; dayOffset++) {
+      const checkDate = addDays(today, dayOffset);
+      const dayOfWeek = checkDate.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+      
+      // Verifica se o psicólogo trabalha neste dia da semana
+      const workingHoursForDay = psychologist.workingHours.find(wh => wh.dayOfWeek === dayOfWeek);
+      
+      if (workingHoursForDay) {
+        const { startTime, endTime } = workingHoursForDay;
+        const dateString = format(checkDate, 'yyyy-MM-dd');
+        
+        // Pega todos os agendamentos deste psicólogo nesta data
+        const psychologistAppointmentsOnDate = appointments.filter(
+          a => a.psychologistId === psychologistId && a.date === dateString
+        );
+        
+        // Gere slots de tempo a cada 30 min entre o início e fim do expediente
+        const availableSlots = generateTimeSlots(startTime, endTime, 60); // 60 minutos por consulta
+        
+        // Para cada slot de tempo potencial, verifique se está disponível
+        for (const slot of availableSlots) {
+          const [slotStartTime, slotEndTime] = slot;
+          
+          // Verifique se o slot já está ocupado
+          const isSlotTaken = psychologistAppointmentsOnDate.some(appointment => {
+            return isOverlapping(appointment.startTime, appointment.endTime, slotStartTime, slotEndTime);
+          });
+          
+          // Se o slot estiver livre e for futuro (ou hoje, mas horário futuro)
+          if (!isSlotTaken) {
+            const slotDateTime = combineDateTime(checkDate, slotStartTime);
+            
+            // Se o slot for no futuro
+            if (isAfter(slotDateTime, new Date())) {
+              resultDate = checkDate;
+              resultStartTime = slotStartTime;
+              resultEndTime = slotEndTime;
+              found = true;
+              break;
+            }
+          }
+        }
+        
+        if (found) break;
+      }
+    }
+    
+    if (found) {
+      return { 
+        date: resultDate!, 
+        startTime: resultStartTime!, 
+        endTime: resultEndTime! 
+      };
+    }
+    
+    return null;
+  };
+
+  const rescheduleAppointment = (appointmentId: string, newDate: string, newStartTime: string, newEndTime: string) => {
+    const appointment = appointments.find(a => a.id === appointmentId);
+    if (!appointment) return;
+    
+    const updatedAppointment = { 
+      ...appointment, 
+      date: newDate,
+      startTime: newStartTime,
+      endTime: newEndTime,
+      status: "pending" as AppointmentStatus // Reset to pending when rescheduled
+    };
+    
+    updateAppointment(updatedAppointment);
+    
+    toast({
+      title: "Consulta reagendada",
+      description: `A consulta foi remarcada para ${format(new Date(newDate), 'dd/MM/yyyy')} às ${newStartTime}.`
+    });
+  };
+
+  // Funções auxiliares
+  
+  const isOverlapping = (existingStart: string, existingEnd: string, newStart: string, newEnd: string) => {
+    // Converte para minutos desde 00:00 para comparação
+    const existingStartMin = timeToMinutes(existingStart);
+    const existingEndMin = timeToMinutes(existingEnd);
+    const newStartMin = timeToMinutes(newStart);
+    const newEndMin = timeToMinutes(newEnd);
+    
+    return (
+      (newStartMin >= existingStartMin && newStartMin < existingEndMin) || // new start is during existing
+      (newEndMin > existingStartMin && newEndMin <= existingEndMin) || // new end is during existing
+      (newStartMin <= existingStartMin && newEndMin >= existingEndMin) // new contains existing
+    );
+  };
+
+  const timeToMinutes = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+
+  const generateTimeSlots = (startTime: string, endTime: string, durationMinutes: number) => {
+    const slots = [];
+    const startMin = timeToMinutes(startTime);
+    const endMin = timeToMinutes(endTime);
+    
+    for (let currentMin = startMin; currentMin + durationMinutes <= endMin; currentMin += 30) {
+      const slotStartTime = minutesToTime(currentMin);
+      const slotEndTime = minutesToTime(currentMin + durationMinutes);
+      slots.push([slotStartTime, slotEndTime]);
+    }
+    
+    return slots;
+  };
+
+  const minutesToTime = (minutes: number) => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+  };
+
+  const combineDateTime = (date: Date, time: string) => {
+    const [hours, minutes] = time.split(':').map(Number);
+    const result = new Date(date);
+    result.setHours(hours, minutes, 0, 0);
+    return result;
   };
 
   const addRoom = (roomData: Omit<ConsultingRoom, 'id'>) => {
@@ -290,7 +451,10 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
         getPatientRecordsForPatient,
         getPatientById,
         getRoomById,
-        getPsychologistAppointments
+        getPsychologistAppointments,
+        updateAppointmentStatus,
+        findNextAvailableSlot,
+        rescheduleAppointment
       }}
     >
       {children}

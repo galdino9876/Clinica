@@ -16,6 +16,7 @@ import { format } from "date-fns";
 import { Patient } from "@/types/appointment";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import PatientForm from "./PatientForm";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface AppointmentFormProps {
   selectedDate: Date;
@@ -24,24 +25,44 @@ interface AppointmentFormProps {
 }
 
 const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: AppointmentFormProps) => {
-  const { addAppointment, updateAppointment, patients, rooms } = useAppointments();
+  const { addAppointment, updateAppointment, patients, rooms, findNextAvailableSlot } = useAppointments();
   const { getPsychologists } = useAuth();
   const [isPatientFormOpen, setIsPatientFormOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<string>(existingAppointment?.patient.id || "");
   const [psychologistId, setPsychologistId] = useState(existingAppointment?.psychologistId || "");
   const [roomId, setRoomId] = useState(existingAppointment?.roomId || "");
+  const [date, setDate] = useState<Date>(selectedDate);
   const [startTime, setStartTime] = useState(existingAppointment?.startTime || "09:00");
   const [endTime, setEndTime] = useState(existingAppointment?.endTime || "10:00");
   const [paymentMethod, setPaymentMethod] = useState(existingAppointment?.paymentMethod || "private");
   const [insuranceType, setInsuranceType] = useState(existingAppointment?.insuranceType || null);
   const [value, setValue] = useState(existingAppointment?.value?.toString() || "200");
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
+  const [nextAvailableSlot, setNextAvailableSlot] = useState<{ date: Date, startTime: string, endTime: string } | null>(null);
+  const [status, setStatus] = useState<"scheduled" | "pending" | "confirmed">(existingAppointment?.status || "pending");
   
   // Obter a lista de psicólogos do sistema
   const psychologists = getPsychologists();
 
   // Determinar o dia da semana da data selecionada (0-6, onde 0 é domingo)
-  const dayOfWeek = selectedDate.getDay();
+  const dayOfWeek = date.getDay();
+
+  // Efeito para encontrar o próximo horário disponível quando o psicólogo é selecionado
+  useEffect(() => {
+    if (psychologistId) {
+      const slot = findNextAvailableSlot(psychologistId);
+      setNextAvailableSlot(slot);
+      
+      // Se for um novo agendamento e houver um slot disponível, sugerimos automaticamente
+      if (slot && !existingAppointment) {
+        setDate(slot.date);
+        setStartTime(slot.startTime);
+        setEndTime(slot.endTime);
+      }
+    } else {
+      setNextAvailableSlot(null);
+    }
+  }, [psychologistId, findNextAvailableSlot, existingAppointment]);
 
   // Função para calcular horários disponíveis com base no psicólogo selecionado
   useEffect(() => {
@@ -90,7 +111,7 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
         setEndTime(times[times.length - 1]);
       }
     }
-  }, [psychologistId, dayOfWeek, psychologists]);
+  }, [psychologistId, dayOfWeek, date, psychologists]);
 
   // Função para gerar opções de horário padrão (das 8:00 às 20:00)
   const generateDefaultTimeOptions = () => {
@@ -149,10 +170,10 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
       psychologistName: selectedPsychologist.name,
       roomId,
       roomName: selectedRoom.name,
-      date: format(selectedDate, "yyyy-MM-dd"),
+      date: format(date, "yyyy-MM-dd"),
       startTime,
       endTime,
-      status: "scheduled" as const,
+      status,
       paymentMethod: paymentMethod as "private" | "insurance",
       insuranceType: paymentMethod === "insurance" ? insuranceType as any : null,
       value: parseFloat(value),
@@ -177,6 +198,15 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
   const handlePatientAdded = (newPatient: Patient) => {
     setSelectedPatient(newPatient.id);
     setIsPatientFormOpen(false);
+  };
+
+  // Usar o próximo slot disponível
+  const applyNextAvailableSlot = () => {
+    if (nextAvailableSlot) {
+      setDate(nextAvailableSlot.date);
+      setStartTime(nextAvailableSlot.startTime);
+      setEndTime(nextAvailableSlot.endTime);
+    }
   };
 
   // Verifica se o psicólogo está disponível no dia selecionado
@@ -212,16 +242,6 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="date">Data</Label>
-          <Input
-            id="date"
-            type="date"
-            value={format(selectedDate, "yyyy-MM-dd")}
-            disabled
-          />
-        </div>
-
-        <div className="space-y-2">
           <Label htmlFor="psychologist">Psicólogo</Label>
           <Select value={psychologistId} onValueChange={setPsychologistId} required>
             <SelectTrigger id="psychologist">
@@ -232,19 +252,36 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
                 <SelectItem 
                   key={psychologist.id} 
                   value={psychologist.id}
-                  disabled={!isPsychologistAvailable(psychologist.id)}
                 >
                   {psychologist.name}
-                  {!isPsychologistAvailable(psychologist.id) && " (Indisponível neste dia)"}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {psychologistId && availableTimes.length === 0 && (
-            <p className="text-sm text-red-500 mt-1">
-              O profissional selecionado não atende neste dia da semana.
-            </p>
-          )}
+        </div>
+
+        {nextAvailableSlot && !isPsychologistAvailable(psychologistId) && (
+          <div className="col-span-2">
+            <Alert className="bg-amber-50 border-amber-200">
+              <AlertDescription>
+                O psicólogo selecionado não atende na data selecionada ({format(date, "dd/MM/yyyy")}). 
+                Próximo horário disponível: {format(nextAvailableSlot.date, "dd/MM/yyyy")} às {nextAvailableSlot.startTime}.
+                <Button type="button" variant="link" onClick={applyNextAvailableSlot} className="text-amber-600 pl-0">
+                  Usar esse horário
+                </Button>
+              </AlertDescription>
+            </Alert>
+          </div>
+        )}
+
+        <div className="space-y-2">
+          <Label htmlFor="date">Data</Label>
+          <Input
+            id="date"
+            type="date"
+            value={format(date, "yyyy-MM-dd")}
+            onChange={(e) => setDate(new Date(e.target.value))}
+          />
         </div>
 
         <div className="space-y-2">
@@ -352,6 +389,19 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
             onChange={(e) => setValue(e.target.value)}
             required
           />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="status">Status</Label>
+          <Select value={status} onValueChange={setStatus} required>
+            <SelectTrigger id="status">
+              <SelectValue placeholder="Selecione o status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="pending">Pendente</SelectItem>
+              <SelectItem value="confirmed">Confirmado</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
