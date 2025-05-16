@@ -8,7 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card, CardContent } from "@/components/ui/card";
-import { Pencil } from "lucide-react";
+import { Trash } from "lucide-react";
 
 interface PatientRecordsProps {
   patient: Patient;
@@ -16,16 +16,14 @@ interface PatientRecordsProps {
 }
 
 const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
-  const { patientRecords, addPatientRecord, updatePatientRecord } = useAppointments();
+  const { patientRecords, addPatientRecord, deletePatientRecord } = useAppointments();
   const { user } = useAuth();
   const [notes, setNotes] = useState("");
-  const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
-  const [editingNotes, setEditingNotes] = useState("");
   
   const isAdmin = user?.role === "admin";
   const isPsychologist = user?.role === "psychologist";
-  // Admin ou Psicólogo podem editar prontuários
-  const canEditRecords = isAdmin || isPsychologist;
+  // Admin ou Psicólogo podem gerenciar prontuários
+  const canManageRecords = isAdmin || isPsychologist;
 
   const records = patientRecords.filter(
     (record) => record.patientId === patient.id
@@ -45,26 +43,10 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
     setNotes("");
   };
   
-  const handleEditRecord = (record: PatientRecord) => {
-    setEditingRecordId(record.id);
-    setEditingNotes(record.notes);
-  };
-  
-  const handleSaveEdit = (record: PatientRecord) => {
-    if (!editingNotes.trim()) return;
-    
-    updatePatientRecord({
-      ...record,
-      notes: editingNotes
-    });
-    
-    setEditingRecordId(null);
-    setEditingNotes("");
-  };
-  
-  const handleCancelEdit = () => {
-    setEditingRecordId(null);
-    setEditingNotes("");
+  const handleDeleteRecord = (recordId: string) => {
+    if (window.confirm("Tem certeza que deseja excluir este prontuário?")) {
+      deletePatientRecord(recordId);
+    }
   };
 
   const formatDate = (dateStr: string) => {
@@ -103,32 +85,18 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
                 <CardContent className="p-4">
                   <div className="flex justify-between mb-2">
                     <p className="text-sm font-medium">{formatDate(record.date)}</p>
-                    {canEditRecords && (
-                      <Button variant="ghost" size="sm" onClick={() => handleEditRecord(record)}>
-                        <Pencil className="h-4 w-4" />
+                    {canManageRecords && (
+                      <Button 
+                        variant="ghost" 
+                        size="sm" 
+                        onClick={() => handleDeleteRecord(record.id)}
+                        className="text-red-500 hover:bg-red-50 hover:text-red-600"
+                      >
+                        <Trash className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
-                  
-                  {editingRecordId === record.id ? (
-                    <div className="space-y-3">
-                      <Textarea
-                        value={editingNotes}
-                        onChange={(e) => setEditingNotes(e.target.value)}
-                        rows={6}
-                      />
-                      <div className="flex justify-end space-x-2">
-                        <Button variant="outline" onClick={handleCancelEdit}>
-                          Cancelar
-                        </Button>
-                        <Button onClick={() => handleSaveEdit(record)}>
-                          Salvar Alterações
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <p className="text-sm whitespace-pre-wrap">{record.notes}</p>
-                  )}
+                  <p className="text-sm whitespace-pre-wrap">{record.notes}</p>
                 </CardContent>
               </Card>
             ))}
