@@ -1,5 +1,5 @@
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,6 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAppointments } from "@/context/AppointmentContext";
+import { useAuth } from "@/context/AuthContext";
 import { format } from "date-fns";
 import { Patient } from "@/types/appointment";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -19,11 +20,12 @@ import PatientForm from "./PatientForm";
 interface AppointmentFormProps {
   selectedDate: Date;
   onClose: () => void;
-  existingAppointment?: any; // For editing existing appointments
+  existingAppointment?: any; // Para edição de agendamentos existentes
 }
 
 const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: AppointmentFormProps) => {
   const { addAppointment, updateAppointment, patients, rooms } = useAppointments();
+  const { getPsychologists } = useAuth();
   const [isPatientFormOpen, setIsPatientFormOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<string>(existingAppointment?.patient.id || "");
   const [psychologistId, setPsychologistId] = useState(existingAppointment?.psychologistId || "");
@@ -33,14 +35,65 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
   const [paymentMethod, setPaymentMethod] = useState(existingAppointment?.paymentMethod || "private");
   const [insuranceType, setInsuranceType] = useState(existingAppointment?.insuranceType || null);
   const [value, setValue] = useState(existingAppointment?.value?.toString() || "200");
+  const [availableTimes, setAvailableTimes] = useState<string[]>([]);
+  
+  // Obter a lista de psicólogos do sistema
+  const psychologists = getPsychologists();
 
-  // Mock psychologists for demonstration
-  const psychologists = [
-    { id: "3", name: "Dr. John Smith" },
-    { id: "4", name: "Dr. Sarah Johnson" },
-  ];
+  // Determinar o dia da semana da data selecionada (0-6, onde 0 é domingo)
+  const dayOfWeek = selectedDate.getDay();
 
-  const generateTimeOptions = () => {
+  // Função para calcular horários disponíveis com base no psicólogo selecionado
+  useEffect(() => {
+    if (!psychologistId) {
+      setAvailableTimes([]);
+      return;
+    }
+
+    const psychologist = psychologists.find(p => p.id === psychologistId);
+    if (!psychologist || !psychologist.workingHours) {
+      setAvailableTimes(generateDefaultTimeOptions());
+      return;
+    }
+
+    // Procura pela disponibilidade no dia da semana
+    const availability = psychologist.workingHours.find(
+      wh => wh.dayOfWeek === dayOfWeek
+    );
+
+    if (!availability) {
+      setAvailableTimes([]);
+      setStartTime("");
+      setEndTime("");
+      return;
+    }
+
+    // Gera opções de horário dentro do intervalo de trabalho do psicólogo
+    const times = generateTimeOptionsInRange(availability.startTime, availability.endTime);
+    setAvailableTimes(times);
+    
+    // Define um horário inicial válido
+    if (times.length > 0 && !times.includes(startTime)) {
+      setStartTime(times[0]);
+      
+      // Define o horário de término como 1 hora após o início
+      const startHour = parseInt(times[0].split(':')[0]);
+      const startMinute = parseInt(times[0].split(':')[1]);
+      let endHour = startHour + 1;
+      const endTimeString = `${endHour.toString().padStart(2, "0")}:${startMinute.toString().padStart(2, "0")}`;
+      
+      // Verifica se o horário de término está dentro do intervalo disponível
+      if (times.includes(endTimeString)) {
+        setEndTime(endTimeString);
+      } else {
+        // Se não estiver, usa o último horário disponível
+        setEndTime(times[times.length - 1]);
+      }
+    }
+  }, [psychologistId, dayOfWeek, psychologists]);
+
+  // Função para gerar opções de horário padrão (das 8:00 às 20:00)
+  const generateDefaultTimeOptions = () => {
     const times = [];
     for (let hour = 8; hour < 20; hour++) {
       for (let minute = 0; minute < 60; minute += 30) {
@@ -52,7 +105,31 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
     return times;
   };
 
-  const timeOptions = generateTimeOptions();
+  // Função para gerar opções de horário dentro de um intervalo específico
+  const generateTimeOptionsInRange = (start: string, end: string) => {
+    const times = [];
+    const startHour = parseInt(start.split(':')[0]);
+    const startMinute = parseInt(start.split(':')[1]);
+    const endHour = parseInt(end.split(':')[0]);
+    const endMinute = parseInt(end.split(':')[1]);
+    
+    let currentHour = startHour;
+    let currentMinute = startMinute - (startMinute % 30); // Arredondar para intervalo de 30 minutos
+    
+    while (currentHour < endHour || (currentHour === endHour && currentMinute <= endMinute)) {
+      const formattedHour = currentHour.toString().padStart(2, "0");
+      const formattedMinute = currentMinute.toString().padStart(2, "0");
+      times.push(`${formattedHour}:${formattedMinute}`);
+      
+      currentMinute += 30;
+      if (currentMinute >= 60) {
+        currentMinute = 0;
+        currentHour += 1;
+      }
+    }
+    
+    return times;
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -102,6 +179,14 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
     setIsPatientFormOpen(false);
   };
 
+  // Verifica se o psicólogo está disponível no dia selecionado
+  const isPsychologistAvailable = (psychologistId: string): boolean => {
+    const psychologist = psychologists.find(p => p.id === psychologistId);
+    if (!psychologist || !psychologist.workingHours) return true;
+    
+    return psychologist.workingHours.some(wh => wh.dayOfWeek === dayOfWeek);
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -144,12 +229,22 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
             </SelectTrigger>
             <SelectContent>
               {psychologists.map((psychologist) => (
-                <SelectItem key={psychologist.id} value={psychologist.id}>
+                <SelectItem 
+                  key={psychologist.id} 
+                  value={psychologist.id}
+                  disabled={!isPsychologistAvailable(psychologist.id)}
+                >
                   {psychologist.name}
+                  {!isPsychologistAvailable(psychologist.id) && " (Indisponível neste dia)"}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
+          {psychologistId && availableTimes.length === 0 && (
+            <p className="text-sm text-red-500 mt-1">
+              O profissional selecionado não atende neste dia da semana.
+            </p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -170,12 +265,17 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
 
         <div className="space-y-2">
           <Label htmlFor="startTime">Horário de Início</Label>
-          <Select value={startTime} onValueChange={setStartTime} required>
+          <Select 
+            value={startTime} 
+            onValueChange={setStartTime} 
+            required
+            disabled={availableTimes.length === 0}
+          >
             <SelectTrigger id="startTime">
               <SelectValue placeholder="Selecione o horário" />
             </SelectTrigger>
             <SelectContent>
-              {timeOptions.map((time) => (
+              {availableTimes.map((time) => (
                 <SelectItem key={`start-${time}`} value={time}>
                   {time}
                 </SelectItem>
@@ -186,15 +286,22 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
 
         <div className="space-y-2">
           <Label htmlFor="endTime">Horário de Término</Label>
-          <Select value={endTime} onValueChange={setEndTime} required>
+          <Select 
+            value={endTime} 
+            onValueChange={setEndTime} 
+            required
+            disabled={availableTimes.length === 0}
+          >
             <SelectTrigger id="endTime">
               <SelectValue placeholder="Selecione o horário" />
             </SelectTrigger>
             <SelectContent>
-              {timeOptions.map((time) => (
-                <SelectItem key={`end-${time}`} value={time}>
-                  {time}
-                </SelectItem>
+              {availableTimes
+                .filter(time => time > startTime) // Apenas horários após o início
+                .map((time) => (
+                  <SelectItem key={`end-${time}`} value={time}>
+                    {time}
+                  </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -252,7 +359,10 @@ const AppointmentForm = ({ selectedDate, onClose, existingAppointment }: Appoint
         <Button type="button" variant="outline" onClick={onClose}>
           Cancelar
         </Button>
-        <Button type="submit">
+        <Button 
+          type="submit"
+          disabled={availableTimes.length === 0 || !startTime || !endTime}
+        >
           {existingAppointment ? "Atualizar" : "Agendar"} Consulta
         </Button>
       </div>
