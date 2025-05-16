@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useContext, ReactNode } from 'react';
 import { 
   Appointment, 
@@ -80,7 +79,7 @@ interface AppointmentContextType {
   addRoom: (room: Omit<ConsultingRoom, 'id'>) => void;
   updateRoom: (room: ConsultingRoom) => void;
   deleteRoom: (id: string) => void;
-  addPatient: (patient: Omit<Patient, 'id'>) => void;
+  addPatient: (patient: Omit<Patient, 'id'>) => Patient; // Updated return type to Patient
   updatePatient: (patient: Patient) => void;
   deletePatient: (id: string) => void;
   addPatientRecord: (record: Omit<PatientRecord, 'id'>) => void;
@@ -188,7 +187,7 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
       title: "Patient added",
       description: `Patient ${patientData.name} has been added.`
     });
-    return newPatient;
+    return newPatient; // Explicitly return the new patient object
   };
 
   const updatePatient = (patient: Patient) => {

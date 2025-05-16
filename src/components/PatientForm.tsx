@@ -38,10 +38,18 @@ const PatientForm = ({ patient, onSave, onCancel }: PatientFormProps) => {
       updatePatient(updatedPatient);
       onSave(updatedPatient);
     } else {
-      // Create a new patient and ensure we return a Patient object
+      // Call addPatient and get the returned patient object
       const newPatient = addPatient(patientData);
-      // TypeScript requires explicit typing here to prevent void error
-      onSave(newPatient as Patient);
+      
+      // If newPatient is defined, use it; otherwise, create a new patient object with generated ID
+      if (newPatient) {
+        onSave(newPatient);
+      } else {
+        // For compatibility if addPatient doesn't return a patient object
+        // This creates a temporary patient with a randomly generated ID
+        console.error("Warning: addPatient did not return a patient object");
+        onSave({ ...patientData, id: Math.random().toString(36).substring(2, 11) });
+      }
     }
   };
 
