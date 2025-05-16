@@ -13,11 +13,15 @@ export interface Patient {
   email: string;
   address?: string;
   birthdate?: string;
+  active: boolean;
+  deactivationReason?: string;
+  deactivationDate?: string;
 }
 
 export type PaymentMethod = 'private' | 'insurance';
 export type InsuranceType = 'Unimed' | 'SulAmérica' | 'Fusex' | 'Other' | null;
 export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'confirmed' | 'pending';
+export type AppointmentType = 'presential' | 'online';
 
 export interface Appointment {
   id: string;
@@ -33,6 +37,7 @@ export interface Appointment {
   paymentMethod: PaymentMethod;
   insuranceType: InsuranceType;
   value: number;
+  appointmentType: AppointmentType;
 }
 
 export interface PatientRecord {
@@ -42,4 +47,17 @@ export interface PatientRecord {
   date: string; // ISO date string
   notes: string;
   createdBy: string; // psychologist ID
+}
+
+export interface PendingPatientsData {
+  date: string;
+  patients: Array<{
+    name: string;
+    phone: string;
+    email: string;
+    cpf: string;
+    appointmentId: string;
+    psychologistName: string;
+    startTime: string;
+  }>;
 }

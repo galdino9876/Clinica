@@ -1,4 +1,5 @@
-import { useState } from "react";
+
+import { useState, useEffect } from "react";
 import Calendar from "react-calendar";
 import { useAppointments } from "@/context/AppointmentContext";
 import { useAuth } from "@/context/AuthContext";
@@ -51,31 +52,23 @@ const AppointmentCalendar = () => {
   // Get list of all psychologists
   const psychologists = getPsychologists();
   
-  // Determine if a date is available for the selected psychologist
+  // Determine if a date is available for any psychologist (for admin/receptionist) or current psychologist (for psychologist)
   const isPsychologistAvailableOnDate = (date: Date) => {
-    if (!selectedPsychologistId) return false;
-    
-    const psychologist = psychologists.find(p => p.id === selectedPsychologistId);
-    if (!psychologist || !psychologist.workingHours) return false;
-    
-    const dayOfWeek = date.getDay();
-    
-    // Check if the psychologist works on this day of the week
-    const workingHoursForDay = psychologist.workingHours.find(wh => wh.dayOfWeek === dayOfWeek);
-    if (!workingHoursForDay) return false;
-    
-    // Check if there's any availability on this date
-    const dateStr = date.toISOString().split('T')[0];
-    const psychologistAppointmentsOnDate = appointments.filter(
-      app => app.psychologistId === selectedPsychologistId && app.date === dateStr
-    );
-    
-    // If no appointments or some free time slots, mark as available
-    if (psychologistAppointmentsOnDate.length === 0) return true;
-    
-    // More complex check can be added here to determine if there are free time slots
-    // based on working hours and existing appointments
-    return true; // Simplified for now, just showing working days
+    if (user?.role === "psychologist") {
+      // For psychologist users, only check their own availability
+      if (!user.workingHours) return false;
+      
+      const dayOfWeek = date.getDay();
+      return user.workingHours.some(wh => wh.dayOfWeek === dayOfWeek);
+    } else {
+      // For admin/receptionist, check all psychologists
+      return psychologists.some(psychologist => {
+        if (!psychologist.workingHours) return false;
+        
+        const dayOfWeek = date.getDay();
+        return psychologist.workingHours.some(wh => wh.dayOfWeek === dayOfWeek);
+      });
+    }
   };
 
   // Custom tile content to show appointment indicators
@@ -83,7 +76,9 @@ const AppointmentCalendar = () => {
     if (view !== "month") return null;
     
     const appointmentsForDate = getAppointmentsForDate(date);
-    if (appointmentsForDate.length === 0 && !isPsychologistAvailableOnDate(date)) return null;
+    const isAvailable = isPsychologistAvailableOnDate(date);
+    
+    if (appointmentsForDate.length === 0 && !isAvailable) return null;
     
     // Count appointments by status
     const confirmedCount = appointmentsForDate.filter(app => app.status === "confirmed").length;
@@ -100,9 +95,10 @@ const AppointmentCalendar = () => {
         {pendingCount > 0 && (
           <div
             className="appointment-dot bg-yellow-500"
+            style={{ marginRight: "3px" }}
           />
         )}
-        {isPsychologistAvailableOnDate(date) && (
+        {isAvailable && (
           <div
             className="appointment-dot bg-emerald-400"
             style={{ marginRight: "3px" }}

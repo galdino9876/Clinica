@@ -1,10 +1,12 @@
+
 import React, { createContext, useState, useContext, ReactNode } from 'react';
 import { 
   Appointment, 
   ConsultingRoom, 
   Patient,
   PatientRecord,
-  AppointmentStatus
+  AppointmentStatus,
+  PendingPatientsData
 } from '@/types/appointment';
 import { useToast } from '@/components/ui/use-toast';
 import { format, addDays, parse, isAfter, isBefore, isEqual } from 'date-fns';
@@ -24,8 +26,22 @@ const initialRooms: ConsultingRoom[] = [
 ];
 
 const initialPatients: Patient[] = [
-  { id: "p1", name: "Maria Silva", cpf: "123.456.789-00", phone: "(11) 98765-4321", email: "maria@email.com" },
-  { id: "p2", name: "João Oliveira", cpf: "987.654.321-00", phone: "(11) 91234-5678", email: "joao@email.com" },
+  { 
+    id: "p1", 
+    name: "Maria Silva", 
+    cpf: "123.456.789-00", 
+    phone: "(11) 98765-4321", 
+    email: "maria@email.com",
+    active: true 
+  },
+  { 
+    id: "p2", 
+    name: "João Oliveira", 
+    cpf: "987.654.321-00", 
+    phone: "(11) 91234-5678", 
+    email: "joao@email.com",
+    active: true 
+  },
 ];
 
 const initialAppointments: Appointment[] = [
@@ -43,6 +59,7 @@ const initialAppointments: Appointment[] = [
     paymentMethod: "private",
     insuranceType: null,
     value: 200.0,
+    appointmentType: "presential"
   },
   {
     id: "a2",
@@ -58,6 +75,7 @@ const initialAppointments: Appointment[] = [
     paymentMethod: "insurance",
     insuranceType: "Unimed",
     value: 150.0,
+    appointmentType: "presential"
   }
 ];
 
@@ -85,7 +103,8 @@ interface AppointmentContextType {
   deleteRoom: (id: string) => void;
   addPatient: (patient: Omit<Patient, 'id'>) => Patient;
   updatePatient: (patient: Patient) => void;
-  deletePatient: (id: string) => void;
+  deactivatePatient: (id: string, reason: string) => void;
+  reactivatePatient: (id: string) => void;
   addPatientRecord: (record: Omit<PatientRecord, 'id'>) => void;
   updatePatientRecord: (record: PatientRecord) => void;
   deletePatientRecord: (id: string) => void;
@@ -96,6 +115,7 @@ interface AppointmentContextType {
   updateAppointmentStatus: (appointmentId: string, status: AppointmentStatus) => void;
   findNextAvailableSlot: (psychologistId: string) => { date: Date, startTime: string, endTime: string } | null;
   rescheduleAppointment: (appointmentId: string, newDate: string, newStartTime: string, newEndTime: string) => void;
+  getPendingAppointmentsByDate: () => PendingPatientsData[];
 }
 
 const AppointmentContext = createContext<AppointmentContextType | undefined>(undefined);
@@ -246,6 +266,45 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
     });
   };
 
+  const getPendingAppointmentsByDate = (): PendingPatientsData[] => {
+    // Get all pending appointments
+    const pendingAppointments = appointments.filter(
+      app => app.status === "pending"
+    ).sort((a, b) => {
+      // Sort by date first
+      const dateComparison = new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (dateComparison !== 0) return dateComparison;
+      
+      // If same date, sort by time
+      return a.startTime.localeCompare(b.startTime);
+    });
+    
+    // Group by date
+    const groupedByDate: Record<string, PendingPatientsData> = {};
+    
+    pendingAppointments.forEach(app => {
+      if (!groupedByDate[app.date]) {
+        groupedByDate[app.date] = {
+          date: app.date,
+          patients: []
+        };
+      }
+      
+      groupedByDate[app.date].patients.push({
+        name: app.patient.name,
+        phone: app.patient.phone,
+        email: app.patient.email,
+        cpf: app.patient.cpf,
+        appointmentId: app.id,
+        psychologistName: app.psychologistName,
+        startTime: app.startTime
+      });
+    });
+    
+    // Convert to array
+    return Object.values(groupedByDate);
+  };
+
   // Funções auxiliares
   
   const isOverlapping = (existingStart: string, existingEnd: string, newStart: string, newEnd: string) => {
@@ -341,7 +400,8 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
   const addPatient = (patientData: Omit<Patient, 'id'>) => {
     const newPatient: Patient = {
       id: generateId(),
-      ...patientData
+      ...patientData,
+      active: true
     };
     setPatients(prev => [...prev, newPatient]);
     toast({
@@ -361,26 +421,42 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
     });
   };
 
-  const deletePatient = (id: string) => {
-    const patientToDelete = patients.find(p => p.id === id);
-    const hasAppointments = appointments.some(a => a.patient.id === id);
+  const deactivatePatient = (id: string, reason: string) => {
+    const patient = patients.find(p => p.id === id);
+    if (!patient) return;
     
-    if (hasAppointments) {
-      toast({
-        title: "Cannot delete patient",
-        description: `Patient ${patientToDelete?.name} has scheduled appointments.`,
-        variant: "destructive"
-      });
-      return;
-    }
+    const updatedPatient = { 
+      ...patient, 
+      active: false,
+      deactivationReason: reason,
+      deactivationDate: new Date().toISOString().split('T')[0]
+    };
     
-    setPatients(prev => prev.filter(p => p.id !== id));
-    if (patientToDelete) {
-      toast({
-        title: "Patient deleted",
-        description: `Patient ${patientToDelete.name} has been removed.`
-      });
-    }
+    updatePatient(updatedPatient);
+    
+    toast({
+      title: "Paciente desativado",
+      description: `O paciente ${patient.name} foi desativado com sucesso.`
+    });
+  };
+
+  const reactivatePatient = (id: string) => {
+    const patient = patients.find(p => p.id === id);
+    if (!patient) return;
+    
+    const updatedPatient = { 
+      ...patient, 
+      active: true,
+      deactivationReason: undefined,
+      deactivationDate: undefined
+    };
+    
+    updatePatient(updatedPatient);
+    
+    toast({
+      title: "Paciente reativado",
+      description: `O paciente ${patient.name} foi reativado com sucesso.`
+    });
   };
 
   const addPatientRecord = (recordData: Omit<PatientRecord, 'id'>) => {
@@ -444,7 +520,8 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
         deleteRoom,
         addPatient,
         updatePatient,
-        deletePatient,
+        deactivatePatient,
+        reactivatePatient,
         addPatientRecord,
         updatePatientRecord,
         deletePatientRecord,
@@ -454,7 +531,8 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
         getPsychologistAppointments,
         updateAppointmentStatus,
         findNextAvailableSlot,
-        rescheduleAppointment
+        rescheduleAppointment,
+        getPendingAppointmentsByDate
       }}
     >
       {children}

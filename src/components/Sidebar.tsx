@@ -1,7 +1,7 @@
 
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
-import { Calendar, Users, BarChart3, LogOut, User, Key } from "lucide-react";
+import { Calendar, Users, BarChart3, LogOut, User, Key, Check } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import ChangePasswordModal from "./ChangePasswordModal";
@@ -25,6 +25,13 @@ const Sidebar = () => {
     if (user?.role === "psychologist") {
       baseItems.push(
         { to: "/patients", label: "Meus Pacientes", icon: <Users className="mr-2 h-5 w-5" /> }
+      );
+    }
+
+    // Adiciona a página de confirmações para admin e psicólogos
+    if (user?.role === "admin" || user?.role === "psychologist") {
+      baseItems.push(
+        { to: "/confirmations", label: "Confirmações", icon: <Check className="mr-2 h-5 w-5" /> }
       );
     }
 

@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,7 @@ import {
 import { useAppointments } from "@/context/AppointmentContext";
 import { useAuth } from "@/context/AuthContext";
 import { format } from "date-fns";
-import { Patient, AppointmentStatus } from "@/types/appointment";
+import { Patient } from "@/types/appointment";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import PatientForm from "./PatientForm";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -45,7 +46,7 @@ const AppointmentForm = ({
   const [value, setValue] = useState(existingAppointment?.value?.toString() || "200");
   const [availableTimes, setAvailableTimes] = useState<string[]>([]);
   const [nextAvailableSlot, setNextAvailableSlot] = useState<{ date: Date, startTime: string, endTime: string } | null>(null);
-  const [status, setStatus] = useState<AppointmentStatus>(existingAppointment?.status || "pending");
+  const [appointmentType, setAppointmentType] = useState(existingAppointment?.appointmentType || "presential");
   
   // Obter a lista de psicólogos do sistema
   const psychologists = getPsychologists();
@@ -172,31 +173,43 @@ const AppointmentForm = ({
     const selectedPatientData = patients.find((p) => p.id === selectedPatient);
     if (!selectedPatientData) return;
 
-    const selectedRoom = rooms.find((r) => r.id === roomId);
-    if (!selectedRoom) return;
-
     const selectedPsychologist = psychologists.find((p) => p.id === psychologistId);
     if (!selectedPsychologist) return;
+
+    let selectedRoom = rooms.find((r) => r.id === roomId);
+    // Para consultas online, não precisamos de sala física
+    if (appointmentType === "online" && !selectedRoom) {
+      // Usar uma sala virtual
+      selectedRoom = {
+        id: "virtual",
+        name: "Sala Virtual"
+      };
+    } else if (appointmentType === "presential" && !selectedRoom) {
+      // Para consultas presenciais, precisamos de sala física
+      return;
+    }
 
     const appointmentData = {
       patient: selectedPatientData,
       psychologistId,
       psychologistName: selectedPsychologist.name,
-      roomId,
-      roomName: selectedRoom.name,
+      roomId: selectedRoom ? selectedRoom.id : "virtual",
+      roomName: selectedRoom ? selectedRoom.name : "Sala Virtual",
       date: format(date, "yyyy-MM-dd"),
       startTime,
       endTime,
-      status,
+      status: "pending", // Todos os agendamentos começam como pendentes
       paymentMethod: paymentMethod as "private" | "insurance",
       insuranceType: paymentMethod === "insurance" ? insuranceType as any : null,
       value: parseFloat(value),
+      appointmentType: appointmentType as "presential" | "online"
     };
 
     if (existingAppointment) {
       updateAppointment({
         ...appointmentData,
         id: existingAppointment.id,
+        status: existingAppointment.status // Manter o status existente
       });
     } else {
       addAppointment(appointmentData);
@@ -231,15 +244,6 @@ const AppointmentForm = ({
     return psychologist.workingHours.some(wh => wh.dayOfWeek === dayOfWeek);
   };
 
-  // This function handles the status change properly with type safety
-  const handleStatusChange = (value: string) => {
-    // Only accept values that conform to AppointmentStatus
-    if (value === "pending" || value === "confirmed" || value === "scheduled" || 
-        value === "cancelled" || value === "completed") {
-      setStatus(value);
-    }
-  };
-
   // Função para atualizar a data selecionada
   const handleDateChange = (newDate: Date) => {
     setDate(newDate);
@@ -256,7 +260,7 @@ const AppointmentForm = ({
                 <SelectValue placeholder="Selecione o paciente" />
               </SelectTrigger>
               <SelectContent>
-                {patients.map((patient) => (
+                {patients.filter(p => p.active).map((patient) => (
                   <SelectItem key={patient.id} value={patient.id}>
                     {patient.name}
                   </SelectItem>
@@ -288,6 +292,19 @@ const AppointmentForm = ({
           </Select>
         </div>
 
+        <div className="space-y-2">
+          <Label htmlFor="appointmentType">Tipo de Atendimento</Label>
+          <Select value={appointmentType} onValueChange={setAppointmentType} required>
+            <SelectTrigger id="appointmentType">
+              <SelectValue placeholder="Selecione o tipo" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="presential">Presencial</SelectItem>
+              <SelectItem value="online">Online</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         {nextAvailableSlot && !isPsychologistAvailable(psychologistId) && (
           <div className="col-span-2">
             <Alert className="bg-amber-50 border-amber-200">
@@ -304,7 +321,6 @@ const AppointmentForm = ({
 
         <div className="space-y-2">
           <Label htmlFor="date">Data</Label>
-          {/* Substitui o campo de input pelo novo componente de calendário */}
           <PsychologistAvailabilityDatePicker
             date={date}
             onDateChange={handleDateChange}
@@ -312,21 +328,23 @@ const AppointmentForm = ({
           />
         </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="room">Consultório</Label>
-          <Select value={roomId} onValueChange={setRoomId} required>
-            <SelectTrigger id="room">
-              <SelectValue placeholder="Selecione o consultório" />
-            </SelectTrigger>
-            <SelectContent>
-              {rooms.map((room) => (
-                <SelectItem key={room.id} value={room.id}>
-                  {room.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
+        {appointmentType === "presential" && (
+          <div className="space-y-2">
+            <Label htmlFor="room">Consultório</Label>
+            <Select value={roomId} onValueChange={setRoomId} required>
+              <SelectTrigger id="room">
+                <SelectValue placeholder="Selecione o consultório" />
+              </SelectTrigger>
+              <SelectContent>
+                {rooms.map((room) => (
+                  <SelectItem key={room.id} value={room.id}>
+                    {room.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         <div className="space-y-2">
           <Label htmlFor="startTime">Horário de Início</Label>
@@ -417,19 +435,6 @@ const AppointmentForm = ({
             onChange={(e) => setValue(e.target.value)}
             required
           />
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="status">Status</Label>
-          <Select value={status} onValueChange={handleStatusChange} required>
-            <SelectTrigger id="status">
-              <SelectValue placeholder="Selecione o status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="pending">Pendente</SelectItem>
-              <SelectItem value="confirmed">Confirmado</SelectItem>
-            </SelectContent>
-          </Select>
         </div>
       </div>
 
