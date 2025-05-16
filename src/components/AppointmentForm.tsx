@@ -198,7 +198,7 @@ const AppointmentForm = ({
       date: format(date, "yyyy-MM-dd"),
       startTime,
       endTime,
-      status: "pending", // Todos os agendamentos começam como pendentes
+      status: "pending" as AppointmentStatus, // Fix: cast to AppointmentStatus
       paymentMethod: paymentMethod as "private" | "insurance",
       insuranceType: paymentMethod === "insurance" ? insuranceType as any : null,
       value: parseFloat(value),

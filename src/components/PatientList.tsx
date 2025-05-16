@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useAppointments } from "@/context/AppointmentContext";
 import { useAuth } from "@/context/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Search, FileText, Pencil, Trash, Send, FileArrowUp, FilePlus } from "lucide-react";
+import { Plus, Search, FileText, Pencil, Trash, Send, CircleArrowUp, FilePlus } from "lucide-react";
 import PatientForm from "./PatientForm";
 import { Patient } from "@/types/appointment";
 import { Input } from "@/components/ui/input";

@@ -31,22 +31,27 @@ const PatientForm = ({ patient, onSave, onCancel }: PatientFormProps) => {
       email,
       address,
       birthdate,
+      active: true // Add the missing 'active' property
     };
 
     if (patient) {
-      const updatedPatient = { ...patientData, id: patient.id };
+      // For existing patients, preserve their active status
+      const updatedPatient = { 
+        ...patientData, 
+        id: patient.id,
+        active: patient.active !== undefined ? patient.active : true,
+        deactivationReason: patient.deactivationReason,
+        deactivationDate: patient.deactivationDate
+      };
       updatePatient(updatedPatient);
       onSave(updatedPatient);
     } else {
-      // Call addPatient and get the returned patient object
+      // For new patients, set active to true by default
       const newPatient = addPatient(patientData);
       
-      // If newPatient is defined, use it; otherwise, create a new patient object with generated ID
       if (newPatient) {
         onSave(newPatient);
       } else {
-        // For compatibility if addPatient doesn't return a patient object
-        // This creates a temporary patient with a randomly generated ID
         console.error("Warning: addPatient did not return a patient object");
         onSave({ ...patientData, id: Math.random().toString(36).substring(2, 11) });
       }
