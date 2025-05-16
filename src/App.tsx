@@ -12,6 +12,7 @@ import Index from "./pages/Index";
 import LoginPage from "./pages/LoginPage";
 import Patients from "./pages/Patients";
 import Finance from "./pages/Finance";
+import Users from "./pages/Users";
 import NotFound from "./pages/NotFound";
 
 // Initialize React Query client
@@ -30,6 +31,7 @@ const App = () => (
               <Route path="/" element={<Index />} />
               <Route path="/patients" element={<Patients />} />
               <Route path="/finance" element={<Finance />} />
+              <Route path="/users" element={<Users />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </BrowserRouter>

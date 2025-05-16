@@ -14,7 +14,8 @@ const Sidebar = () => {
 
     if (user?.role === "admin" || user?.role === "receptionist") {
       baseItems.push(
-        { to: "/patients", label: "Pacientes", icon: <Users className="mr-2 h-5 w-5" /> }
+        { to: "/patients", label: "Pacientes", icon: <Users className="mr-2 h-5 w-5" /> },
+        { to: "/users", label: "Usuários", icon: <User className="mr-2 h-5 w-5" /> }
       );
     }
 
@@ -27,12 +28,6 @@ const Sidebar = () => {
     baseItems.push(
       { to: "/finance", label: "Finanças", icon: <BarChart3 className="mr-2 h-5 w-5" /> }
     );
-
-    if (user?.role === "admin") {
-      baseItems.push(
-        { to: "/users", label: "Usuários", icon: <User className="mr-2 h-5 w-5" /> }
-      );
-    }
 
     return baseItems;
   };
