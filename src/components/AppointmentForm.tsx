@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +16,7 @@ import { Patient, AppointmentStatus } from "@/types/appointment";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import PatientForm from "./PatientForm";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import PsychologistAvailabilityDatePicker from "./PsychologistAvailabilityDatePicker";
 
 interface AppointmentFormProps {
   selectedDate: Date;
@@ -240,6 +240,11 @@ const AppointmentForm = ({
     }
   };
 
+  // Função para atualizar a data selecionada
+  const handleDateChange = (newDate: Date) => {
+    setDate(newDate);
+  };
+
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -299,11 +304,11 @@ const AppointmentForm = ({
 
         <div className="space-y-2">
           <Label htmlFor="date">Data</Label>
-          <Input
-            id="date"
-            type="date"
-            value={format(date, "yyyy-MM-dd")}
-            onChange={(e) => setDate(new Date(e.target.value))}
+          {/* Substitui o campo de input pelo novo componente de calendário */}
+          <PsychologistAvailabilityDatePicker
+            date={date}
+            onDateChange={handleDateChange}
+            psychologistId={psychologistId}
           />
         </div>
 
