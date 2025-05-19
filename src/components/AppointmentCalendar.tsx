@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import Calendar from "react-calendar";
 import { useAppointments } from "@/context/AppointmentContext";
@@ -52,7 +51,7 @@ const AppointmentCalendar = () => {
         for (let i = 0; i < 60; i++) {
           const date = new Date(today);
           date.setDate(today.getDate() + i);
-          const dayOfWeek = date.getDay();
+          const dayOfWeek = date.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
           
           // If this psychologist works on this day of week
           if (availableDays.includes(dayOfWeek)) {

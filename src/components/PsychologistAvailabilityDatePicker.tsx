@@ -25,7 +25,7 @@ const PsychologistAvailabilityDatePicker = ({
   const [selectedDate, setSelectedDate] = useState<Date>(date);
   const { users } = useAuth();
   const [psychologist, setPsychologist] = useState<User | null>(null);
-  const [availableDays, setAvailableDays] = useState<number[]>([]);
+  const [availableDays, setAvailableDays] = useState<(0 | 1 | 2 | 3 | 4 | 5 | 6)[]>([]);
 
   // Log the initial date passed to the component for debugging
   useEffect(() => {
