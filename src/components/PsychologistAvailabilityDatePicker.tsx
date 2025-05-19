@@ -37,7 +37,7 @@ const PsychologistAvailabilityDatePicker = ({
     setSelectedDate(date);
   }, [date]);
 
-  // Encontra o psicólogo selecionado quando o ID muda
+  // Find the selected psychologist when the ID changes
   useEffect(() => {
     if (psychologistId) {
       const found = users.find((user) => user.id === psychologistId);
@@ -56,7 +56,7 @@ const PsychologistAvailabilityDatePicker = ({
     }
   }, [psychologistId, users]);
 
-  // Quando a data é alterada, notifica o componente pai
+  // When the date is changed, notify the parent component
   const handleDateSelect = (date: Date | undefined) => {
     if (date) {
       console.log("Date selected in DatePicker:", date);
@@ -68,14 +68,14 @@ const PsychologistAvailabilityDatePicker = ({
     }
   };
 
-  // Função para determinar se um dia está disponível para o psicólogo
+  // Function to determine if a day is available for the psychologist
   const isPsychologistAvailable = (date: Date) => {
     if (!psychologist || !psychologist.workingHours || availableDays.length === 0) return true;
     const dayOfWeek = date.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
     return availableDays.includes(dayOfWeek);
   };
 
-  // Componente de decoração para dias disponíveis
+  // Day content component for available days
   const DayContent = (props: any) => {
     const isAvailable = isPsychologistAvailable(props.date);
     return (

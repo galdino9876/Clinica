@@ -253,7 +253,15 @@ const AppointmentCalendar = () => {
   
   // Update the selected psychologist when the form modal opens
   const handleCreateModalOpen = () => {
+    // When opening the create modal directly from button, use the current selected date
     setIsCreateModalOpen(true);
+  };
+  
+  // Create appointment for specific date from the calendar view
+  const handleCreateFromCalendar = (date: Date) => {
+    console.log("Creating appointment from calendar for date:", date);
+    setSelectedDate(date); // Set selected date before opening modal
+    setIsCreateModalOpen(true); // Open create appointment modal
   };
   
   // Update selectedPsychologistId when form closes
@@ -328,6 +336,7 @@ const AppointmentCalendar = () => {
           <AppointmentTimeSlots 
             selectedDate={selectedDate}
             appointments={getAppointmentsForDate(selectedDate)}
+            onCreateAppointment={() => handleCreateFromCalendar(selectedDate)}
           />
         </DialogContent>
       </Dialog>
