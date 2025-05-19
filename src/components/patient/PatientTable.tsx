@@ -122,7 +122,7 @@ const PatientTable = ({
                     )}
                     <td className="px-4 py-4 whitespace-nowrap text-right">
                       <div className="flex justify-end space-x-2">
-                        {/* View details button */}
+                        {/* View details button - always visible */}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -132,17 +132,26 @@ const PatientTable = ({
                           <Calendar className="h-4 w-4" />
                         </Button>
                         
-                        {/* Apenas admin e psicólogos podem ver prontuários e gerar documentos */}
-                        {canViewRecords && (
+                        {/* Documentos para recepcionistas e psicólogos */}
+                        {(canViewRecords || isAdmin || isPsychologist) && (
                           <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => onViewDetails(patient)}
-                              title="Prontuários"
-                            >
-                              <FileText className="h-4 w-4" />
-                            </Button>
+                            {/* Prontuário - apenas psicólogos e admin */}
+                            {canViewRecords && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onViewDetails(patient)}
+                                title="Prontuários"
+                              >
+                                <FileText className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </>
+                        )}
+
+                        {/* Encaminhamento e Atestado - para recepcionistas e quem pode ver prontuários */}
+                        {(canViewRecords || isAdmin || isPsychologist || canManagePatients) && (
+                          <>
                             <Button
                               variant="ghost"
                               size="sm"
@@ -161,6 +170,8 @@ const PatientTable = ({
                             </Button>
                           </>
                         )}
+
+                        {/* Gerenciamento de pacientes - apenas para quem pode gerenciar */}
                         {canManagePatients && patient.active && (
                           <>
                             <Button
