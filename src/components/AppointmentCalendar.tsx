@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import Calendar from "react-calendar";
 import { useAppointments } from "@/context/AppointmentContext";
@@ -5,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import AppointmentTimeSlots from "./AppointmentTimeSlots";
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import "react-calendar/dist/Calendar.css";
@@ -104,11 +105,13 @@ const AppointmentCalendar = () => {
     });
     
     setFullyBookedDates(fullyBooked);
+    console.log("Fully booked dates:", fullyBooked);
   };
   
   // Filter appointments based on user role and selected date
   const getAppointmentsForDate = (date: Date) => {
     const dateStr = date.toISOString().split('T')[0];
+    console.log(`Filtering appointments for date: ${dateStr}`);
     
     if (user?.role === "psychologist") {
       return appointments.filter(
@@ -141,14 +144,14 @@ const AppointmentCalendar = () => {
       // For psychologist users, only check their own availability
       if (!user.workingHours) return false;
       
-      const dayOfWeek = date.getDay();
+      const dayOfWeek = date.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
       return user.workingHours.some(wh => wh.dayOfWeek === dayOfWeek);
     } else {
       // For admin/receptionist, check all psychologists
       return psychologists.some(psychologist => {
         if (!psychologist.workingHours) return false;
         
-        const dayOfWeek = date.getDay();
+        const dayOfWeek = date.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
         return psychologist.workingHours.some(wh => wh.dayOfWeek === dayOfWeek);
       });
     }
@@ -240,7 +243,10 @@ const AppointmentCalendar = () => {
 
   const handleDateChange = (value: Value) => {
     if (value instanceof Date) {
-      setSelectedDate(value);
+      // Make sure to create a new Date object to avoid reference issues
+      const selectedDate = new Date(value);
+      console.log("Calendar selection - New date selected:", selectedDate);
+      setSelectedDate(selectedDate);
       setIsDetailsOpen(true);
     }
   };
@@ -315,6 +321,9 @@ const AppointmentCalendar = () => {
             <DialogTitle className="text-xl font-semibold capitalize">
               {formatSelectedDate(selectedDate)}
             </DialogTitle>
+            <DialogDescription>
+              Consultas e horários disponíveis para esta data
+            </DialogDescription>
           </DialogHeader>
           <AppointmentTimeSlots 
             selectedDate={selectedDate}
@@ -328,6 +337,9 @@ const AppointmentCalendar = () => {
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Novo Agendamento</DialogTitle>
+            <DialogDescription>
+              Preencha os dados para criar um novo agendamento
+            </DialogDescription>
           </DialogHeader>
           <AppointmentForm
             selectedDate={selectedDate}

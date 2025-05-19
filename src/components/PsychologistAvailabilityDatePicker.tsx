@@ -30,7 +30,12 @@ const PsychologistAvailabilityDatePicker = ({
   // Log the initial date passed to the component for debugging
   useEffect(() => {
     console.log("DatePicker received date:", date);
-  }, []);
+  }, [date]); // Added date as dependency to respond to external date changes
+
+  // Update selectedDate when the external date prop changes
+  useEffect(() => {
+    setSelectedDate(date);
+  }, [date]);
 
   // Encontra o psicólogo selecionado quando o ID muda
   useEffect(() => {
@@ -55,8 +60,11 @@ const PsychologistAvailabilityDatePicker = ({
   const handleDateSelect = (date: Date | undefined) => {
     if (date) {
       console.log("Date selected in DatePicker:", date);
-      setSelectedDate(date);
-      onDateChange(date);
+      
+      // Create a new Date object to avoid reference issues
+      const newDate = new Date(date);
+      setSelectedDate(newDate);
+      onDateChange(newDate);
     }
   };
 
