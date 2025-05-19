@@ -1,15 +1,16 @@
-
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAppointments } from "@/context/AppointmentContext";
 import { useAuth } from "@/context/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { Plus, Search, FileText, Pencil, Trash, Send, CircleArrowUp, FilePlus } from "lucide-react";
+import { Plus, Search, FileText, Pencil, Trash, Send, CircleArrowUp, FilePlus, Calendar } from "lucide-react";
 import PatientForm from "./PatientForm";
 import { Patient } from "@/types/appointment";
 import { Input } from "@/components/ui/input";
 import PatientRecords from "./PatientRecords";
+import PatientAppointmentHistory from "./PatientAppointmentHistory";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const PatientList = () => {
   const { patients, deactivatePatient, reactivatePatient, appointments } = useAppointments();
@@ -17,7 +18,7 @@ const PatientList = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [isAddPatientOpen, setIsAddPatientOpen] = useState(false);
   const [isEditPatientOpen, setIsEditPatientOpen] = useState(false);
-  const [isViewRecordsOpen, setIsViewRecordsOpen] = useState(false);
+  const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false);
   const [isDeactivatePatientOpen, setIsDeactivatePatientOpen] = useState(false);
   const [isReferralOpen, setIsReferralOpen] = useState(false);
   const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
@@ -73,9 +74,9 @@ const PatientList = () => {
     setIsEditPatientOpen(true);
   };
 
-  const handleViewRecords = (patient: Patient) => {
+  const handleViewDetails = (patient: Patient) => {
     setSelectedPatient(patient);
-    setIsViewRecordsOpen(true);
+    setIsViewDetailsOpen(true);
   };
 
   const handleDeactivatePatient = (patient: Patient) => {
@@ -217,12 +218,22 @@ const PatientList = () => {
                     )}
                     <td className="px-4 py-4 whitespace-nowrap text-right">
                       <div className="flex justify-end space-x-2">
+                        {/* View details button (new) */}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleViewDetails(patient)}
+                          title="Ver Detalhes"
+                        >
+                          <Calendar className="h-4 w-4" />
+                        </Button>
+                        
                         {canViewRecords && (
                           <>
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => handleViewRecords(patient)}
+                              onClick={() => handleViewDetails(patient)}
                               title="Prontuários"
                             >
                               <FileText className="h-4 w-4" />
@@ -315,19 +326,30 @@ const PatientList = () => {
         </DialogContent>
       </Dialog>
 
-      {/* View Patient Records Dialog */}
-      <Dialog open={isViewRecordsOpen} onOpenChange={setIsViewRecordsOpen}>
-        <DialogContent className="max-w-3xl">
+      {/* Patient Details Dialog */}
+      <Dialog open={isViewDetailsOpen} onOpenChange={setIsViewDetailsOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>
-              Prontuário - {selectedPatient?.name}
+              Detalhes do Paciente - {selectedPatient?.name}
             </DialogTitle>
           </DialogHeader>
           {selectedPatient && (
-            <PatientRecords
-              patient={selectedPatient}
-              onClose={() => setIsViewRecordsOpen(false)}
-            />
+            <Tabs defaultValue="records" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="records">Prontuário</TabsTrigger>
+                <TabsTrigger value="appointments">Histórico de Consultas</TabsTrigger>
+              </TabsList>
+              <TabsContent value="records" className="pt-4">
+                <PatientRecords
+                  patient={selectedPatient}
+                  onClose={() => setIsViewDetailsOpen(false)}
+                />
+              </TabsContent>
+              <TabsContent value="appointments" className="pt-4">
+                <PatientAppointmentHistory patient={selectedPatient} />
+              </TabsContent>
+            </Tabs>
           )}
         </DialogContent>
       </Dialog>

@@ -91,7 +91,7 @@ const AppointmentCalendar = () => {
     // Count appointments by status
     const confirmedCount = appointmentsForDate.filter(app => app.status === "confirmed").length;
     const pendingCount = appointmentsForDate.filter(app => app.status === "pending").length;
-    const totalCount = appointmentsForDate.length;
+    const otherCount = appointmentsForDate.length - confirmedCount - pendingCount;
     
     // Create appointment dots based on status and count
     const appointmentDots = [];
@@ -107,7 +107,7 @@ const AppointmentCalendar = () => {
     }
     
     // Add pending appointment dots (yellow)
-    for (let i = 0; i < pendingCount && appointmentDots.length < 5; i++) {
+    for (let i = 0; i < pendingCount && i + confirmedCount < 5; i++) {
       appointmentDots.push(
         <div
           key={`pending-${i}`}
@@ -117,8 +117,7 @@ const AppointmentCalendar = () => {
     }
     
     // Add others (cancelled, completed) if space permits
-    const otherCount = totalCount - confirmedCount - pendingCount;
-    for (let i = 0; i < otherCount && appointmentDots.length < 5; i++) {
+    for (let i = 0; i < otherCount && i + confirmedCount + pendingCount < 5; i++) {
       appointmentDots.push(
         <div
           key={`other-${i}`}
@@ -127,14 +126,23 @@ const AppointmentCalendar = () => {
       );
     }
     
+    // Only show green availability dot if no appointments and psychologist is available
+    if (appointmentDots.length === 0 && isAvailable) {
+      appointmentDots.push(
+        <div 
+          key="available" 
+          className="appointment-dot bg-emerald-400" 
+        />
+      );
+    }
+    
+    const totalAppointments = appointmentsForDate.length;
+    
     return (
       <div className="flex flex-wrap justify-center gap-1 mt-1">
         {appointmentDots}
-        {totalCount > 5 && (
+        {totalAppointments > 5 && (
           <span className="text-xs text-gray-500 font-medium">+</span>
-        )}
-        {appointmentDots.length === 0 && isAvailable && (
-          <div className="appointment-dot bg-emerald-400" />
         )}
       </div>
     );

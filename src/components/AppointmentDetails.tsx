@@ -16,6 +16,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useAppointments } from "@/context/AppointmentContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/use-toast";
 
 interface AppointmentDetailsProps {
   appointment: Appointment;
@@ -24,6 +25,7 @@ interface AppointmentDetailsProps {
 
 const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const { updateAppointmentStatus, deleteAppointment, findNextAvailableSlot, rescheduleAppointment, updateAppointment } = useAppointments();
   const [isReschedulingOpen, setIsReschedulingOpen] = useState(false);
   const [newDate, setNewDate] = useState<string>(appointment.date);
@@ -73,6 +75,11 @@ const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) =
       insuranceToken
     };
     updateAppointment(updatedAppointment);
+    
+    toast({
+      title: "Token salvo",
+      description: "O token do convênio foi salvo com sucesso.",
+    });
   };
 
   const getStatusColor = (status: string) => {
@@ -165,6 +172,9 @@ const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) =
                 Salvar Token
               </Button>
             </div>
+            <p className="text-xs text-gray-500">
+              O token é importante para controle e rastreamento dos atendimentos realizados via convênio.
+            </p>
           </div>
         </div>
       )}
