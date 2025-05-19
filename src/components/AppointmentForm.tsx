@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,8 +66,27 @@ const AppointmentForm = ({
         psychologist.workingHours?.some(wh => wh.dayOfWeek === dayOfWeek)
       );
       setAvailablePsychologists(available);
+      
+      // If previously selected psychologist is not available for this date, clear selection
+      if (psychologistId) {
+        const isAvailable = isPsychologistAvailable(psychologistId);
+        if (!isAvailable) {
+          // Clear psychologist selection if not available
+          setPsychologistId("");
+          
+          // Show toast notification
+          const psychologist = psychologists.find(p => p.id === psychologistId);
+          if (psychologist) {
+            toast({
+              title: "Psicólogo indisponível",
+              description: `${psychologist.name} não atende na data ${format(date, "dd/MM/yyyy")}. Selecione um psicólogo disponível.`,
+              variant: "destructive",
+            });
+          }
+        }
+      }
     }
-  }, [date, psychologists]);
+  }, [date, psychologists, psychologistId, toast]);
 
   // Handle psychologist selection for calendar highlighting
   const handlePsychologistChange = (value: string) => {
@@ -381,6 +401,9 @@ const AppointmentForm = ({
           description: `${psychologist.name} não atende neste dia da semana. Existem ${availablePsychologists.length} outros psicólogos disponíveis neste dia.`,
           variant: "destructive",
         });
+        
+        // Clear the psychologist selection
+        setPsychologistId("");
       }
     }
   };
@@ -431,18 +454,28 @@ const AppointmentForm = ({
               <SelectValue placeholder="Selecione o psicólogo" />
             </SelectTrigger>
             <SelectContent>
-              {psychologists.map((psychologist) => (
-                <SelectItem 
-                  key={psychologist.id} 
-                  value={psychologist.id}
-                  className={!isPsychologistAvailable(psychologist.id) ? "text-gray-400" : ""}
-                >
-                  {psychologist.name}
-                  {!isPsychologistAvailable(psychologist.id) && " (Indisponível nesta data)"}
+              {/* Filter the psychologist list to show only those available for the selected date */}
+              {availablePsychologists.length > 0 ? (
+                availablePsychologists.map((psychologist) => (
+                  <SelectItem 
+                    key={psychologist.id} 
+                    value={psychologist.id}
+                  >
+                    {psychologist.name}
+                  </SelectItem>
+                ))
+              ) : (
+                <SelectItem value="" disabled>
+                  Nenhum psicólogo disponível nesta data
                 </SelectItem>
-              ))}
+              )}
             </SelectContent>
           </Select>
+          {availablePsychologists.length > 0 && (
+            <div className="text-xs text-green-600 mt-1">
+              {availablePsychologists.length} psicólogo(s) disponível(is) na data selecionada
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -457,35 +490,6 @@ const AppointmentForm = ({
             </SelectContent>
           </Select>
         </div>
-
-        {psychologistId && !isPsychologistAvailable(psychologistId) && (
-          <div className="col-span-2">
-            <Alert className="bg-amber-50 border-amber-200">
-              <AlertDescription className="flex items-center justify-between">
-                <div>
-                  O psicólogo selecionado não atende na data selecionada ({format(date, "dd/MM/yyyy")}). 
-                  {nextAvailableSlot && (
-                    <> 
-                      Próximo horário disponível: {format(nextAvailableSlot.date, "dd/MM/yyyy")} às {nextAvailableSlot.startTime}.
-                    </>
-                  )}
-                </div>
-                <div className="flex gap-2">
-                  {nextAvailableSlot && (
-                    <Button type="button" variant="outline" onClick={applyNextAvailableSlot} className="text-amber-600">
-                      Usar próximo horário
-                    </Button>
-                  )}
-                  {availablePsychologists.length > 0 && (
-                    <Button type="button" variant="outline" onClick={switchToAvailablePsychologist} className="text-amber-600">
-                      Usar outro psicólogo
-                    </Button>
-                  )}
-                </div>
-              </AlertDescription>
-            </Alert>
-          </div>
-        )}
 
         <div className="space-y-2">
           <Label htmlFor="date">Data</Label>
