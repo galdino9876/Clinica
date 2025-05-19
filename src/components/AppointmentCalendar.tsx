@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import Calendar from "react-calendar";
 import { useAppointments } from "@/context/AppointmentContext";
@@ -37,14 +38,18 @@ const AppointmentCalendar = () => {
   // Calculate which dates are fully booked
   const calculateFullyBookedDates = () => {
     const psychologists = getPsychologists();
-    const bookedDatesMap = new Map<string, Set<string>>();
-    const psychologistsByDate = new Map<string, Set<string>>();
     
-    // First, collect all dates where psychologists are available
+    // Map to store available time slots for each date and psychologist
+    const availableSlotsMap = new Map<string, Map<string, number>>();
+    
+    // Map to store booked time slots for each date and psychologist
+    const bookedSlotsMap = new Map<string, Map<string, number>>();
+    
+    // First, initialize available slots for each psychologist's working days
     psychologists.forEach(psych => {
       if (psych.workingHours) {
         // Get available days of week for this psychologist
-        const availableDays = psych.workingHours.map(wh => wh.dayOfWeek);
+        const workingHours = psych.workingHours;
         
         // Check the next 60 days
         const today = new Date();
@@ -53,58 +58,105 @@ const AppointmentCalendar = () => {
           date.setDate(today.getDate() + i);
           const dayOfWeek = date.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
           
-          // If this psychologist works on this day of week
-          if (availableDays.includes(dayOfWeek)) {
+          // Find if this psychologist works on this day of week
+          const workingHoursForDay = workingHours.find(wh => wh.dayOfWeek === dayOfWeek);
+          
+          if (workingHoursForDay) {
+            const { startTime, endTime } = workingHoursForDay;
             const dateStr = date.toISOString().split('T')[0];
             
-            // Add this psychologist to the set of available psychologists for this date
-            if (!psychologistsByDate.has(dateStr)) {
-              psychologistsByDate.set(dateStr, new Set());
+            // Generate 1-hour slots for this day
+            const availableSlots = generateTimeSlots(startTime, endTime, 60);
+            
+            // Add these slots to the available slots map
+            if (!availableSlotsMap.has(dateStr)) {
+              availableSlotsMap.set(dateStr, new Map());
             }
-            psychologistsByDate.get(dateStr)?.add(psych.id);
+            
+            const psychSlotsMap = availableSlotsMap.get(dateStr)!;
+            if (!psychSlotsMap.has(psych.id)) {
+              psychSlotsMap.set(psych.id, availableSlots.length);
+            } else {
+              psychSlotsMap.set(psych.id, psychSlotsMap.get(psych.id)! + availableSlots.length);
+            }
           }
         }
       }
     });
     
-    // Now check appointments to see which psychologists are fully booked
+    // Now count all booked slots from appointments
     appointments.forEach(app => {
-      // Only count confirmed appointments
       if (app.status === 'confirmed' || app.status === 'pending') {
         const dateStr = app.date;
         const psychId = app.psychologistId;
         
-        // Initialize the set of booked psychologists for this date if needed
-        if (!bookedDatesMap.has(dateStr)) {
-          bookedDatesMap.set(dateStr, new Set());
+        // Initialize booked slots map for this date if needed
+        if (!bookedSlotsMap.has(dateStr)) {
+          bookedSlotsMap.set(dateStr, new Map());
         }
         
-        // Add this psychologist to the set of booked psychologists for this date
-        bookedDatesMap.get(dateStr)?.add(psychId);
+        // Increment booked slots count for this psychologist on this date
+        const psychBookedMap = bookedSlotsMap.get(dateStr)!;
+        if (!psychBookedMap.has(psychId)) {
+          psychBookedMap.set(psychId, 1);
+        } else {
+          psychBookedMap.set(psychId, psychBookedMap.get(psychId)! + 1);
+        }
       }
     });
     
-    // Find dates where all available psychologists are booked
+    // Find dates where all available slots are booked
     const fullyBooked: string[] = [];
     
-    psychologistsByDate.forEach((availablePsychs, dateStr) => {
-      const bookedPsychs = bookedDatesMap.get(dateStr) || new Set();
+    availableSlotsMap.forEach((psychSlotsMap, dateStr) => {
+      let totalAvailableSlots = 0;
+      let totalBookedSlots = 0;
       
-      // Check if all available psychologists are booked
-      let allBooked = true;
-      availablePsychs.forEach(psychId => {
-        if (!bookedPsychs.has(psychId)) {
-          allBooked = false;
+      // Calculate total available slots for this date across all psychologists
+      psychSlotsMap.forEach((slots, psychId) => {
+        totalAvailableSlots += slots;
+        
+        // Add booked slots for this psychologist if any
+        const bookedSlotsForDate = bookedSlotsMap.get(dateStr);
+        if (bookedSlotsForDate && bookedSlotsForDate.has(psychId)) {
+          totalBookedSlots += bookedSlotsForDate.get(psychId)!;
         }
       });
       
-      if (allBooked && availablePsychs.size > 0) {
+      // If all available slots are booked, mark this date as fully booked
+      if (totalAvailableSlots > 0 && totalAvailableSlots === totalBookedSlots) {
         fullyBooked.push(dateStr);
       }
     });
     
     setFullyBookedDates(fullyBooked);
     console.log("Fully booked dates:", fullyBooked);
+    console.log("Available slots map:", Array.from(availableSlotsMap.entries()));
+    console.log("Booked slots map:", Array.from(bookedSlotsMap.entries()));
+  };
+  
+  // Helper function to generate time slots
+  const generateTimeSlots = (startTime: string, endTime: string, durationMinutes: number) => {
+    const slots = [];
+    const startMin = timeToMinutes(startTime);
+    const endMin = timeToMinutes(endTime);
+    
+    for (let currentMin = startMin; currentMin + durationMinutes <= endMin; currentMin += durationMinutes) {
+      slots.push([minutesToTime(currentMin), minutesToTime(currentMin + durationMinutes)]);
+    }
+    
+    return slots;
+  };
+  
+  const timeToMinutes = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number);
+    return hours * 60 + minutes;
+  };
+  
+  const minutesToTime = (minutes: number) => {
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
   };
   
   // Filter appointments based on user role and selected date
@@ -137,7 +189,7 @@ const AppointmentCalendar = () => {
   // Get list of all psychologists
   const psychologists = getPsychologists();
   
-  // Determine if a date is available for any psychologist (for admin/receptionist) or current psychologist (for psychologist)
+  // Determine if a date is available for any psychologist
   const isPsychologistAvailableOnDate = (date: Date) => {
     if (user?.role === "psychologist") {
       // For psychologist users, only check their own availability
