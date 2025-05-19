@@ -93,7 +93,7 @@ const AppointmentCalendar = () => {
     const pendingCount = appointmentsForDate.filter(app => app.status === "pending").length;
     const totalCount = appointmentsForDate.length;
     
-    // Create appointment dots based on status
+    // Create appointment dots based on status and count
     const appointmentDots = [];
     
     // Add confirmed appointment dots (green)
@@ -102,7 +102,6 @@ const AppointmentCalendar = () => {
         <div
           key={`confirmed-${i}`}
           className="appointment-dot bg-green-500"
-          style={{ marginRight: "3px" }}
         />
       );
     }
@@ -113,7 +112,6 @@ const AppointmentCalendar = () => {
         <div
           key={`pending-${i}`}
           className="appointment-dot bg-yellow-500"
-          style={{ marginRight: "3px" }}
         />
       );
     }
@@ -125,25 +123,18 @@ const AppointmentCalendar = () => {
         <div
           key={`other-${i}`}
           className="appointment-dot bg-gray-500"
-          style={{ marginRight: "3px" }}
         />
       );
     }
     
-    // Show "+" if there are more than 5 appointments
-    const showMore = totalCount > 5;
-    
     return (
-      <div className="flex justify-center mt-1">
+      <div className="flex flex-wrap justify-center gap-1 mt-1">
         {appointmentDots}
-        {showMore && (
-          <span className="text-xs text-gray-500">+</span>
+        {totalCount > 5 && (
+          <span className="text-xs text-gray-500 font-medium">+</span>
         )}
         {appointmentDots.length === 0 && isAvailable && (
-          <div
-            className="appointment-dot bg-emerald-400"
-            style={{ marginRight: "3px" }}
-          />
+          <div className="appointment-dot bg-emerald-400" />
         )}
       </div>
     );
@@ -227,7 +218,7 @@ const AppointmentCalendar = () => {
       
       {/* Modal for appointment details */}
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="w-full max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogContent className="w-full max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="text-xl font-semibold capitalize">
               {formatSelectedDate(selectedDate)}
@@ -242,7 +233,7 @@ const AppointmentCalendar = () => {
 
       {/* Create Appointment Modal */}
       <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent className="max-w-3xl">
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Novo Agendamento</DialogTitle>
           </DialogHeader>
@@ -263,6 +254,7 @@ const AppointmentCalendar = () => {
           width: 6px;
           height: 6px;
           border-radius: 50%;
+          margin-right: 2px;
         }
         .react-calendar__tile {
           color: black !important;
@@ -282,4 +274,3 @@ const AppointmentCalendar = () => {
 };
 
 export default AppointmentCalendar;
-
