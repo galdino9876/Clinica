@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
 import { Calendar, Users, BarChart3, LogOut, User, Key } from "lucide-react";
@@ -42,6 +41,7 @@ const Sidebar = () => {
     return baseItems;
   };
 
+  
   return (
     <div className="hidden md:flex min-h-screen w-64 flex-col bg-white border-r border-gray-200">
       <div className="flex flex-col justify-between h-full">

@@ -45,7 +45,7 @@ const App = () => {
                 <Route
                   path="/users"
                   element={
-                    <PrivateRoute allowedRoles={["admin"]}>
+                    <PrivateRoute allowedRoles={["admin", "receptionist"]}>
                       <Users />
                     </PrivateRoute>
                   }

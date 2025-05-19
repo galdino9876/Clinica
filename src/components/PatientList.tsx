@@ -228,6 +228,7 @@ const PatientList = () => {
                           <Calendar className="h-4 w-4" />
                         </Button>
                         
+                        {/* Apenas admin e psicólogos podem ver prontuários e gerar documentos */}
                         {canViewRecords && (
                           <>
                             <Button
@@ -335,21 +336,29 @@ const PatientList = () => {
             </DialogTitle>
           </DialogHeader>
           {selectedPatient && (
-            <Tabs defaultValue="records" className="w-full">
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="records">Prontuário</TabsTrigger>
-                <TabsTrigger value="appointments">Histórico de Consultas</TabsTrigger>
-              </TabsList>
-              <TabsContent value="records" className="pt-4">
-                <PatientRecords
-                  patient={selectedPatient}
-                  onClose={() => setIsViewDetailsOpen(false)}
-                />
-              </TabsContent>
-              <TabsContent value="appointments" className="pt-4">
+            <>
+              {/* Para recepcionista, mostrar apenas histórico de consultas */}
+              {isReceptionist ? (
                 <PatientAppointmentHistory patient={selectedPatient} />
-              </TabsContent>
-            </Tabs>
+              ) : (
+                /* Para admin e psicólogos, mostrar tabs com prontuário e histórico */
+                <Tabs defaultValue="records" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="records">Prontuário</TabsTrigger>
+                    <TabsTrigger value="appointments">Histórico de Consultas</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="records" className="pt-4">
+                    <PatientRecords
+                      patient={selectedPatient}
+                      onClose={() => setIsViewDetailsOpen(false)}
+                    />
+                  </TabsContent>
+                  <TabsContent value="appointments" className="pt-4">
+                    <PatientAppointmentHistory patient={selectedPatient} />
+                  </TabsContent>
+                </Tabs>
+              )}
+            </>
           )}
         </DialogContent>
       </Dialog>
