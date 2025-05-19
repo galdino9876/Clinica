@@ -13,9 +13,10 @@ import AppointmentDetails from "./AppointmentDetails";
 interface AppointmentTimeSlotsProps {
   selectedDate: Date;
   appointments: Appointment[];
+  onCreateAppointment?: () => void; // Make this optional
 }
 
-const AppointmentTimeSlots = ({ selectedDate, appointments }: AppointmentTimeSlotsProps) => {
+const AppointmentTimeSlots = ({ selectedDate, appointments, onCreateAppointment }: AppointmentTimeSlotsProps) => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const { user } = useAuth();
@@ -33,6 +34,15 @@ const AppointmentTimeSlots = ({ selectedDate, appointments }: AppointmentTimeSlo
 
   const openAppointmentModal = (appointment: Appointment) => {
     setSelectedAppointment(appointment);
+  };
+
+  const handleCreateAppointment = () => {
+    // If a custom handler is provided, use it, otherwise use local state
+    if (onCreateAppointment) {
+      onCreateAppointment();
+    } else {
+      setIsCreateModalOpen(true);
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -58,7 +68,7 @@ const AppointmentTimeSlots = ({ selectedDate, appointments }: AppointmentTimeSlo
         </h2>
         {(user?.role === "admin" || user?.role === "receptionist") && (
           <Button
-            onClick={() => setIsCreateModalOpen(true)}
+            onClick={handleCreateAppointment}
             variant="default"
             size="sm"
             className="bg-clinic-600 hover:bg-clinic-700"
