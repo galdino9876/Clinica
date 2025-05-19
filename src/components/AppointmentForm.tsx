@@ -434,7 +434,7 @@ const AppointmentForm = ({
     }
   };
 
-  // Verifica se o psicólogo está disponível no dia selecionado
+  // Função para verificar se o psicólogo está disponível no dia selecionado
   const isPsychologistAvailable = (psychologistId: string): boolean => {
     const psychologist = psychologists.find(p => p.id === psychologistId);
     if (!psychologist || !psychologist.workingHours) return true;
@@ -557,6 +557,7 @@ const AppointmentForm = ({
             onDateChange={handleDateChange}
             psychologistId={psychologistId}
             disabled={lockDate}
+            onPsychologistChange={lockDate ? undefined : handlePsychologistChange}
           />
           {lockDate && (
             <div className="text-xs text-blue-600 mt-1">

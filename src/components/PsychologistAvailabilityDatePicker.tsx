@@ -1,5 +1,5 @@
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -14,16 +14,47 @@ interface PsychologistAvailabilityDatePickerProps {
   onDateChange: (date: Date) => void;
   psychologistId?: string;
   disabled?: boolean; // Add disabled prop
+  onPsychologistChange?: (psychologistId: string) => void; // Add new prop to listen to psychologist changes
 }
 
 const PsychologistAvailabilityDatePicker = ({
   date,
   onDateChange,
   psychologistId,
-  disabled = false // Default to false (not disabled)
+  disabled = false, // Default to false (not disabled)
+  onPsychologistChange
 }: PsychologistAvailabilityDatePickerProps) => {
   const [open, setOpen] = useState(false);
   const { users } = useAuth();
+  const [nextAvailableDate, setNextAvailableDate] = useState<Date | null>(null);
+
+  // Listen to psychologist changes and find the next available date
+  useEffect(() => {
+    if (psychologistId && !disabled && onPsychologistChange) {
+      // If we have a psychologist and date is not locked, find next available date
+      const psychologist = users.find((u) => u.id === psychologistId);
+      if (psychologist && psychologist.workingHours) {
+        // Find the next available date based on working hours
+        const today = new Date();
+        for (let i = 0; i < 30; i++) { // Check for the next 30 days
+          const checkDate = new Date(today);
+          checkDate.setDate(today.getDate() + i);
+          
+          const dayOfWeek = checkDate.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+          const isWorkingDay = psychologist.workingHours.some(
+            (wh) => wh.dayOfWeek === dayOfWeek
+          );
+          
+          if (isWorkingDay) {
+            setNextAvailableDate(checkDate);
+            // Set the next available date automatically
+            onDateChange(checkDate);
+            break;
+          }
+        }
+      }
+    }
+  }, [psychologistId, disabled, onPsychologistChange, users, onDateChange]);
 
   // Function to determine which days should be disabled based on psychologist availability
   const disabledDays = (date: Date) => {
