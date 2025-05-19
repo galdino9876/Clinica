@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,13 +24,15 @@ interface AppointmentFormProps {
   onClose: () => void;
   existingAppointment?: any; // Para edição de agendamentos existentes
   onPsychologistSelected?: (psychologistId: string) => void;
+  lockDate?: boolean; // New prop to lock the date field
 }
 
 const AppointmentForm = ({ 
   selectedDate, 
   onClose, 
   existingAppointment,
-  onPsychologistSelected 
+  onPsychologistSelected,
+  lockDate = false // Default to false (date is changeable)
 }: AppointmentFormProps) => {
   const { addAppointment, updateAppointment, patients, rooms, findNextAvailableSlot, appointments } = useAppointments();
   const { getPsychologists, users } = useAuth();
@@ -105,14 +106,6 @@ const AppointmentForm = ({
           description: `${psychologist.name} não atende neste dia da semana. Sugerimos escolher outra data ou outro psicólogo.`,
           variant: "destructive",
         });
-        
-        // Suggest next available slot for this psychologist
-        if (nextAvailableSlot) {
-          toast({
-            title: "Próximo horário disponível",
-            description: `Próxima data disponível: ${format(nextAvailableSlot.date, "dd/MM/yyyy")} às ${nextAvailableSlot.startTime}.`,
-          });
-        }
       }
     }
     
@@ -121,22 +114,29 @@ const AppointmentForm = ({
     }
   };
 
-  // Efeito para encontrar o próximo horário disponível quando o psicólogo é selecionado
+  // Modified effect to consider the lockDate prop when finding available slots
   useEffect(() => {
     if (psychologistId) {
-      const slot = findNextAvailableSlot(psychologistId);
-      setNextAvailableSlot(slot);
-      
-      // Se for um novo agendamento e houver um slot disponível, sugerimos automaticamente
-      if (slot && !existingAppointment) {
-        setDate(slot.date);
-        setStartTime(slot.startTime);
-        setEndTime(slot.endTime);
+      // Only find the next available slot if the date is not locked
+      if (!lockDate) {
+        const slot = findNextAvailableSlot(psychologistId);
+        setNextAvailableSlot(slot);
+        
+        // Se for um novo agendamento e houver um slot disponível, sugerimos automaticamente
+        if (slot && !existingAppointment) {
+          setDate(slot.date);
+          setStartTime(slot.startTime);
+          setEndTime(slot.endTime);
+        }
+      } else {
+        // When date is locked, we don't need to find the next available slot
+        // We just need to check if there are available times on the selected date
+        setNextAvailableSlot(null);
       }
     } else {
       setNextAvailableSlot(null);
     }
-  }, [psychologistId, findNextAvailableSlot, existingAppointment]);
+  }, [psychologistId, findNextAvailableSlot, existingAppointment, lockDate]);
 
   // Função para verificar se um horário já está ocupado pelo psicólogo
   const isTimeSlotOccupied = (psychologistId: string, date: Date, startTime: string, endTime: string) => {
@@ -150,9 +150,9 @@ const AppointmentForm = ({
     );
 
     // Verifica se há sobreposição com algum agendamento existente
-    return existingAppointments.some(app => {
-      const appStartMinutes = timeToMinutes(app.startTime);
-      const appEndMinutes = timeToMinutes(app.endTime);
+    return existingAppointments.some(appointment => {
+      const appStartMinutes = timeToMinutes(appointment.startTime);
+      const appEndMinutes = timeToMinutes(appointment.endTime);
       const newStartMinutes = timeToMinutes(startTime);
       const newEndMinutes = timeToMinutes(endTime);
 
@@ -444,6 +444,9 @@ const AppointmentForm = ({
 
   // Função para atualizar a data selecionada
   const handleDateChange = (newDate: Date) => {
+    // Only allow date changes if the date is not locked
+    if (lockDate) return;
+    
     setDate(newDate);
     
     // Verificar se o psicólogo atual está disponível na nova data
@@ -553,7 +556,13 @@ const AppointmentForm = ({
             date={date}
             onDateChange={handleDateChange}
             psychologistId={psychologistId}
+            disabled={lockDate}
           />
+          {lockDate && (
+            <div className="text-xs text-blue-600 mt-1">
+              Data fixa selecionada do calendário
+            </div>
+          )}
         </div>
 
         {appointmentType === "presential" && (

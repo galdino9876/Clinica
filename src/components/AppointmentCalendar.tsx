@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import Calendar from "react-calendar";
 import { useAppointments } from "@/context/AppointmentContext";
@@ -347,13 +346,16 @@ const AppointmentCalendar = () => {
           <DialogHeader>
             <DialogTitle>Novo Agendamento</DialogTitle>
             <DialogDescription>
-              Preencha os dados para criar um novo agendamento
+              {isDetailsOpen 
+                ? "Criando agendamento para a data selecionada"
+                : "Preencha os dados para criar um novo agendamento"}
             </DialogDescription>
           </DialogHeader>
           <AppointmentForm
             selectedDate={selectedDate}
             onClose={handleFormClose}
             onPsychologistSelected={handlePsychologistSelected}
+            lockDate={isDetailsOpen} // Lock the date if we're creating from calendar view
           />
         </DialogContent>
       </Dialog>
