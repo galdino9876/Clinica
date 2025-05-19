@@ -22,6 +22,7 @@ const AppointmentCalendar = () => {
   const { appointments } = useAppointments();
   const { user, getPsychologists } = useAuth();
   const [selectedPsychologistId, setSelectedPsychologistId] = useState<string | null>(null);
+  const [fullyBookedDates, setFullyBookedDates] = useState<string[]>([]);
   
   // Force re-render when appointments change
   const [, setForceUpdate] = useState<number>(0);
@@ -29,7 +30,82 @@ const AppointmentCalendar = () => {
   useEffect(() => {
     // Force component to re-render when appointments change
     setForceUpdate(prev => prev + 1);
+    
+    // Calculate fully booked dates
+    calculateFullyBookedDates();
   }, [appointments]);
+  
+  // Calculate which dates are fully booked
+  const calculateFullyBookedDates = () => {
+    const psychologists = getPsychologists();
+    const bookedDatesMap = new Map<string, Set<string>>();
+    const psychologistsByDate = new Map<string, Set<string>>();
+    
+    // First, collect all dates where psychologists are available
+    psychologists.forEach(psych => {
+      if (psych.workingHours) {
+        // Get available days of week for this psychologist
+        const availableDays = psych.workingHours.map(wh => wh.dayOfWeek);
+        
+        // Check the next 60 days
+        const today = new Date();
+        for (let i = 0; i < 60; i++) {
+          const date = new Date(today);
+          date.setDate(today.getDate() + i);
+          const dayOfWeek = date.getDay();
+          
+          // If this psychologist works on this day of week
+          if (availableDays.includes(dayOfWeek)) {
+            const dateStr = date.toISOString().split('T')[0];
+            
+            // Add this psychologist to the set of available psychologists for this date
+            if (!psychologistsByDate.has(dateStr)) {
+              psychologistsByDate.set(dateStr, new Set());
+            }
+            psychologistsByDate.get(dateStr)?.add(psych.id);
+          }
+        }
+      }
+    });
+    
+    // Now check appointments to see which psychologists are fully booked
+    appointments.forEach(app => {
+      // Only count confirmed appointments
+      if (app.status === 'confirmed' || app.status === 'pending') {
+        const dateStr = app.date;
+        const psychId = app.psychologistId;
+        
+        // Initialize the set of booked psychologists for this date if needed
+        if (!bookedDatesMap.has(dateStr)) {
+          bookedDatesMap.set(dateStr, new Set());
+        }
+        
+        // Add this psychologist to the set of booked psychologists for this date
+        bookedDatesMap.get(dateStr)?.add(psychId);
+      }
+    });
+    
+    // Find dates where all available psychologists are booked
+    const fullyBooked: string[] = [];
+    
+    psychologistsByDate.forEach((availablePsychs, dateStr) => {
+      const bookedPsychs = bookedDatesMap.get(dateStr) || new Set();
+      
+      // Check if all available psychologists are booked
+      let allBooked = true;
+      availablePsychs.forEach(psychId => {
+        if (!bookedPsychs.has(psychId)) {
+          allBooked = false;
+        }
+      });
+      
+      if (allBooked && availablePsychs.size > 0) {
+        fullyBooked.push(dateStr);
+      }
+    });
+    
+    setFullyBookedDates(fullyBooked);
+  };
   
   // Filter appointments based on user role and selected date
   const getAppointmentsForDate = (date: Date) => {
@@ -151,6 +227,11 @@ const AppointmentCalendar = () => {
   const tileClassName = ({ date, view }: { date: Date; view: string }) => {
     if (view !== "month") return null;
     
+    const dateStr = date.toISOString().split('T')[0];
+    if (fullyBookedDates.includes(dateStr)) {
+      return "fully-booked-date";
+    }
+    
     if (isPsychologistAvailableOnDate(date)) {
       return "available-date";
     }
@@ -217,9 +298,13 @@ const AppointmentCalendar = () => {
             <div className="w-3 h-3 rounded-full bg-yellow-500 mr-1"></div>
             <span className="text-xs">Pendentes</span>
           </div>
-          <div className="flex items-center">
+          <div className="flex items-center mr-4">
             <div className="w-3 h-3 rounded-full bg-emerald-400 mr-1"></div>
             <span className="text-xs">Disponibilidade do psicólogo</span>
+          </div>
+          <div className="flex items-center">
+            <div className="w-3 h-3 rounded-full bg-orange-500 mr-1"></div>
+            <span className="text-xs">Dia totalmente agendado</span>
           </div>
         </div>
       </div>
@@ -257,6 +342,9 @@ const AppointmentCalendar = () => {
         {`
         .available-date {
           background-color: rgba(52, 211, 153, 0.15);
+        }
+        .fully-booked-date {
+          background-color: #FEC6A1;
         }
         .appointment-dot {
           width: 6px;

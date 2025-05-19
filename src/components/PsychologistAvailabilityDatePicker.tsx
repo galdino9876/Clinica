@@ -27,6 +27,11 @@ const PsychologistAvailabilityDatePicker = ({
   const [psychologist, setPsychologist] = useState<User | null>(null);
   const [availableDays, setAvailableDays] = useState<number[]>([]);
 
+  // Log the initial date passed to the component for debugging
+  useEffect(() => {
+    console.log("DatePicker received date:", date);
+  }, []);
+
   // Encontra o psicólogo selecionado quando o ID muda
   useEffect(() => {
     if (psychologistId) {
@@ -49,6 +54,7 @@ const PsychologistAvailabilityDatePicker = ({
   // Quando a data é alterada, notifica o componente pai
   const handleDateSelect = (date: Date | undefined) => {
     if (date) {
+      console.log("Date selected in DatePicker:", date);
       setSelectedDate(date);
       onDateChange(date);
     }
