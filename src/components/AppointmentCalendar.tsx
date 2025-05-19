@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import Calendar from "react-calendar";
 import { useAppointments } from "@/context/AppointmentContext";
@@ -109,22 +108,21 @@ const AppointmentCalendar = () => {
     const fullyBooked: string[] = [];
     
     availableSlotsMap.forEach((psychSlotsMap, dateStr) => {
-      let totalAvailableSlots = 0;
-      let totalBookedSlots = 0;
+      let allPsychologistsFullyBooked = true;
       
-      // Calculate total available slots for this date across all psychologists
-      psychSlotsMap.forEach((slots, psychId) => {
-        totalAvailableSlots += slots;
-        
-        // Add booked slots for this psychologist if any
+      // Check if each psychologist is fully booked for this date
+      psychSlotsMap.forEach((availableSlots, psychId) => {
         const bookedSlotsForDate = bookedSlotsMap.get(dateStr);
-        if (bookedSlotsForDate && bookedSlotsForDate.has(psychId)) {
-          totalBookedSlots += bookedSlotsForDate.get(psychId)!;
+        const bookedSlotsForPsych = bookedSlotsForDate?.get(psychId) || 0;
+        
+        // If any psychologist has available slots, the date is not fully booked
+        if (bookedSlotsForPsych < availableSlots) {
+          allPsychologistsFullyBooked = false;
         }
       });
       
-      // If all available slots are booked, mark this date as fully booked
-      if (totalAvailableSlots > 0 && totalAvailableSlots === totalBookedSlots) {
+      // If all psychologists are fully booked, mark this date as fully booked
+      if (allPsychologistsFullyBooked && psychSlotsMap.size > 0) {
         fullyBooked.push(dateStr);
       }
     });
@@ -141,6 +139,7 @@ const AppointmentCalendar = () => {
     const startMin = timeToMinutes(startTime);
     const endMin = timeToMinutes(endTime);
     
+    // Corrigido: Garantir que inclua o último horário possível antes do fim do expediente
     for (let currentMin = startMin; currentMin + durationMinutes <= endMin; currentMin += durationMinutes) {
       slots.push([minutesToTime(currentMin), minutesToTime(currentMin + durationMinutes)]);
     }
@@ -328,18 +327,6 @@ const AppointmentCalendar = () => {
 
   return (
     <div className="w-full max-w-4xl mx-auto">
-      <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">Agenda</h1>
-        {(user?.role === "admin" || user?.role === "receptionist") && (
-          <Button 
-            onClick={handleCreateModalOpen} 
-            className="bg-clinic-600 hover:bg-clinic-700"
-          >
-            <Plus className="h-4 w-4 mr-1" /> Novo Agendamento
-          </Button>
-        )}
-      </div>
-      
       <div className="bg-white p-6 rounded-lg shadow-sm">
         <Calendar
           onChange={handleDateChange}

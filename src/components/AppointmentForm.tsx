@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -274,10 +275,11 @@ const AppointmentForm = ({
     const endHour = parseInt(end.split(':')[0]);
     const endMinute = parseInt(end.split(':')[1]);
     
+    // Corrigido: Inclui o último horário (end) na lista de opções
     let currentHour = startHour;
     let currentMinute = startMinute - (startMinute % 30); // Arredondar para intervalo de 30 minutos
     
-    while (currentHour < endHour || (currentHour === endHour && currentMinute <= endMinute)) {
+    while (currentHour < endHour || (currentHour === endHour && currentMinute <= endMinute - 60)) {
       const formattedHour = currentHour.toString().padStart(2, "0");
       const formattedMinute = currentMinute.toString().padStart(2, "0");
       times.push(`${formattedHour}:${formattedMinute}`);

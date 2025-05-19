@@ -3,20 +3,65 @@ import AppointmentCalendar from "@/components/AppointmentCalendar";
 import Layout from "@/components/Layout";
 import { useAppointments } from "@/context/AppointmentContext";
 import { useAuth } from "@/context/AuthContext";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import AppointmentForm from "@/components/AppointmentForm";
+import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
 
 const Index = () => {
   const { appointments } = useAppointments();
-  const { users } = useAuth();
+  const { users, user } = useAuth();
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   
   // Log for debugging when appointments change
   useEffect(() => {
     console.log("Agendamentos atualizados:", appointments);
   }, [appointments]);
 
+  // Usar sempre uma nova data ao abrir o modal da página inicial
+  const handleCreateModalOpen = () => {
+    setIsCreateModalOpen(true);
+  };
+
+  const handleFormClose = () => {
+    setIsCreateModalOpen(false);
+  };
+
   return (
     <Layout>
-      <AppointmentCalendar />
+      <div className="w-full max-w-4xl mx-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold">Agenda</h1>
+          {(user?.role === "admin" || user?.role === "receptionist") && (
+            <Button 
+              onClick={handleCreateModalOpen} 
+              className="bg-clinic-600 hover:bg-clinic-700"
+            >
+              <Plus className="h-4 w-4 mr-1" /> Novo Agendamento
+            </Button>
+          )}
+        </div>
+        
+        <AppointmentCalendar />
+        
+        {/* Create Appointment Modal for Homepage */}
+        <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Novo Agendamento</DialogTitle>
+              <DialogDescription>
+                Preencha os dados para criar um novo agendamento
+              </DialogDescription>
+            </DialogHeader>
+            <AppointmentForm
+              selectedDate={new Date()} // Sempre usa uma nova data ao abrir da página inicial
+              onClose={handleFormClose}
+              lockDate={false} // Nunca bloqueia a data quando aberto da página inicial
+            />
+          </DialogContent>
+        </Dialog>
+      </div>
     </Layout>
   );
 };
