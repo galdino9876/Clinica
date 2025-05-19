@@ -117,6 +117,14 @@ const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) =
     }
   };
 
+  // Log for debugging
+  console.log("Appointment details:", {
+    paymentMethod: appointment.paymentMethod,
+    status: appointment.status,
+    canEditToken,
+    shouldShowTokenInput
+  });
+
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
