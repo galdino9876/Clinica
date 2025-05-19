@@ -7,7 +7,7 @@ import { useEffect } from "react";
 const Index = () => {
   const { appointments } = useAppointments();
   
-  // Log para debug quando os agendamentos mudarem
+  // Log for debugging when appointments change
   useEffect(() => {
     console.log("Agendamentos atualizados:", appointments);
   }, [appointments]);

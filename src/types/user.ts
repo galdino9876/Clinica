@@ -16,4 +16,7 @@ export interface User {
   username?: string;
   password?: string; // Apenas para transferência, não será armazenado no estado
   workingHours?: WorkingHours[]; // Disponibilidade para psicólogos
+  commissionPercentage?: number; // Percentage of commission for psychologists
 }
+
+export type CommissionOption = 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100;

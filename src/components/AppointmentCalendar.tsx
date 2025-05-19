@@ -91,29 +91,59 @@ const AppointmentCalendar = () => {
     // Count appointments by status
     const confirmedCount = appointmentsForDate.filter(app => app.status === "confirmed").length;
     const pendingCount = appointmentsForDate.filter(app => app.status === "pending").length;
+    const totalCount = appointmentsForDate.length;
+    
+    // Create appointment dots based on status
+    const appointmentDots = [];
+    
+    // Add confirmed appointment dots (green)
+    for (let i = 0; i < confirmedCount && i < 5; i++) {
+      appointmentDots.push(
+        <div
+          key={`confirmed-${i}`}
+          className="appointment-dot bg-green-500"
+          style={{ marginRight: "3px" }}
+        />
+      );
+    }
+    
+    // Add pending appointment dots (yellow)
+    for (let i = 0; i < pendingCount && appointmentDots.length < 5; i++) {
+      appointmentDots.push(
+        <div
+          key={`pending-${i}`}
+          className="appointment-dot bg-yellow-500"
+          style={{ marginRight: "3px" }}
+        />
+      );
+    }
+    
+    // Add others (cancelled, completed) if space permits
+    const otherCount = totalCount - confirmedCount - pendingCount;
+    for (let i = 0; i < otherCount && appointmentDots.length < 5; i++) {
+      appointmentDots.push(
+        <div
+          key={`other-${i}`}
+          className="appointment-dot bg-gray-500"
+          style={{ marginRight: "3px" }}
+        />
+      );
+    }
+    
+    // Show "+" if there are more than 5 appointments
+    const showMore = totalCount > 5;
     
     return (
       <div className="flex justify-center mt-1">
-        {confirmedCount > 0 && (
-          <div
-            className="appointment-dot bg-green-500"
-            style={{ marginRight: "3px" }}
-          />
+        {appointmentDots}
+        {showMore && (
+          <span className="text-xs text-gray-500">+</span>
         )}
-        {pendingCount > 0 && (
-          <div
-            className="appointment-dot bg-yellow-500"
-            style={{ marginRight: "3px" }}
-          />
-        )}
-        {isAvailable && (
+        {appointmentDots.length === 0 && isAvailable && (
           <div
             className="appointment-dot bg-emerald-400"
             style={{ marginRight: "3px" }}
           />
-        )}
-        {appointmentsForDate.length > (confirmedCount + pendingCount) && (
-          <span className="text-xs text-gray-500">+{appointmentsForDate.length - (confirmedCount + pendingCount)}</span>
         )}
       </div>
     );
@@ -252,3 +282,4 @@ const AppointmentCalendar = () => {
 };
 
 export default AppointmentCalendar;
+

@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { User, UserRole, WorkingHours } from "@/types/user";
+import { User, UserRole, WorkingHours, CommissionOption } from "@/types/user";
 import WorkingHoursSelector from "./WorkingHoursSelector";
 import { useAuth } from "@/context/AuthContext";
 
@@ -31,6 +31,9 @@ const UserForm = ({ user, onSave, onCancel }: UserFormProps) => {
   );
   const [username, setUsername] = useState(user?.username || "");
   const [password, setPassword] = useState("");
+  const [commissionPercentage, setCommissionPercentage] = useState<number>(
+    user?.commissionPercentage || 50
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -42,7 +45,10 @@ const UserForm = ({ user, onSave, onCancel }: UserFormProps) => {
       phone,
       username,
       ...(password && { password }),
-      ...(role === "psychologist" && { workingHours }),
+      ...(role === "psychologist" && { 
+        workingHours,
+        commissionPercentage 
+      }),
     };
 
     if (user) {
@@ -124,10 +130,31 @@ const UserForm = ({ user, onSave, onCancel }: UserFormProps) => {
       </div>
 
       {role === "psychologist" && (
-        <WorkingHoursSelector
-          workingHours={workingHours}
-          onChange={setWorkingHours}
-        />
+        <>
+          <div className="space-y-2">
+            <Label htmlFor="commissionPercentage">Percentual de Comissão</Label>
+            <Select
+              value={commissionPercentage.toString()}
+              onValueChange={(value: string) => setCommissionPercentage(parseInt(value))}
+            >
+              <SelectTrigger id="commissionPercentage">
+                <SelectValue placeholder="Selecione o percentual" />
+              </SelectTrigger>
+              <SelectContent>
+                {[10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((percent) => (
+                  <SelectItem key={percent} value={percent.toString()}>
+                    {percent}%
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <WorkingHoursSelector
+            workingHours={workingHours}
+            onChange={setWorkingHours}
+          />
+        </>
       )}
 
       <div className="flex justify-end gap-2">

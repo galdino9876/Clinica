@@ -16,6 +16,8 @@ export interface Patient {
   active: boolean;
   deactivationReason?: string;
   deactivationDate?: string;
+  identityDocument?: File | string; // Added for identity document
+  insuranceDocument?: File | string; // Added for insurance document
 }
 
 export type PaymentMethod = 'private' | 'insurance';
@@ -36,6 +38,7 @@ export interface Appointment {
   status: AppointmentStatus;
   paymentMethod: PaymentMethod;
   insuranceType: InsuranceType;
+  insuranceToken?: string; // Added for insurance token
   value: number;
   appointmentType: AppointmentType;
 }

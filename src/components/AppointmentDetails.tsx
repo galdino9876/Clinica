@@ -24,16 +24,19 @@ interface AppointmentDetailsProps {
 
 const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) => {
   const { user } = useAuth();
-  const { updateAppointmentStatus, deleteAppointment, findNextAvailableSlot, rescheduleAppointment } = useAppointments();
+  const { updateAppointmentStatus, deleteAppointment, findNextAvailableSlot, rescheduleAppointment, updateAppointment } = useAppointments();
   const [isReschedulingOpen, setIsReschedulingOpen] = useState(false);
   const [newDate, setNewDate] = useState<string>(appointment.date);
   const [newStartTime, setNewStartTime] = useState<string>(appointment.startTime);
   const [newEndTime, setNewEndTime] = useState<string>(appointment.endTime);
+  const [insuranceToken, setInsuranceToken] = useState<string>(appointment.insuranceToken || "");
 
   const formattedDate = format(new Date(appointment.date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
   const isAdmin = user?.role === "admin";
   const isReceptionist = user?.role === "receptionist";
-  const canManage = isAdmin || isReceptionist;
+  const isPsychologist = user?.role === "psychologist";
+  const canManage = isAdmin || isReceptionist || isPsychologist;
+  const canEditToken = isAdmin || isReceptionist || isPsychologist;
 
   const handleStatusChange = (status: "pending" | "confirmed" | "cancelled") => {
     updateAppointmentStatus(appointment.id, status);
@@ -62,6 +65,14 @@ const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) =
   const handleReschedule = () => {
     rescheduleAppointment(appointment.id, newDate, newStartTime, newEndTime);
     setIsReschedulingOpen(false);
+  };
+
+  const handleSaveToken = () => {
+    const updatedAppointment = {
+      ...appointment,
+      insuranceToken
+    };
+    updateAppointment(updatedAppointment);
   };
 
   const getStatusColor = (status: string) => {
@@ -136,6 +147,27 @@ const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) =
           </div>
         </div>
       </div>
+
+      {/* Token input for insurance plans */}
+      {appointment.paymentMethod === "insurance" && canEditToken && (
+        <div className="pt-4 border-t border-gray-200">
+          <div className="space-y-3">
+            <Label htmlFor="insuranceToken">Token do Plano de Saúde</Label>
+            <div className="flex space-x-2">
+              <Input
+                id="insuranceToken"
+                value={insuranceToken}
+                onChange={(e) => setInsuranceToken(e.target.value)}
+                placeholder="Digite o código de autorização"
+                className="flex-1"
+              />
+              <Button onClick={handleSaveToken} className="whitespace-nowrap">
+                Salvar Token
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {canManage && (
         <div className="pt-4 border-t border-gray-200">
