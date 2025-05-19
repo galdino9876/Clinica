@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
@@ -24,14 +25,24 @@ const PsychologistAvailabilityDatePicker = ({
   const [selectedDate, setSelectedDate] = useState<Date>(date);
   const { users } = useAuth();
   const [psychologist, setPsychologist] = useState<User | null>(null);
+  const [availableDays, setAvailableDays] = useState<number[]>([]);
 
   // Encontra o psicólogo selecionado quando o ID muda
   useEffect(() => {
     if (psychologistId) {
       const found = users.find((user) => user.id === psychologistId);
       setPsychologist(found || null);
+
+      // Determine available days for this psychologist
+      if (found && found.workingHours) {
+        const days = found.workingHours.map(wh => wh.dayOfWeek);
+        setAvailableDays(days);
+      } else {
+        setAvailableDays([]);
+      }
     } else {
       setPsychologist(null);
+      setAvailableDays([]);
     }
   }, [psychologistId, users]);
 
@@ -45,27 +56,25 @@ const PsychologistAvailabilityDatePicker = ({
 
   // Função para determinar se um dia está disponível para o psicólogo
   const isPsychologistAvailable = (date: Date) => {
-    if (!psychologist || !psychologist.workingHours) return false;
-    
+    if (!psychologist || !psychologist.workingHours || availableDays.length === 0) return true;
     const dayOfWeek = date.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
-    
-    // Verifica se o psicólogo trabalha neste dia da semana
-    return psychologist.workingHours.some(wh => wh.dayOfWeek === dayOfWeek);
+    return availableDays.includes(dayOfWeek);
   };
 
-  // Função para adicionar classes específicas a diferentes dias no calendário
-  const modifiersStyles = {
-    available: {
-      backgroundColor: "rgba(52, 211, 153, 0.15)",
-    },
-  };
-
-  // Personaliza o estilo dos dias no calendário
-  const getDayClassName = (date: Date) => {
-    if (isPsychologistAvailable(date)) {
-      return "bg-emerald-100 hover:bg-emerald-200";
-    }
-    return "";
+  // Componente de decoração para dias disponíveis
+  const DayContent = (props: any) => {
+    const isAvailable = isPsychologistAvailable(props.date);
+    return (
+      <div 
+        className={cn(
+          "w-full h-full flex items-center justify-center rounded-full",
+          isAvailable && psychologistId ? "bg-emerald-100" : "",
+          !isAvailable && psychologistId ? "bg-gray-100 text-gray-400" : ""
+        )}
+      >
+        {props.date.getDate()}
+      </div>
+    );
   };
 
   return (
@@ -88,24 +97,35 @@ const PsychologistAvailabilityDatePicker = ({
             mode="single"
             selected={selectedDate}
             onSelect={handleDateSelect}
-            modifiersStyles={modifiersStyles}
+            className="p-3 pointer-events-auto"
+            components={{
+              DayContent
+            }}
             modifiers={{
               available: (date) => isPsychologistAvailable(date)
             }}
-            className={cn("p-3 pointer-events-auto")}
-            classNames={{
-              day_selected: "bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground",
-              day: cn("p-0", {
-                "bg-emerald-100 hover:bg-emerald-200": false  // This forces it to be a static value, not a function
-              })
+            modifiersStyles={{
+              available: {
+                backgroundColor: psychologistId ? "rgba(52, 211, 153, 0.15)" : "transparent",
+              }
             }}
           />
-          <div className="p-3 border-t">
-            <div className="flex items-center text-sm">
-              <div className="w-3 h-3 rounded-full bg-emerald-400 mr-2"></div>
-              <span>Dias disponíveis do psicólogo</span>
+          {psychologistId && (
+            <div className="p-3 border-t">
+              <div className="flex items-center text-sm">
+                <div className="w-3 h-3 rounded-full bg-emerald-400 mr-2"></div>
+                <span>Dias disponíveis do psicólogo</span>
+              </div>
+              {availableDays.length > 0 && (
+                <div className="text-xs mt-1 text-gray-500">
+                  Dias: {availableDays.map(day => {
+                    const weekdays = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+                    return weekdays[day];
+                  }).join(", ")}
+                </div>
+              )}
             </div>
-          </div>
+          )}
         </PopoverContent>
       </Popover>
     </div>

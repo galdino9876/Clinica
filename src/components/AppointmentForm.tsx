@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +17,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import PatientForm from "./PatientForm";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import PsychologistAvailabilityDatePicker from "./PsychologistAvailabilityDatePicker";
+import { useToast } from "@/hooks/use-toast";
 
 interface AppointmentFormProps {
   selectedDate: Date;
@@ -33,7 +33,8 @@ const AppointmentForm = ({
   onPsychologistSelected 
 }: AppointmentFormProps) => {
   const { addAppointment, updateAppointment, patients, rooms, findNextAvailableSlot, appointments } = useAppointments();
-  const { getPsychologists } = useAuth();
+  const { getPsychologists, users } = useAuth();
+  const { toast } = useToast();
   const [isPatientFormOpen, setIsPatientFormOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<string>(existingAppointment?.patient.id || "");
   const [psychologistId, setPsychologistId] = useState(existingAppointment?.psychologistId || "");
@@ -48,6 +49,7 @@ const AppointmentForm = ({
   const [nextAvailableSlot, setNextAvailableSlot] = useState<{ date: Date, startTime: string, endTime: string } | null>(null);
   const [appointmentType, setAppointmentType] = useState(existingAppointment?.appointmentType || "presential");
   const [conflictError, setConflictError] = useState<string | null>(null);
+  const [availablePsychologists, setAvailablePsychologists] = useState<any[]>([]);
   
   // Obter a lista de psicólogos do sistema
   const psychologists = getPsychologists();
@@ -55,9 +57,43 @@ const AppointmentForm = ({
   // Determinar o dia da semana da data selecionada (0-6, onde 0 é domingo)
   const dayOfWeek = date.getDay();
 
+  // Find available psychologists for the selected date
+  useEffect(() => {
+    if (date) {
+      const dayOfWeek = date.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+      const available = psychologists.filter(psychologist => 
+        psychologist.workingHours?.some(wh => wh.dayOfWeek === dayOfWeek)
+      );
+      setAvailablePsychologists(available);
+    }
+  }, [date, psychologists]);
+
   // Handle psychologist selection for calendar highlighting
   const handlePsychologistChange = (value: string) => {
     setPsychologistId(value);
+    
+    // Check if the selected psychologist is available on the selected date
+    const psychologist = psychologists.find(p => p.id === value);
+    if (psychologist) {
+      const isAvailable = isPsychologistAvailable(value);
+      
+      if (!isAvailable) {
+        toast({
+          title: "Psicólogo indisponível",
+          description: `${psychologist.name} não atende neste dia da semana. Sugerimos escolher outra data ou outro psicólogo.`,
+          variant: "destructive",
+        });
+        
+        // Suggest next available slot for this psychologist
+        if (nextAvailableSlot) {
+          toast({
+            title: "Próximo horário disponível",
+            description: `Próxima data disponível: ${format(nextAvailableSlot.date, "dd/MM/yyyy")} às ${nextAvailableSlot.startTime}.`,
+          });
+        }
+      }
+    }
+    
     if (onPsychologistSelected) {
       onPsychologistSelected(value);
     }
@@ -243,6 +279,16 @@ const AppointmentForm = ({
       return;
     }
 
+    // Verifica se o psicólogo está disponível na data selecionada
+    if (!isPsychologistAvailable(psychologistId)) {
+      toast({
+        title: "Psicólogo indisponível",
+        description: `O psicólogo selecionado não atende na data escolhida. Por favor, selecione outra data ou outro psicólogo.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     const selectedPatientData = patients.find((p) => p.id === selectedPatient);
     if (!selectedPatientData) return;
 
@@ -323,6 +369,35 @@ const AppointmentForm = ({
   // Função para atualizar a data selecionada
   const handleDateChange = (newDate: Date) => {
     setDate(newDate);
+    
+    // Verificar se o psicólogo atual está disponível na nova data
+    if (psychologistId) {
+      const psychologist = psychologists.find(p => p.id === psychologistId);
+      const isAvailable = isPsychologistAvailable(psychologistId);
+      
+      if (!isAvailable && psychologist) {
+        toast({
+          title: "Psicólogo indisponível",
+          description: `${psychologist.name} não atende neste dia da semana. Existem ${availablePsychologists.length} outros psicólogos disponíveis neste dia.`,
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  // Função para alternar para outro psicólogo disponível
+  const switchToAvailablePsychologist = () => {
+    if (availablePsychologists.length > 0 && psychologistId) {
+      // Encontrar o próximo psicólogo disponível diferente do atual
+      const nextPsychologist = availablePsychologists.find(p => p.id !== psychologistId);
+      if (nextPsychologist) {
+        setPsychologistId(nextPsychologist.id);
+        toast({
+          title: "Psicólogo alterado",
+          description: `Alterado para ${nextPsychologist.name} que está disponível na data selecionada.`,
+        });
+      }
+    }
   };
 
   return (
@@ -360,8 +435,10 @@ const AppointmentForm = ({
                 <SelectItem 
                   key={psychologist.id} 
                   value={psychologist.id}
+                  className={!isPsychologistAvailable(psychologist.id) ? "text-gray-400" : ""}
                 >
                   {psychologist.name}
+                  {!isPsychologistAvailable(psychologist.id) && " (Indisponível nesta data)"}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -381,15 +458,30 @@ const AppointmentForm = ({
           </Select>
         </div>
 
-        {nextAvailableSlot && !isPsychologistAvailable(psychologistId) && (
+        {psychologistId && !isPsychologistAvailable(psychologistId) && (
           <div className="col-span-2">
             <Alert className="bg-amber-50 border-amber-200">
-              <AlertDescription>
-                O psicólogo selecionado não atende na data selecionada ({format(date, "dd/MM/yyyy")}). 
-                Próximo horário disponível: {format(nextAvailableSlot.date, "dd/MM/yyyy")} às {nextAvailableSlot.startTime}.
-                <Button type="button" variant="link" onClick={applyNextAvailableSlot} className="text-amber-600 pl-0">
-                  Usar esse horário
-                </Button>
+              <AlertDescription className="flex items-center justify-between">
+                <div>
+                  O psicólogo selecionado não atende na data selecionada ({format(date, "dd/MM/yyyy")}). 
+                  {nextAvailableSlot && (
+                    <> 
+                      Próximo horário disponível: {format(nextAvailableSlot.date, "dd/MM/yyyy")} às {nextAvailableSlot.startTime}.
+                    </>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  {nextAvailableSlot && (
+                    <Button type="button" variant="outline" onClick={applyNextAvailableSlot} className="text-amber-600">
+                      Usar próximo horário
+                    </Button>
+                  )}
+                  {availablePsychologists.length > 0 && (
+                    <Button type="button" variant="outline" onClick={switchToAvailablePsychologist} className="text-amber-600">
+                      Usar outro psicólogo
+                    </Button>
+                  )}
+                </div>
               </AlertDescription>
             </Alert>
           </div>
@@ -528,7 +620,13 @@ const AppointmentForm = ({
         </Button>
         <Button 
           type="submit"
-          disabled={availableTimes.length === 0 || !startTime || !endTime || !!conflictError}
+          disabled={
+            availableTimes.length === 0 || 
+            !startTime || 
+            !endTime || 
+            !!conflictError || 
+            !isPsychologistAvailable(psychologistId)
+          }
         >
           {existingAppointment ? "Atualizar" : "Agendar"} Consulta
         </Button>
