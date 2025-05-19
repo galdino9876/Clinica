@@ -14,7 +14,7 @@ import { useAppointments } from "@/context/AppointmentContext";
 import { useAuth } from "@/context/AuthContext";
 import { format } from "date-fns";
 import { Patient, AppointmentStatus } from "@/types/appointment";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import PatientForm from "./PatientForm";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import PsychologistAvailabilityDatePicker from "./PsychologistAvailabilityDatePicker";
@@ -51,6 +51,8 @@ const AppointmentForm = ({
   const [appointmentType, setAppointmentType] = useState(existingAppointment?.appointmentType || "presential");
   const [conflictError, setConflictError] = useState<string | null>(null);
   const [availablePsychologists, setAvailablePsychologists] = useState<any[]>([]);
+  const [formSubmitted, setFormSubmitted] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
   
   // Obter a lista de psicólogos do sistema
   const psychologists = getPsychologists();
@@ -292,6 +294,40 @@ const AppointmentForm = ({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    setFormSubmitted(true);
+    setSubmissionError(null);
+    
+    // Add debug logs
+    console.log("Form submission: ", {
+      selectedPatient,
+      psychologistId,
+      roomId: appointmentType === "online" ? "virtual" : roomId,
+      date: format(date, "yyyy-MM-dd"),
+      startTime,
+      endTime,
+      appointmentType
+    });
+
+    // Check for required fields
+    if (!selectedPatient) {
+      setSubmissionError("Por favor, selecione um paciente.");
+      return;
+    }
+
+    if (!psychologistId) {
+      setSubmissionError("Por favor, selecione um psicólogo.");
+      return;
+    }
+
+    if (appointmentType === "presential" && !roomId) {
+      setSubmissionError("Por favor, selecione um consultório para a consulta presencial.");
+      return;
+    }
+
+    if (!startTime || !endTime) {
+      setSubmissionError("Por favor, selecione os horários de início e término.");
+      return;
+    }
 
     // Verifica novamente se há conflitos de horário
     if (isTimeSlotOccupied(psychologistId, date, startTime, endTime)) {
@@ -310,21 +346,27 @@ const AppointmentForm = ({
     }
 
     const selectedPatientData = patients.find((p) => p.id === selectedPatient);
-    if (!selectedPatientData) return;
+    if (!selectedPatientData) {
+      setSubmissionError("Erro: Dados do paciente não encontrados.");
+      return;
+    }
 
     const selectedPsychologist = psychologists.find((p) => p.id === psychologistId);
-    if (!selectedPsychologist) return;
+    if (!selectedPsychologist) {
+      setSubmissionError("Erro: Dados do psicólogo não encontrados.");
+      return;
+    }
 
     let selectedRoom = rooms.find((r) => r.id === roomId);
     // Para consultas online, não precisamos de sala física
-    if (appointmentType === "online" && !selectedRoom) {
+    if (appointmentType === "online") {
       // Usar uma sala virtual
       selectedRoom = {
         id: "virtual",
         name: "Sala Virtual"
       };
     } else if (appointmentType === "presential" && !selectedRoom) {
-      // Para consultas presenciais, precisamos de sala física
+      setSubmissionError("Por favor, selecione um consultório para a consulta presencial.");
       return;
     }
 
@@ -347,17 +389,31 @@ const AppointmentForm = ({
       appointmentType: appointmentType as "presential" | "online"
     };
 
-    if (existingAppointment) {
-      updateAppointment({
-        ...appointmentData,
-        id: existingAppointment.id,
-        status: existingAppointment.status // Manter o status existente
-      });
-    } else {
-      addAppointment(appointmentData);
+    try {
+      if (existingAppointment) {
+        updateAppointment({
+          ...appointmentData,
+          id: existingAppointment.id,
+          status: existingAppointment.status // Manter o status existente
+        });
+        toast({
+          title: "Agendamento atualizado",
+          description: `Agendamento para ${selectedPatientData.name} atualizado com sucesso.`,
+        });
+      } else {
+        addAppointment(appointmentData);
+        toast({
+          title: "Agendamento criado",
+          description: `Nova consulta para ${selectedPatientData.name} agendada com sucesso.`,
+        });
+      }
+      
+      // Limpar o formulário e fechar
+      onClose();
+    } catch (error) {
+      console.error("Erro ao salvar agendamento:", error);
+      setSubmissionError("Ocorreu um erro ao salvar o agendamento. Tente novamente.");
     }
-
-    onClose();
   };
 
   const handleNewPatient = () => {
@@ -465,7 +521,7 @@ const AppointmentForm = ({
                   </SelectItem>
                 ))
               ) : (
-                <SelectItem value="" disabled>
+                <SelectItem value="no-available" disabled>
                   Nenhum psicólogo disponível nesta data
                 </SelectItem>
               )}
@@ -503,7 +559,7 @@ const AppointmentForm = ({
         {appointmentType === "presential" && (
           <div className="space-y-2">
             <Label htmlFor="room">Consultório</Label>
-            <Select value={roomId} onValueChange={setRoomId} required>
+            <Select value={roomId} onValueChange={setRoomId} required={appointmentType === "presential"}>
               <SelectTrigger id="room">
                 <SelectValue placeholder="Selecione o consultório" />
               </SelectTrigger>
@@ -530,11 +586,17 @@ const AppointmentForm = ({
               <SelectValue placeholder="Selecione o horário" />
             </SelectTrigger>
             <SelectContent>
-              {availableTimes.map((time) => (
-                <SelectItem key={`start-${time}`} value={time}>
-                  {time}
+              {availableTimes.length > 0 ? (
+                availableTimes.map((time) => (
+                  <SelectItem key={`start-${time}`} value={time}>
+                    {time}
+                  </SelectItem>
+                ))
+              ) : (
+                <SelectItem value="no-time-available" disabled>
+                  Sem horários disponíveis
                 </SelectItem>
-              ))}
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -553,19 +615,28 @@ const AppointmentForm = ({
             <SelectContent>
               {availableTimes
                 .filter(time => time > startTime) // Apenas horários após o início
-                .map((time) => (
-                  <SelectItem key={`end-${time}`} value={time}>
-                    {time}
+                .length > 0 ? (
+                  availableTimes
+                    .filter(time => time > startTime)
+                    .map((time) => (
+                      <SelectItem key={`end-${time}`} value={time}>
+                        {time}
+                      </SelectItem>
+                    ))
+                ) : (
+                  <SelectItem value="no-end-time" disabled>
+                    Selecione um horário de início primeiro
                   </SelectItem>
-              ))}
+                )
+              }
             </SelectContent>
           </Select>
         </div>
 
-        {conflictError && (
+        {(conflictError || submissionError) && (
           <div className="col-span-2">
             <Alert variant="destructive">
-              <AlertDescription>{conflictError}</AlertDescription>
+              <AlertDescription>{conflictError || submissionError}</AlertDescription>
             </Alert>
           </div>
         )}
@@ -625,11 +696,14 @@ const AppointmentForm = ({
         <Button 
           type="submit"
           disabled={
+            formSubmitted ||
             availableTimes.length === 0 || 
             !startTime || 
             !endTime || 
             !!conflictError || 
-            !isPsychologistAvailable(psychologistId)
+            !isPsychologistAvailable(psychologistId) ||
+            !selectedPatient ||
+            (appointmentType === "presential" && !roomId)
           }
         >
           {existingAppointment ? "Atualizar" : "Agendar"} Consulta
@@ -641,6 +715,9 @@ const AppointmentForm = ({
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Novo Paciente</DialogTitle>
+            <DialogDescription>
+              Preencha os dados do novo paciente
+            </DialogDescription>
           </DialogHeader>
           <PatientForm onSave={handlePatientAdded} onCancel={() => setIsPatientFormOpen(false)} />
         </DialogContent>
