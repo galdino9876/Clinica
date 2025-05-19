@@ -262,13 +262,16 @@ const AppointmentForm = ({
       return;
     }
 
+    // FIX: Ensure we're using the correct date format by using format() directly on the date object
+    const formattedDate = format(date, "yyyy-MM-dd");
+    
     const appointmentData = {
       patient: selectedPatientData,
       psychologistId,
       psychologistName: selectedPsychologist.name,
       roomId: selectedRoom ? selectedRoom.id : "virtual",
       roomName: selectedRoom ? selectedRoom.name : "Sala Virtual",
-      date: format(date, "yyyy-MM-dd"),
+      date: formattedDate, // Using the formatted date
       startTime,
       endTime,
       status: "pending" as AppointmentStatus,

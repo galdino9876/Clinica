@@ -61,7 +61,7 @@ const App = () => {
                 <Route
                   path="/confirmations"
                   element={
-                    <PrivateRoute allowedRoles={["admin"]}>
+                    <PrivateRoute allowedRoles={["admin", "receptionist"]}>
                       <Confirmations />
                     </PrivateRoute>
                   }
