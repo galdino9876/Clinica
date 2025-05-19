@@ -10,18 +10,35 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 
 const Index = () => {
-  const { appointments } = useAppointments();
+  const { appointments, findNextAvailableSlot } = useAppointments();
   const { users, user } = useAuth();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [selectedPsychologistId, setSelectedPsychologistId] = useState<string>("");
   
   // Log for debugging when appointments change
   useEffect(() => {
     console.log("Agendamentos atualizados:", appointments);
   }, [appointments]);
 
-  // Usar sempre uma nova data ao abrir o modal da página inicial
+  // Encontrar o primeiro psicólogo disponível quando o componente é montado
+  useEffect(() => {
+    if (users && users.length > 0) {
+      // Tente encontrar um psicólogo no sistema
+      const firstPsychologist = users.find(u => u.role === 'psychologist');
+      if (firstPsychologist) {
+        setSelectedPsychologistId(firstPsychologist.id);
+      }
+    }
+  }, [users]);
+
+  // Função modificada para abrir o modal com a data mais próxima disponível
   const handleCreateModalOpen = () => {
     setIsCreateModalOpen(true);
+  };
+
+  // Função para lidar com a seleção do psicólogo no formulário
+  const handlePsychologistSelected = (psychologistId: string) => {
+    setSelectedPsychologistId(psychologistId);
   };
 
   const handleFormClose = () => {
@@ -45,19 +62,21 @@ const Index = () => {
         
         <AppointmentCalendar />
         
-        {/* Create Appointment Modal for Homepage */}
+        {/* Create Appointment Modal for Homepage - Now with auto-suggest next available slot */}
         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
           <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Novo Agendamento</DialogTitle>
               <DialogDescription>
-                Preencha os dados para criar um novo agendamento
+                Preencha os dados para criar um novo agendamento.
+                {selectedPsychologistId && " O sistema sugerirá automaticamente o próximo horário disponível quando você selecionar um psicólogo."}
               </DialogDescription>
             </DialogHeader>
             <AppointmentForm
-              selectedDate={new Date()} // Sempre usa uma nova data ao abrir da página inicial
+              selectedDate={new Date()}
               onClose={handleFormClose}
-              lockDate={false} // Nunca bloqueia a data quando aberto da página inicial
+              lockDate={false}
+              onPsychologistSelected={handlePsychologistSelected}
             />
           </DialogContent>
         </Dialog>

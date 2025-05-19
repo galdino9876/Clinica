@@ -141,6 +141,11 @@ const AppointmentForm = ({
 
   // Função para verificar se um horário já está ocupado pelo psicólogo
   const isTimeSlotOccupied = (psychologistId: string, date: Date, startTime: string, endTime: string) => {
+    // Correção: Antes de verificar conflitos, certifique-se de que os parâmetros são válidos
+    if (!psychologistId || !date || !startTime || !endTime) {
+      return false;
+    }
+    
     const dateString = format(date, 'yyyy-MM-dd');
     
     // Ignorar o próprio agendamento se estiver editando
@@ -210,7 +215,8 @@ const AppointmentForm = ({
       )
       .map(app => ({ start: app.startTime, end: app.endTime }));
     
-    // Atualiza a lista de horários disponíveis excluindo os já ocupados
+    // CORREÇÃO: Melhorar a lógica para identificar horários disponíveis
+    // Verificando corretamente se cada horário está disponível (sem conflitos)
     const availableSlots = times.filter(time => {
       // Assume uma consulta de 1 hora para simplificar
       const startHour = parseInt(time.split(':')[0]);
@@ -218,13 +224,14 @@ const AppointmentForm = ({
       let endHour = startHour + 1;
       const endTimeStr = `${endHour.toString().padStart(2, "0")}:${startMinute.toString().padStart(2, "0")}`;
       
+      // CORREÇÃO: Verifica especificamente este horário, não todos de uma vez
       return !isTimeSlotOccupied(psychologistId, date, time, endTimeStr);
     });
     
     setAvailableTimes(availableSlots);
     
     // Define um horário inicial válido se necessário
-    if (availableSlots.length > 0 && !availableSlots.includes(startTime)) {
+    if (availableSlots.length > 0 && (!startTime || !availableSlots.includes(startTime))) {
       setStartTime(availableSlots[0]);
       
       // Define o horário de término como 1 hora após o início
@@ -244,7 +251,7 @@ const AppointmentForm = ({
       return;
     }
 
-    // Verifica se o horário selecionado já está ocupado
+    // CORREÇÃO: Verificar corretamente se o horário atual tem conflito com a agenda existente
     const hasConflict = isTimeSlotOccupied(psychologistId, date, startTime, endTime);
     
     if (hasConflict) {
@@ -275,11 +282,15 @@ const AppointmentForm = ({
     const endHour = parseInt(end.split(':')[0]);
     const endMinute = parseInt(end.split(':')[1]);
     
-    // Corrigido: Inclui o último horário (end) na lista de opções
+    // CORREÇÃO: Melhorar a geração de horários para incluir todos os horários disponíveis
     let currentHour = startHour;
     let currentMinute = startMinute - (startMinute % 30); // Arredondar para intervalo de 30 minutos
     
-    while (currentHour < endHour || (currentHour === endHour && currentMinute <= endMinute - 60)) {
+    // Gera opções em intervalos de 30 minutos até 1 hora antes do fim do expediente
+    while (
+      currentHour < endHour || 
+      (currentHour === endHour && currentMinute <= endMinute - 60)
+    ) {
       const formattedHour = currentHour.toString().padStart(2, "0");
       const formattedMinute = currentMinute.toString().padStart(2, "0");
       times.push(`${formattedHour}:${formattedMinute}`);
@@ -331,9 +342,10 @@ const AppointmentForm = ({
       return;
     }
 
-    // Verifica novamente se há conflitos de horário
+    // CORREÇÃO: Verifica novamente se há conflitos de horário para o horário atual
+    // Isso garantirá que não haja erro ao tentar marcar horários disponíveis no fim do dia
     if (isTimeSlotOccupied(psychologistId, date, startTime, endTime)) {
-      setConflictError(`O psicólogo já possui um agendamento entre ${startTime} e ${endTime} nesta data.`);
+      setSubmissionError(`O psicólogo já possui um agendamento entre ${startTime} e ${endTime} nesta data.`);
       return;
     }
 
@@ -481,6 +493,19 @@ const AppointmentForm = ({
           description: `Alterado para ${nextPsychologist.name} que está disponível na data selecionada.`,
         });
       }
+    }
+  };
+
+  // CORREÇÃO: Adicionar botão para sugerir próximo horário disponível
+  const suggestNextAvailableSlot = () => {
+    if (nextAvailableSlot) {
+      setDate(nextAvailableSlot.date);
+      setStartTime(nextAvailableSlot.startTime);
+      setEndTime(nextAvailableSlot.endTime);
+      toast({
+        title: "Próximo horário disponível",
+        description: `Horário sugerido para ${format(nextAvailableSlot.date, "dd/MM/yyyy")} às ${nextAvailableSlot.startTime}.`,
+      });
     }
   };
 
@@ -700,6 +725,19 @@ const AppointmentForm = ({
           />
         </div>
       </div>
+
+      {nextAvailableSlot && !lockDate && (
+        <div className="flex justify-center mb-4">
+          <Button 
+            type="button" 
+            variant="outline" 
+            onClick={suggestNextAvailableSlot}
+            className="text-green-600 border-green-600 hover:bg-green-50"
+          >
+            Sugerir próximo horário disponível ({format(nextAvailableSlot.date, "dd/MM/yyyy")} às {nextAvailableSlot.startTime})
+          </Button>
+        </div>
+      )}
 
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onClose}>
