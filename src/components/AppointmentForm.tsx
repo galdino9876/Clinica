@@ -56,6 +56,11 @@ const AppointmentForm = ({
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   
+  // Update date when selectedDate changes
+  useEffect(() => {
+    setDate(selectedDate);
+  }, [selectedDate]);
+  
   // Obter a lista de psicólogos do sistema
   const psychologists = getPsychologists();
 
@@ -107,6 +112,14 @@ const AppointmentForm = ({
           description: `${psychologist.name} não atende neste dia da semana. Sugerimos escolher outra data ou outro psicólogo.`,
           variant: "destructive",
         });
+      } else {
+        // If psychologist is available, find next available slot
+        const slot = findNextAvailableSlot(value);
+        if (slot && !lockDate) {
+          setDate(slot.date);
+          setStartTime(slot.startTime);
+          setEndTime(slot.endTime);
+        }
       }
     }
     
@@ -202,8 +215,11 @@ const AppointmentForm = ({
       return;
     }
 
+    console.log(`Verificando horários disponíveis para data ${format(date, "dd/MM/yyyy")} entre ${availability.startTime} e ${availability.endTime}`);
+
     // Gera opções de horário dentro do intervalo de trabalho do psicólogo
     const times = generateTimeOptionsInRange(availability.startTime, availability.endTime);
+    console.log("Horários potenciais:", times);
     
     // Filtra os horários ocupados
     const dateString = format(date, 'yyyy-MM-dd');
@@ -215,30 +231,42 @@ const AppointmentForm = ({
       )
       .map(app => ({ start: app.startTime, end: app.endTime }));
     
+    console.log("Horários ocupados:", occupiedSlots);
+    
     // CORREÇÃO: Melhorar a lógica para identificar horários disponíveis
-    // Verificando corretamente se cada horário está disponível (sem conflitos)
-    const availableSlots = times.filter(time => {
-      // Assume uma consulta de 1 hora para simplificar
-      const startHour = parseInt(time.split(':')[0]);
-      const startMinute = parseInt(time.split(':')[1]);
-      let endHour = startHour + 1;
-      const endTimeStr = `${endHour.toString().padStart(2, "0")}:${startMinute.toString().padStart(2, "0")}`;
+    // Verificar cada horário individualmente se é válido para início de uma consulta
+    const availableStartTimes = times.filter(time => {
+      // Calculando horário de término (consulta de 1 hora)
+      const startMinutes = timeToMinutes(time);
+      const endMinutes = startMinutes + 60; // 1 hora depois
       
-      // CORREÇÃO: Verifica especificamente este horário, não todos de uma vez
-      return !isTimeSlotOccupied(psychologistId, date, time, endTimeStr);
+      // Converter de volta para string formato HH:MM para verificação de conflito
+      const hours = Math.floor(endMinutes / 60);
+      const minutes = endMinutes % 60;
+      const endTimeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
+      
+      // Verificar se este horário não tem conflito com agendamentos existentes
+      const hasConflict = isTimeSlotOccupied(psychologistId, date, time, endTimeStr);
+      
+      // Verificar também se o horário de término não ultrapassa o horário de trabalho do psicólogo
+      const endTimeInWorkingHours = timeToMinutes(endTimeStr) <= timeToMinutes(availability.endTime);
+      
+      return !hasConflict && endTimeInWorkingHours;
     });
     
-    setAvailableTimes(availableSlots);
+    console.log("Horários disponíveis para início:", availableStartTimes);
+    setAvailableTimes(availableStartTimes);
     
     // Define um horário inicial válido se necessário
-    if (availableSlots.length > 0 && (!startTime || !availableSlots.includes(startTime))) {
-      setStartTime(availableSlots[0]);
+    if (availableStartTimes.length > 0 && (!startTime || !availableStartTimes.includes(startTime))) {
+      setStartTime(availableStartTimes[0]);
       
       // Define o horário de término como 1 hora após o início
-      const startHour = parseInt(availableSlots[0].split(':')[0]);
-      const startMinute = parseInt(availableSlots[0].split(':')[1]);
-      let endHour = startHour + 1;
-      const endTimeString = `${endHour.toString().padStart(2, "0")}:${startMinute.toString().padStart(2, "0")}`;
+      const startMinutes = timeToMinutes(availableStartTimes[0]);
+      const endMinutes = startMinutes + 60;
+      const hours = Math.floor(endMinutes / 60);
+      const minutes = endMinutes % 60;
+      const endTimeString = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
       
       setEndTime(endTimeString);
     }
@@ -286,20 +314,17 @@ const AppointmentForm = ({
     let currentHour = startHour;
     let currentMinute = startMinute - (startMinute % 30); // Arredondar para intervalo de 30 minutos
     
-    // Gera opções em intervalos de 30 minutos até 1 hora antes do fim do expediente
-    while (
-      currentHour < endHour || 
-      (currentHour === endHour && currentMinute <= endMinute - 60)
-    ) {
-      const formattedHour = currentHour.toString().padStart(2, "0");
-      const formattedMinute = currentMinute.toString().padStart(2, "0");
+    // Gera opções em intervalos de 30 minutos até no máximo 1 hora antes do fim do expediente
+    const startMinutes = startHour * 60 + startMinute;
+    const endMinutes = endHour * 60 + endMinute;
+    
+    // Percorre em intervalos de 30 minutos
+    for (let currentMinutes = startMinutes; currentMinutes <= endMinutes - 60; currentMinutes += 30) {
+      const hours = Math.floor(currentMinutes / 60);
+      const minutes = currentMinutes % 60;
+      const formattedHour = hours.toString().padStart(2, "0");
+      const formattedMinute = minutes.toString().padStart(2, "0");
       times.push(`${formattedHour}:${formattedMinute}`);
-      
-      currentMinute += 30;
-      if (currentMinute >= 60) {
-        currentMinute = 0;
-        currentHour += 1;
-      }
     }
     
     return times;
@@ -461,6 +486,7 @@ const AppointmentForm = ({
     // Only allow date changes if the date is not locked
     if (lockDate) return;
     
+    console.log("Data alterada para:", format(newDate, "dd/MM/yyyy"));
     setDate(newDate);
     
     // Verificar se o psicólogo atual está disponível na nova data

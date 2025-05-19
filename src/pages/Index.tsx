@@ -14,6 +14,7 @@ const Index = () => {
   const { users, user } = useAuth();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedPsychologistId, setSelectedPsychologistId] = useState<string>("");
+  const [suggestedDate, setSuggestedDate] = useState<Date>(new Date());
   
   // Log for debugging when appointments change
   useEffect(() => {
@@ -27,9 +28,15 @@ const Index = () => {
       const firstPsychologist = users.find(u => u.role === 'psychologist');
       if (firstPsychologist) {
         setSelectedPsychologistId(firstPsychologist.id);
+        
+        // Encontrar o próximo horário disponível para este psicólogo
+        const nextSlot = findNextAvailableSlot(firstPsychologist.id);
+        if (nextSlot) {
+          setSuggestedDate(nextSlot.date);
+        }
       }
     }
-  }, [users]);
+  }, [users, findNextAvailableSlot]);
 
   // Função modificada para abrir o modal com a data mais próxima disponível
   const handleCreateModalOpen = () => {
@@ -39,6 +46,16 @@ const Index = () => {
   // Função para lidar com a seleção do psicólogo no formulário
   const handlePsychologistSelected = (psychologistId: string) => {
     setSelectedPsychologistId(psychologistId);
+    
+    // Quando um psicólogo é selecionado, atualizamos a data sugerida para a mais próxima disponível
+    const nextSlot = findNextAvailableSlot(psychologistId);
+    if (nextSlot) {
+      setSuggestedDate(nextSlot.date);
+      console.log("Próximo slot disponível encontrado:", nextSlot.date, nextSlot.startTime);
+    } else {
+      setSuggestedDate(new Date());
+      console.log("Nenhum slot disponível encontrado para o psicólogo", psychologistId);
+    }
   };
 
   const handleFormClose = () => {
@@ -73,7 +90,7 @@ const Index = () => {
               </DialogDescription>
             </DialogHeader>
             <AppointmentForm
-              selectedDate={new Date()}
+              selectedDate={suggestedDate}
               onClose={handleFormClose}
               lockDate={false}
               onPsychologistSelected={handlePsychologistSelected}
