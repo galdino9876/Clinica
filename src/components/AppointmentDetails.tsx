@@ -39,6 +39,11 @@ const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) =
   const isPsychologist = user?.role === "psychologist";
   const canManage = isAdmin || isReceptionist || isPsychologist;
   const canEditToken = isAdmin || isReceptionist || isPsychologist;
+  
+  // Determine if we should show token input (for insurance appointments that are pending OR confirmed)
+  const shouldShowTokenInput = appointment.paymentMethod === "insurance" && 
+    (appointment.status === "pending" || appointment.status === "confirmed") && 
+    canEditToken;
 
   const handleStatusChange = (status: "pending" | "confirmed" | "cancelled") => {
     updateAppointmentStatus(appointment.id, status);
@@ -156,7 +161,7 @@ const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) =
       </div>
 
       {/* Token input for insurance plans */}
-      {appointment.paymentMethod === "insurance" && canEditToken && (
+      {shouldShowTokenInput && (
         <div className="pt-4 border-t border-gray-200">
           <div className="space-y-3">
             <Label htmlFor="insuranceToken">Token do Plano de Saúde</Label>
