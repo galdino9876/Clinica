@@ -12,6 +12,7 @@ import Users from "./pages/Users";
 import Finance from "./pages/Finance";
 import NotFound from "./pages/NotFound";
 import Confirmations from "./pages/Confirmations";
+import DatabaseSchema from "./pages/DatabaseSchema";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // Criando a instância do QueryClient
@@ -63,6 +64,14 @@ const App = () => {
                   element={
                     <PrivateRoute allowedRoles={["admin", "receptionist"]}>
                       <Confirmations />
+                    </PrivateRoute>
+                  }
+                />
+                <Route
+                  path="/database-schema"
+                  element={
+                    <PrivateRoute allowedRoles={["admin"]}>
+                      <DatabaseSchema />
                     </PrivateRoute>
                   }
                 />
