@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,7 +20,7 @@ import {
 import { useAppointments } from "@/context/AppointmentContext";
 import { useAuth } from "@/context/AuthContext";
 import { format, addDays, addWeeks, parse } from "date-fns";
-import { Patient, AppointmentStatus, RecurrenceType } from "@/types/appointment";
+import { Patient, AppointmentStatus, RecurrenceType, Appointment } from "@/types/appointment";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import PatientForm from "./PatientForm";
 import { Alert, AlertDescription } from "@/components/ui/alert";
