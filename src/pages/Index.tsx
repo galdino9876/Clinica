@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 
 const Index = () => {
-  const { appointments, findNextAvailableSlot } = useAppointments();
+  const { appointments } = useAppointments();
   const { users, user } = useAuth();
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedPsychologistId, setSelectedPsychologistId] = useState<string>("");
@@ -21,41 +21,18 @@ const Index = () => {
     console.log("Agendamentos atualizados:", appointments);
   }, [appointments]);
 
-  // Encontrar o primeiro psicólogo disponível quando o componente é montado
-  useEffect(() => {
-    if (users && users.length > 0) {
-      // Tente encontrar um psicólogo no sistema
-      const firstPsychologist = users.find(u => u.role === 'psychologist');
-      if (firstPsychologist) {
-        setSelectedPsychologistId(firstPsychologist.id);
-        
-        // Encontrar o próximo horário disponível para este psicólogo
-        const nextSlot = findNextAvailableSlot(firstPsychologist.id);
-        if (nextSlot) {
-          setSuggestedDate(nextSlot.date);
-        }
-      }
-    }
-  }, [users, findNextAvailableSlot]);
-
-  // Função modificada para abrir o modal com a data mais próxima disponível
+  // Função para abrir o modal independente do calendário, sem data pré-selecionada
   const handleCreateModalOpen = () => {
+    // Não seleciona nenhum psicólogo por padrão
+    setSelectedPsychologistId("");
+    // Não sugere nenhuma data específica inicialmente
+    setSuggestedDate(new Date());
     setIsCreateModalOpen(true);
   };
 
   // Função para lidar com a seleção do psicólogo no formulário
   const handlePsychologistSelected = (psychologistId: string) => {
     setSelectedPsychologistId(psychologistId);
-    
-    // Quando um psicólogo é selecionado, atualizamos a data sugerida para a mais próxima disponível
-    const nextSlot = findNextAvailableSlot(psychologistId);
-    if (nextSlot) {
-      setSuggestedDate(nextSlot.date);
-      console.log("Próximo slot disponível encontrado:", nextSlot.date, nextSlot.startTime);
-    } else {
-      setSuggestedDate(new Date());
-      console.log("Nenhum slot disponível encontrado para o psicólogo", psychologistId);
-    }
   };
 
   const handleFormClose = () => {
@@ -79,14 +56,14 @@ const Index = () => {
         
         <AppointmentCalendar />
         
-        {/* Create Appointment Modal for Homepage - Now with auto-suggest next available slot */}
+        {/* Create Appointment Modal for Homepage - Independent from calendar selection */}
         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
           <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Novo Agendamento</DialogTitle>
               <DialogDescription>
                 Preencha os dados para criar um novo agendamento.
-                {selectedPsychologistId && " O sistema sugerirá automaticamente o próximo horário disponível quando você selecionar um psicólogo."}
+                {" Selecione um psicólogo para que o sistema sugira automaticamente o próximo horário disponível."}
               </DialogDescription>
             </DialogHeader>
             <AppointmentForm
@@ -94,6 +71,7 @@ const Index = () => {
               onClose={handleFormClose}
               lockDate={false}
               onPsychologistSelected={handlePsychologistSelected}
+              independentMode={true} // Novo flag para indicar que é o modo independente
             />
           </DialogContent>
         </Dialog>

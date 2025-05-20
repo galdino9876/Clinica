@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +25,7 @@ interface AppointmentFormProps {
   existingAppointment?: any; // Para edição de agendamentos existentes
   onPsychologistSelected?: (psychologistId: string) => void;
   lockDate?: boolean; // New prop to lock the date field
+  independentMode?: boolean; // New prop to indicate independent mode (not calendar-triggered)
 }
 
 const AppointmentForm = ({ 
@@ -33,7 +33,8 @@ const AppointmentForm = ({
   onClose, 
   existingAppointment,
   onPsychologistSelected,
-  lockDate = false // Default to false (date is changeable)
+  lockDate = false, // Default to false (date is changeable)
+  independentMode = false // Default to false (calendar-triggered)
 }: AppointmentFormProps) => {
   const { addAppointment, updateAppointment, patients, rooms, findNextAvailableSlot, appointments } = useAppointments();
   const { getPsychologists, users } = useAuth();
@@ -56,10 +57,12 @@ const AppointmentForm = ({
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   
-  // Update date when selectedDate changes
+  // Update date when selectedDate changes (only if not in independent mode)
   useEffect(() => {
-    setDate(selectedDate);
-  }, [selectedDate]);
+    if (!independentMode) {
+      setDate(selectedDate);
+    }
+  }, [selectedDate, independentMode]);
   
   // Obter a lista de psicólogos do sistema
   const psychologists = getPsychologists();
@@ -104,21 +107,39 @@ const AppointmentForm = ({
     // Check if the selected psychologist is available on the selected date
     const psychologist = psychologists.find(p => p.id === value);
     if (psychologist) {
-      const isAvailable = isPsychologistAvailable(value);
-      
-      if (!isAvailable) {
-        toast({
-          title: "Psicólogo indisponível",
-          description: `${psychologist.name} não atende neste dia da semana. Sugerimos escolher outra data ou outro psicólogo.`,
-          variant: "destructive",
-        });
-      } else {
-        // If psychologist is available, find next available slot
+      // No independent mode, we need to find the next available slot regardless of current date
+      if (independentMode) {
+        // In independent mode, we always look for the next available slot
         const slot = findNextAvailableSlot(value);
-        if (slot && !lockDate) {
+        if (slot) {
+          // Set date to the suggested slot date
           setDate(slot.date);
           setStartTime(slot.startTime);
           setEndTime(slot.endTime);
+          
+          toast({
+            title: "Próxima disponibilidade encontrada",
+            description: `Sugerindo ${format(slot.date, "dd/MM/yyyy")} às ${slot.startTime} para consulta com ${psychologist.name}.`,
+          });
+        }
+      } else {
+        // In calendar mode, we check if psychologist is available on selected date
+        const isAvailable = isPsychologistAvailable(value);
+        
+        if (!isAvailable) {
+          toast({
+            title: "Psicólogo indisponível",
+            description: `${psychologist.name} não atende neste dia da semana. Sugerimos escolher outra data ou outro psicólogo.`,
+            variant: "destructive",
+          });
+        } else if (!lockDate) {
+          // If psychologist is available and date is not locked, find next available slot on the current date
+          const slot = findNextAvailableSlot(value);
+          if (slot) {
+            setDate(slot.date);
+            setStartTime(slot.startTime);
+            setEndTime(slot.endTime);
+          }
         }
       }
     }
@@ -128,29 +149,42 @@ const AppointmentForm = ({
     }
   };
 
-  // Modified effect to consider the lockDate prop when finding available slots
+  // Modified effect to consider the independentMode prop when finding available slots
   useEffect(() => {
     if (psychologistId) {
-      // Only find the next available slot if the date is not locked
-      if (!lockDate) {
+      // In independent mode, always find and suggest the next available slot
+      if (independentMode) {
         const slot = findNextAvailableSlot(psychologistId);
         setNextAvailableSlot(slot);
         
-        // Se for um novo agendamento e houver um slot disponível, sugerimos automaticamente
-        if (slot && !existingAppointment) {
+        // Se houver um slot disponível, sugerimos automaticamente
+        if (slot) {
           setDate(slot.date);
           setStartTime(slot.startTime);
           setEndTime(slot.endTime);
         }
       } else {
-        // When date is locked, we don't need to find the next available slot
-        // We just need to check if there are available times on the selected date
-        setNextAvailableSlot(null);
+        // In calendar mode, respect the lockDate prop
+        if (!lockDate) {
+          const slot = findNextAvailableSlot(psychologistId);
+          setNextAvailableSlot(slot);
+          
+          // Se for um novo agendamento e houver um slot disponível, sugerimos automaticamente
+          if (slot && !existingAppointment) {
+            setDate(slot.date);
+            setStartTime(slot.startTime);
+            setEndTime(slot.endTime);
+          }
+        } else {
+          // When date is locked, we don't need to find the next available slot
+          // We just need to check if there are available times on the selected date
+          setNextAvailableSlot(null);
+        }
       }
     } else {
       setNextAvailableSlot(null);
     }
-  }, [psychologistId, findNextAvailableSlot, existingAppointment, lockDate]);
+  }, [psychologistId, findNextAvailableSlot, existingAppointment, lockDate, independentMode]);
 
   // Função para verificar se um horário já está ocupado pelo psicólogo
   const isTimeSlotOccupied = (psychologistId: string, date: Date, startTime: string, endTime: string) => {
@@ -233,7 +267,6 @@ const AppointmentForm = ({
     
     console.log("Horários ocupados:", occupiedSlots);
     
-    // CORREÇÃO: Melhorar a lógica para identificar horários disponíveis
     // Verificar cada horário individualmente se é válido para início de uma consulta
     const availableStartTimes = times.filter(time => {
       // Calculando horário de término (consulta de 1 hora)
@@ -566,9 +599,9 @@ const AppointmentForm = ({
               <SelectValue placeholder="Selecione o psicólogo" />
             </SelectTrigger>
             <SelectContent>
-              {/* Filter the psychologist list to show only those available for the selected date */}
-              {availablePsychologists.length > 0 ? (
-                availablePsychologists.map((psychologist) => (
+              {/* No independent mode, we show all psychologists */}
+              {independentMode ? (
+                psychologists.map((psychologist) => (
                   <SelectItem 
                     key={psychologist.id} 
                     value={psychologist.id}
@@ -577,13 +610,30 @@ const AppointmentForm = ({
                   </SelectItem>
                 ))
               ) : (
-                <SelectItem value="no-available" disabled>
-                  Nenhum psicólogo disponível nesta data
-                </SelectItem>
+                // In calendar mode, we filter to those available on the selected date
+                availablePsychologists.length > 0 ? (
+                  availablePsychologists.map((psychologist) => (
+                    <SelectItem 
+                      key={psychologist.id} 
+                      value={psychologist.id}
+                    >
+                      {psychologist.name}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <SelectItem value="no-available" disabled>
+                    Nenhum psicólogo disponível nesta data
+                  </SelectItem>
+                )
               )}
             </SelectContent>
           </Select>
-          {availablePsychologists.length > 0 && (
+          {independentMode && psychologistId && (
+            <div className="text-xs text-green-600 mt-1">
+              Selecione um psicólogo para ver sua próxima data disponível
+            </div>
+          )}
+          {!independentMode && availablePsychologists.length > 0 && (
             <div className="text-xs text-green-600 mt-1">
               {availablePsychologists.length} psicólogo(s) disponível(is) na data selecionada
             </div>
@@ -615,6 +665,11 @@ const AppointmentForm = ({
           {lockDate && (
             <div className="text-xs text-blue-600 mt-1">
               Data fixa selecionada do calendário
+            </div>
+          )}
+          {independentMode && psychologistId && nextAvailableSlot && (
+            <div className="text-xs text-green-600 mt-1">
+              Próxima data disponível para este psicólogo
             </div>
           )}
         </div>
@@ -752,12 +807,12 @@ const AppointmentForm = ({
         </div>
       </div>
 
-      {nextAvailableSlot && !lockDate && (
+      {nextAvailableSlot && !lockDate && !independentMode && (
         <div className="flex justify-center mb-4">
           <Button 
             type="button" 
             variant="outline" 
-            onClick={suggestNextAvailableSlot}
+            onClick={applyNextAvailableSlot}
             className="text-green-600 border-green-600 hover:bg-green-50"
           >
             Sugerir próximo horário disponível ({format(nextAvailableSlot.date, "dd/MM/yyyy")} às {nextAvailableSlot.startTime})
