@@ -327,6 +327,7 @@ const AppointmentForm = ({
     }
 
     // CORREÇÃO: Verificar corretamente se o horário atual tem conflito com a agenda existente
+    // Isso garantirá que não haja erro ao tentar marcar horários disponíveis no fim do dia
     const hasConflict = isTimeSlotOccupied(psychologistId, date, startTime, endTime);
     
     if (hasConflict) {

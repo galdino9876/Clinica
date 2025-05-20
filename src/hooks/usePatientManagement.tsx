@@ -58,6 +58,15 @@ export const usePatientManagement = () => {
       patient.phone.includes(searchTerm)
   );
 
+  // Calculate pending appointments count for the selected patient
+  const pendingAppointmentsCount = selectedPatient 
+    ? appointments.filter(app => 
+        app.patient.id === selectedPatient.id && 
+        ['scheduled', 'pending'].includes(app.status) && 
+        new Date(app.date) >= new Date()
+      ).length 
+    : 0;
+
   // Handlers
   const handleAddPatient = () => {
     setSelectedPatient(null);
@@ -164,6 +173,9 @@ export const usePatientManagement = () => {
     setAttendanceEndTime,
     attendancePeriod,
     setAttendancePeriod,
+    
+    // Add pendingAppointmentsCount to the returned object
+    pendingAppointmentsCount,
     
     // Actions
     handleAddPatient,

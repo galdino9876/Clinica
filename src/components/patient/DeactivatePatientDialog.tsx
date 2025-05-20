@@ -47,7 +47,7 @@ const DeactivatePatientDialog = ({
           </DialogDescription>
         </DialogHeader>
         
-        <Alert variant="destructive" className="bg-amber-50 border-amber-300">
+        <Alert className="bg-amber-50 border-amber-300">
           <AlertTriangle className="h-4 w-4 text-amber-500" />
           <AlertDescription className="text-sm">
             Ao desativar o paciente, todos os seus <strong>{pendingAppointmentsCount} agendamentos futuros</strong> serão automaticamente <strong>cancelados</strong>.
