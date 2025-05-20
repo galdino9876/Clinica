@@ -1,16 +1,8 @@
 
 import { toast } from "@/components/ui/use-toast";
 
-// Configuração das credenciais do banco de dados
-const DATABASE_CONFIG = {
-  host: "mysql.onautomacoes.com.br",
-  user: "data_saude",
-  password: "1q2w3e4r5t!",
-  database: "saude"
-};
-
-// Definição dos tipos de ações que podem ser enviadas ao webhook
-type WebhookAction = 
+// Definição dos tipos de ações que podem ser enviadas ao servidor
+export type WebhookAction = 
   | "GET_USERS"
   | "CREATE_USER"
   | "UPDATE_USER"
@@ -34,29 +26,27 @@ interface WebhookRequestParams {
   filters?: Record<string, any>;
 }
 
-// URL do webhook que serve como proxy para o banco de dados
-const WEBHOOK_URL = "https://n8n.onautomacoes.com.br/webhook-test/f6ba2c1d-f314-45e5-b8ba-6df21c006ab6";
+// URL da API backend que interage com o banco de dados
+const API_URL = "https://api.saude.onautomacoes.com.br/api";
 
 /**
- * Função para chamar o webhook que se comunica com o banco de dados
+ * Função para chamar o serviço de API que se comunica com o banco de dados
  * @param param0 Parâmetros da requisição (ação, payload e filtros)
  * @returns Dados retornados pela API
  */
-export const callWebhook = async <T>({ action, payload = {}, filters = {} }: WebhookRequestParams): Promise<T> => {
+export const callApi = async <T>({ action, payload = {}, filters = {} }: WebhookRequestParams): Promise<T> => {
   try {
-    console.log(`Chamando webhook: ${action}`, { payload, filters });
+    console.log(`Chamando API: ${action}`, { payload, filters });
     
-    // Adicionamos informações do banco de dados no payload para conexão segura
-    const response = await fetch(WEBHOOK_URL, {
+    const response = await fetch(`${API_URL}/${action.toLowerCase()}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        "Authorization": `Bearer ${localStorage.getItem("authToken") || ""}`,
       },
       body: JSON.stringify({
-        action,
         payload,
         filters,
-        databaseConfig: DATABASE_CONFIG,
         timestamp: new Date().toISOString(),
       }),
     });
@@ -70,13 +60,13 @@ export const callWebhook = async <T>({ action, payload = {}, filters = {} }: Web
     // Processar resposta como JSON
     const data = await response.json();
     
-    console.log(`Resposta do webhook (${action}):`, data);
+    console.log(`Resposta da API (${action}):`, data);
     return data as T;
   } catch (error) {
-    console.error(`Erro ao chamar webhook (${action}):`, error);
+    console.error(`Erro ao chamar API (${action}):`, error);
     toast({
       title: "Erro de Conexão",
-      description: "Não foi possível conectar ao banco de dados. Verifique sua conexão com a internet.",
+      description: "Não foi possível conectar ao servidor. Verifique sua conexão com a internet.",
       variant: "destructive",
     });
     throw error;
@@ -88,19 +78,19 @@ export const callWebhook = async <T>({ action, payload = {}, filters = {} }: Web
  */
 export const UserService = {
   getUsers: async () => {
-    return callWebhook({ action: "GET_USERS" });
+    return callApi({ action: "GET_USERS" });
   },
   
   createUser: async (userData: any) => {
-    return callWebhook({ action: "CREATE_USER", payload: userData });
+    return callApi({ action: "CREATE_USER", payload: userData });
   },
   
   updateUser: async (userData: any) => {
-    return callWebhook({ action: "UPDATE_USER", payload: userData });
+    return callApi({ action: "UPDATE_USER", payload: userData });
   },
   
   deleteUser: async (userId: string) => {
-    return callWebhook({ action: "DELETE_USER", payload: { id: userId } });
+    return callApi({ action: "DELETE_USER", payload: { id: userId } });
   }
 };
 
@@ -109,19 +99,19 @@ export const UserService = {
  */
 export const PatientService = {
   getPatients: async (filters = {}) => {
-    return callWebhook({ action: "GET_PATIENTS", filters });
+    return callApi({ action: "GET_PATIENTS", filters });
   },
   
   createPatient: async (patientData: any) => {
-    return callWebhook({ action: "CREATE_PATIENT", payload: patientData });
+    return callApi({ action: "CREATE_PATIENT", payload: patientData });
   },
   
   updatePatient: async (patientData: any) => {
-    return callWebhook({ action: "UPDATE_PATIENT", payload: patientData });
+    return callApi({ action: "UPDATE_PATIENT", payload: patientData });
   },
   
   deactivatePatient: async (patientId: string, reason: string) => {
-    return callWebhook({ 
+    return callApi({ 
       action: "DEACTIVATE_PATIENT", 
       payload: { 
         id: patientId,
@@ -137,19 +127,19 @@ export const PatientService = {
  */
 export const AppointmentService = {
   getAppointments: async (filters = {}) => {
-    return callWebhook({ action: "GET_APPOINTMENTS", filters });
+    return callApi({ action: "GET_APPOINTMENTS", filters });
   },
   
   createAppointment: async (appointmentData: any) => {
-    return callWebhook({ action: "CREATE_APPOINTMENT", payload: appointmentData });
+    return callApi({ action: "CREATE_APPOINTMENT", payload: appointmentData });
   },
   
   updateAppointment: async (appointmentData: any) => {
-    return callWebhook({ action: "UPDATE_APPOINTMENT", payload: appointmentData });
+    return callApi({ action: "UPDATE_APPOINTMENT", payload: appointmentData });
   },
   
   cancelAppointment: async (appointmentId: string, reason: string) => {
-    return callWebhook({ 
+    return callApi({ 
       action: "CANCEL_APPOINTMENT", 
       payload: { 
         id: appointmentId,
@@ -164,7 +154,7 @@ export const AppointmentService = {
  */
 export const RoomService = {
   getRooms: async () => {
-    return callWebhook({ action: "GET_ROOMS" });
+    return callApi({ action: "GET_ROOMS" });
   }
 };
 
@@ -173,17 +163,17 @@ export const RoomService = {
  */
 export const PatientRecordService = {
   getPatientRecords: async (patientId: string) => {
-    return callWebhook({ 
+    return callApi({ 
       action: "GET_PATIENT_RECORDS", 
       filters: { patientId } 
     });
   },
   
   createPatientRecord: async (recordData: any) => {
-    return callWebhook({ action: "CREATE_PATIENT_RECORD", payload: recordData });
+    return callApi({ action: "CREATE_PATIENT_RECORD", payload: recordData });
   },
   
   deletePatientRecord: async (recordId: string) => {
-    return callWebhook({ action: "DELETE_PATIENT_RECORD", payload: { id: recordId } });
+    return callApi({ action: "DELETE_PATIENT_RECORD", payload: { id: recordId } });
   }
 };
