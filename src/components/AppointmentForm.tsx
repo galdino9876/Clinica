@@ -516,13 +516,13 @@ const AppointmentForm = ({
     }
   };
 
-  const createRecurringAppointments = (baseAppointment: Omit<any, 'id'>, recurType: RecurrenceType, count: number) => {
+  const createRecurringAppointments = (baseAppointment: Omit<Appointment, 'id'>, recurType: RecurrenceType, count: number) => {
     // Generate a shared group ID for all appointments in this recurrence
     const recurrenceGroupId = uuidv4();
     
     // Always add the first appointment (the base one)
     const firstAppointment = {
-      ...baseAppointment,
+      ...baseAppointment,  // Spread the entire base appointment first
       recurrenceGroupId,
       recurrenceType: recurType,
       isRecurring: true
@@ -548,7 +548,7 @@ const AppointmentForm = ({
       
       // Clone the base appointment with new date and shared recurrence data
       const newAppointment = {
-        ...baseAppointment,
+        ...baseAppointment,  // Spread the entire base appointment first
         date: newDateStr,
         recurrenceGroupId,
         recurrenceType: recurType,
