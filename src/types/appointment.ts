@@ -24,6 +24,7 @@ export type PaymentMethod = 'private' | 'insurance';
 export type InsuranceType = 'Unimed' | 'SulAmérica' | 'Fusex' | 'Other' | null;
 export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'confirmed' | 'pending';
 export type AppointmentType = 'presential' | 'online';
+export type RecurrenceType = 'weekly' | 'biweekly' | null;
 
 export interface Appointment {
   id: string;
@@ -41,6 +42,8 @@ export interface Appointment {
   insuranceToken?: string; // Added for insurance token
   value: number;
   appointmentType: AppointmentType;
+  isRecurring?: boolean; // Flag to indicate if this appointment is part of a recurring series
+  recurrenceGroupId?: string; // ID to group recurring appointments
 }
 
 export interface PatientRecord {

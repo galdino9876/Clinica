@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -9,15 +10,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { useAppointments } from "@/context/AppointmentContext";
 import { useAuth } from "@/context/AuthContext";
-import { format } from "date-fns";
+import { format, addDays, addWeeks } from "date-fns";
 import { Patient, AppointmentStatus } from "@/types/appointment";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import PatientForm from "./PatientForm";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import PsychologistAvailabilityDatePicker from "./PsychologistAvailabilityDatePicker";
 import { useToast } from "@/hooks/use-toast";
+import { RepeatIcon } from "lucide-react";
 
 interface AppointmentFormProps {
   selectedDate: Date;
@@ -56,6 +64,11 @@ const AppointmentForm = ({
   const [availablePsychologists, setAvailablePsychologists] = useState<any[]>([]);
   const [formSubmitted, setFormSubmitted] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  
+  // New recurring appointment states
+  const [isRecurring, setIsRecurring] = useState(false);
+  const [recurrenceType, setRecurrenceType] = useState<'weekly' | 'biweekly'>('weekly');
+  const [recurrenceCount, setRecurrenceCount] = useState(4); // Default to 4 recurring appointments
   
   // Update date when selectedDate changes (only if not in independent mode)
   useEffect(() => {
@@ -376,7 +389,10 @@ const AppointmentForm = ({
       date: format(date, "yyyy-MM-dd"),
       startTime,
       endTime,
-      appointmentType
+      appointmentType,
+      isRecurring,
+      recurrenceType,
+      recurrenceCount
     });
 
     // Check for required fields
@@ -473,11 +489,17 @@ const AppointmentForm = ({
           description: `Agendamento para ${selectedPatientData.name} atualizado com sucesso.`,
         });
       } else {
-        addAppointment(appointmentData);
-        toast({
-          title: "Agendamento criado",
-          description: `Nova consulta para ${selectedPatientData.name} agendada com sucesso.`,
-        });
+        // Handle recurring appointments
+        if (isRecurring) {
+          createRecurringAppointments(appointmentData, recurrenceType, recurrenceCount);
+        } else {
+          // Single appointment
+          addAppointment(appointmentData);
+          toast({
+            title: "Agendamento criado",
+            description: `Nova consulta para ${selectedPatientData.name} agendada com sucesso.`,
+          });
+        }
       }
       
       // Limpar o formulário e fechar
@@ -486,6 +508,36 @@ const AppointmentForm = ({
       console.error("Erro ao salvar agendamento:", error);
       setSubmissionError("Ocorreu um erro ao salvar o agendamento. Tente novamente.");
     }
+  };
+
+  const createRecurringAppointments = (baseAppointment: Omit<any, 'id'>, recurType: string, count: number) => {
+    // Always add the first appointment (the base one)
+    addAppointment(baseAppointment);
+    
+    // Create additional recurring appointments
+    for (let i = 1; i < count; i++) {
+      const newDate = recurType === 'weekly' 
+        ? addWeeks(new Date(baseAppointment.date), i)  // Weekly: add i weeks
+        : addWeeks(new Date(baseAppointment.date), i * 2); // Biweekly: add i*2 weeks
+      
+      // Format the new date as string
+      const newDateStr = format(newDate, "yyyy-MM-dd");
+      
+      // Clone the base appointment with new date
+      const newAppointment = {
+        ...baseAppointment,
+        date: newDateStr
+      };
+      
+      // Add the recurring appointment
+      addAppointment(newAppointment);
+    }
+    
+    // Show summary toast
+    toast({
+      title: "Agendamentos recorrentes criados",
+      description: `Foram criados ${count} agendamentos para ${baseAppointment.patient.name}.`,
+    });
   };
 
   const handleNewPatient = () => {
@@ -751,6 +803,70 @@ const AppointmentForm = ({
           </Select>
         </div>
 
+        {/* New recurring appointment options */}
+        {!existingAppointment && (
+          <div className="col-span-2 space-y-2 border p-3 rounded-md bg-gray-50">
+            <div className="flex items-center space-x-2">
+              <Checkbox 
+                id="isRecurring" 
+                checked={isRecurring}
+                onCheckedChange={(checked) => setIsRecurring(!!checked)} 
+              />
+              <Label htmlFor="isRecurring" className="flex items-center gap-2">
+                <RepeatIcon className="h-4 w-4" />
+                Agendamento recorrente
+              </Label>
+            </div>
+            
+            {isRecurring && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 pl-6">
+                <div className="space-y-2">
+                  <Label htmlFor="recurrenceType">Frequência</Label>
+                  <Select
+                    value={recurrenceType}
+                    onValueChange={(value: 'weekly' | 'biweekly') => setRecurrenceType(value)}
+                  >
+                    <SelectTrigger id="recurrenceType">
+                      <SelectValue placeholder="Selecione a frequência" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="weekly">Semanal (toda semana)</SelectItem>
+                      <SelectItem value="biweekly">Quinzenal (a cada duas semanas)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="recurrenceCount">Número de sessões</Label>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      id="recurrenceCount"
+                      type="number"
+                      min="2"
+                      max="12"
+                      value={recurrenceCount}
+                      onChange={(e) => setRecurrenceCount(Math.min(12, Math.max(2, parseInt(e.target.value) || 2)))}
+                      className="w-full"
+                    />
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <div className="text-xs text-muted-foreground">
+                            (máx. 12)
+                          </div>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Máximo de 12 sessões recorrentes</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
         {(conflictError || submissionError) && (
           <div className="col-span-2">
             <Alert variant="destructive">
@@ -837,7 +953,7 @@ const AppointmentForm = ({
             (appointmentType === "presential" && !roomId)
           }
         >
-          {existingAppointment ? "Atualizar" : "Agendar"} Consulta
+          {existingAppointment ? "Atualizar" : (isRecurring ? "Agendar Sessões Recorrentes" : "Agendar Consulta")}
         </Button>
       </div>
 

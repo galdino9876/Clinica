@@ -434,6 +434,30 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
     
     updatePatient(updatedPatient);
     
+    // Cancel all future appointments for this patient
+    const patientAppointments = appointments.filter(
+      app => app.patient.id === id && 
+      // Only cancel future appointments or those on the same day
+      (new Date(app.date) >= new Date(new Date().setHours(0, 0, 0, 0))) &&
+      // Only cancel pending or confirmed appointments
+      (app.status === "pending" || app.status === "confirmed")
+    );
+    
+    if (patientAppointments.length > 0) {
+      // Update all of these appointments to cancelled
+      patientAppointments.forEach(app => {
+        updateAppointment({
+          ...app,
+          status: "cancelled" as AppointmentStatus
+        });
+      });
+      
+      toast({
+        title: `${patientAppointments.length} agendamentos cancelados`,
+        description: `Os agendamentos futuros do paciente ${patient.name} foram cancelados automaticamente.`,
+      });
+    }
+    
     toast({
       title: "Paciente desativado",
       description: `O paciente ${patient.name} foi desativado com sucesso.`
