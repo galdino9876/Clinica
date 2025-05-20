@@ -61,6 +61,9 @@ const PatientList = () => {
     handleAttendanceOpen,
     handleSavePatient,
     getAttendanceTimeText,
+    
+    // Pending appointments
+    pendingAppointmentsCount,
   } = usePatientManagement();
 
   return (
@@ -109,6 +112,7 @@ const PatientList = () => {
         deactivationReason={deactivationReason}
         setDeactivationReason={setDeactivationReason}
         onConfirm={confirmDeactivation}
+        pendingAppointmentsCount={pendingAppointmentsCount || 0}
       />
 
       {/* Referral Dialog */}
