@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -399,17 +398,17 @@ const AppointmentForm = ({
     });
 
     // Check for required fields
-    if (!selectedPatient) {
+    if (!selectedPatient || selectedPatient === "") {
       setSubmissionError("Por favor, selecione um paciente.");
       return;
     }
 
-    if (!psychologistId) {
+    if (!psychologistId || psychologistId === "") {
       setSubmissionError("Por favor, selecione um psicólogo.");
       return;
     }
 
-    if (appointmentType === "presential" && !roomId) {
+    if (appointmentType === "presential" && (!roomId || roomId === "")) {
       setSubmissionError("Por favor, selecione um consultório para a consulta presencial.");
       return;
     }
@@ -669,6 +668,9 @@ const AppointmentForm = ({
               Novo
             </Button>
           </div>
+          {formSubmitted && !selectedPatient && (
+            <p className="text-xs text-red-500 mt-1">Por favor, selecione um paciente</p>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -970,14 +972,14 @@ const AppointmentForm = ({
         <Button 
           type="submit"
           disabled={
-            formSubmitted ||
-            availableTimes.length === 0 || 
+            formSubmitted &&
+            (availableTimes.length === 0 || 
             !startTime || 
             !endTime || 
             !!conflictError || 
             !isPsychologistAvailable(psychologistId) ||
             !selectedPatient ||
-            (appointmentType === "presential" && !roomId)
+            (appointmentType === "presential" && !roomId))
           }
         >
           {existingAppointment ? "Atualizar" : (isRecurring ? "Agendar Sessões Recorrentes" : "Agendar Consulta")}
