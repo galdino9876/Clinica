@@ -4,7 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Patient } from "@/types/appointment";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
+import { useState } from "react";
 
 interface DeactivatePatientDialogProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ interface DeactivatePatientDialogProps {
   deactivationReason: string;
   setDeactivationReason: (reason: string) => void;
   onConfirm: () => void;
+  pendingAppointmentsCount: number; // Add count of pending appointments
 }
 
 const DeactivatePatientDialog = ({
@@ -21,9 +23,18 @@ const DeactivatePatientDialog = ({
   patient,
   deactivationReason,
   setDeactivationReason,
-  onConfirm
+  onConfirm,
+  pendingAppointmentsCount // Add count of pending appointments
 }: DeactivatePatientDialogProps) => {
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   if (!patient) return null;
+
+  const handleConfirm = async () => {
+    setIsSubmitting(true);
+    await onConfirm(); // Wait for the onConfirm function to complete
+    setIsSubmitting(false);
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
@@ -39,7 +50,7 @@ const DeactivatePatientDialog = ({
         <Alert variant="warning" className="bg-amber-50 border-amber-300">
           <AlertTriangle className="h-4 w-4 text-amber-500" />
           <AlertDescription className="text-sm">
-            Ao desativar o paciente, todos os seus <strong>agendamentos futuros</strong> serão automaticamente <strong>cancelados</strong>.
+            Ao desativar o paciente, todos os seus <strong>{pendingAppointmentsCount} agendamentos futuros</strong> serão automaticamente <strong>cancelados</strong>.
           </AlertDescription>
         </Alert>
         
@@ -58,15 +69,19 @@ const DeactivatePatientDialog = ({
           </div>
         </div>
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={isSubmitting}>
             Cancelar
           </Button>
           <Button 
             variant="destructive" 
-            onClick={onConfirm}
-            disabled={deactivationReason.trim() === ""}
+            onClick={handleConfirm}
+            disabled={deactivationReason.trim() === "" || isSubmitting}
           >
-            Confirmar Desativação
+            {isSubmitting ? (
+              <>Processando...</>
+            ) : (
+              <>Confirmar Desativação</>
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

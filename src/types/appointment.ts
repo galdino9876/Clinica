@@ -43,6 +43,7 @@ export interface Appointment {
   value: number;
   appointmentType: AppointmentType;
   isRecurring?: boolean; // Flag to indicate if this appointment is part of a recurring series
+  recurrenceType?: RecurrenceType; // Type of recurrence (weekly, biweekly)
   recurrenceGroupId?: string; // ID to group recurring appointments
 }
 

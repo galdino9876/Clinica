@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Appointment } from "@/types/appointment";
 import { useAuth } from "@/context/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus } from "lucide-react";
+import { Plus, CalendarDays } from "lucide-react";
 import AppointmentForm from "./AppointmentForm";
 import AppointmentDetails from "./AppointmentDetails";
+import { Badge } from "./ui/badge";
 
 interface AppointmentTimeSlotsProps {
   selectedDate: Date;
@@ -101,6 +102,14 @@ const AppointmentTimeSlots = ({ selectedDate, appointments, onCreateAppointment 
                         <p className="text-sm text-gray-500">
                           {app.roomName} - Dr. {app.psychologistName}
                         </p>
+                        {app.recurrenceType && (
+                          <div className="flex items-center mt-1">
+                            <Badge variant="outline" className="flex items-center gap-1 text-xs">
+                              <CalendarDays className="h-3 w-3" />
+                              {app.recurrenceType === 'weekly' ? 'Semanal' : 'Quinzenal'}
+                            </Badge>
+                          </div>
+                        )}
                       </div>
                       <div className="text-right">
                         <span className="text-sm font-medium">

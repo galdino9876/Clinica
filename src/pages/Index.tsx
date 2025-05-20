@@ -19,6 +19,12 @@ const Index = () => {
   // Log for debugging when appointments change
   useEffect(() => {
     console.log("Agendamentos atualizados:", appointments);
+    
+    // Log recurring appointments for debugging
+    const recurringAppointments = appointments.filter(app => app.isRecurring);
+    if (recurringAppointments.length > 0) {
+      console.log("Agendamentos recorrentes:", recurringAppointments);
+    }
   }, [appointments]);
 
   // Função para abrir o modal independente do calendário, sem data pré-selecionada

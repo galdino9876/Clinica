@@ -18,14 +18,15 @@ import {
 } from "@/components/ui/tooltip";
 import { useAppointments } from "@/context/AppointmentContext";
 import { useAuth } from "@/context/AuthContext";
-import { format, addDays, addWeeks } from "date-fns";
-import { Patient, AppointmentStatus } from "@/types/appointment";
+import { format, addDays, addWeeks, parse } from "date-fns";
+import { Patient, AppointmentStatus, RecurrenceType } from "@/types/appointment";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import PatientForm from "./PatientForm";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import PsychologistAvailabilityDatePicker from "./PsychologistAvailabilityDatePicker";
 import { useToast } from "@/hooks/use-toast";
 import { RepeatIcon } from "lucide-react";
+import { v4 as uuidv4 } from 'uuid';
 
 interface AppointmentFormProps {
   selectedDate: Date;
@@ -482,7 +483,11 @@ const AppointmentForm = ({
         updateAppointment({
           ...appointmentData,
           id: existingAppointment.id,
-          status: existingAppointment.status // Manter o status existente
+          status: existingAppointment.status, // Manter o status existente
+          // Keep recurrence info if it exists
+          recurrenceGroupId: existingAppointment.recurrenceGroupId,
+          recurrenceType: existingAppointment.recurrenceType,
+          isRecurring: existingAppointment.isRecurring
         });
         toast({
           title: "Agendamento atualizado",
@@ -510,23 +515,43 @@ const AppointmentForm = ({
     }
   };
 
-  const createRecurringAppointments = (baseAppointment: Omit<any, 'id'>, recurType: string, count: number) => {
+  const createRecurringAppointments = (baseAppointment: Omit<any, 'id'>, recurType: RecurrenceType, count: number) => {
+    // Generate a shared group ID for all appointments in this recurrence
+    const recurrenceGroupId = uuidv4();
+    
     // Always add the first appointment (the base one)
-    addAppointment(baseAppointment);
+    const firstAppointment = {
+      ...baseAppointment,
+      recurrenceGroupId,
+      recurrenceType: recurType,
+      isRecurring: true
+    };
+    addAppointment(firstAppointment);
+    
+    console.log(`Creating ${count} recurring appointments of type ${recurType}`);
+    console.log("First appointment date:", baseAppointment.date);
     
     // Create additional recurring appointments
     for (let i = 1; i < count; i++) {
+      // Parse the base appointment date string into a Date
+      const baseDate = parse(baseAppointment.date, "yyyy-MM-dd", new Date());
+      
       const newDate = recurType === 'weekly' 
-        ? addWeeks(new Date(baseAppointment.date), i)  // Weekly: add i weeks
-        : addWeeks(new Date(baseAppointment.date), i * 2); // Biweekly: add i*2 weeks
+        ? addWeeks(baseDate, i)  // Weekly: add i weeks
+        : addWeeks(baseDate, i * 2); // Biweekly: add i*2 weeks
       
       // Format the new date as string
       const newDateStr = format(newDate, "yyyy-MM-dd");
       
-      // Clone the base appointment with new date
+      console.log(`Recurring appointment ${i+1}: ${newDateStr}`);
+      
+      // Clone the base appointment with new date and shared recurrence data
       const newAppointment = {
         ...baseAppointment,
-        date: newDateStr
+        date: newDateStr,
+        recurrenceGroupId,
+        recurrenceType: recurType,
+        isRecurring: true
       };
       
       // Add the recurring appointment
