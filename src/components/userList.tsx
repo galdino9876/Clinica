@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Edit, Trash2, Eye, Plus } from 'lucide-react';
+import { Edit, Trash2, Eye, Plus, Clock, User } from 'lucide-react';
 
-const PatientsTable = () => {
-  const [patients, setPatients] = useState([]);
+const UsersTable = () => {
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -13,10 +13,9 @@ const PatientsTable = () => {
       label: 'Editar',
       icon: Edit,
       color: 'text-blue-600 hover:text-blue-800',
-      onClick: (patient) => {
-        console.log('Editando paciente:', patient);
-        // Aqui você pode adicionar a lógica de edição
-        alert(`Editar paciente: ${patient.nome || patient.name}`);
+      onClick: (user) => {
+        console.log('Editando usuário:', user);
+        alert(`Editar usuário: ${user.nome || user.name}`);
       }
     },
     {
@@ -24,31 +23,39 @@ const PatientsTable = () => {
       label: 'Excluir',
       icon: Trash2,
       color: 'text-red-600 hover:text-red-800',
-      onClick: (patient) => {
-        console.log('Excluindo paciente:', patient);
-        if (window.confirm(`Deseja realmente excluir o paciente ${patient.nome || patient.name}?`)) {
-          // Aqui você pode adicionar a lógica de exclusão
-          alert(`Paciente ${patient.nome || patient.name} excluído!`);
+      onClick: (user) => {
+        console.log('Excluindo usuário:', user);
+        if (window.confirm(`Deseja realmente excluir o usuário ${user.nome || user.name}?`)) {
+          alert(`Usuário ${user.nome || user.name} excluído!`);
         }
       }
     }
-    // Você pode adicionar mais ações aqui facilmente:
+    // Você pode adicionar mais ações aqui:
     // {
     //   id: 'view',
     //   label: 'Visualizar',
     //   icon: Eye,
     //   color: 'text-green-600 hover:text-green-800',
-    //   onClick: (patient) => {
-    //     console.log('Visualizando paciente:', patient);
+    //   onClick: (user) => {
+    //     console.log('Visualizando usuário:', user);
+    //   }
+    // },
+    // {
+    //   id: 'schedule',
+    //   label: 'Gerenciar Horários',
+    //   icon: Clock,
+    //   color: 'text-purple-600 hover:text-purple-800',
+    //   onClick: (user) => {
+    //     console.log('Gerenciando horários:', user);
     //   }
     // }
   ];
 
   // Função para buscar os dados da API
-  const fetchPatients = async () => {
+  const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/patients');
+      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/users');
 
       if (!response.ok) {
         throw new Error(`Erro na API: ${response.status}`);
@@ -57,30 +64,46 @@ const PatientsTable = () => {
       const data = await response.json();
 
       // Assumindo que a resposta pode ser um array ou um objeto com array
-      const patientsData = Array.isArray(data) ? data : data.patients || data.data || [];
+      const usersData = Array.isArray(data) ? data : data.users || data.data || [];
 
-      setPatients(patientsData);
+      setUsers(usersData);
       setError(null);
     } catch (err) {
-      console.error('Erro ao buscar pacientes:', err);
+      console.error('Erro ao buscar usuários:', err);
       setError(err.message);
       // Dados de exemplo para demonstração
-      setPatients([
+      setUsers([
         {
           id: 1,
-          nome: 'João Silva',
-          cpf: '123.456.789-00',
+          nome: 'Dr. João Silva',
+          email: 'joao.silva@clinica.com',
           telefone: '(11) 99999-9999',
-          email: 'joao@email.com',
-          status: 'Ativo'
+          funcao: 'Psicólogo',
+          horarios: ['08:00-12:00', '14:00-18:00']
         },
         {
           id: 2,
-          nome: 'Maria Santos',
-          cpf: '987.654.321-00',
+          nome: 'Dra. Maria Santos',
+          email: 'maria.santos@clinica.com',
           telefone: '(11) 88888-8888',
-          email: 'maria@email.com',
-          status: 'Inativo'
+          funcao: 'Psicóloga',
+          horarios: ['09:00-13:00', '15:00-19:00']
+        },
+        {
+          id: 3,
+          nome: 'Ana Costa',
+          email: 'ana.costa@clinica.com',
+          telefone: '(11) 77777-7777',
+          funcao: 'Recepcionista',
+          horarios: []
+        },
+        {
+          id: 4,
+          nome: 'Carlos Lima',
+          email: 'carlos.lima@clinica.com',
+          telefone: '(11) 66666-6666',
+          funcao: 'Administrador',
+          horarios: []
         }
       ]);
     } finally {
@@ -89,24 +112,51 @@ const PatientsTable = () => {
   };
 
   useEffect(() => {
-    fetchPatients();
+    fetchUsers();
   }, []);
 
-  // Função para renderizar o status com cores
-  const renderStatus = (status) => {
-    const statusColors = {
-      'Ativo': 'bg-green-100 text-green-800',
-      'Inativo': 'bg-red-100 text-red-800',
-      'Pendente': 'bg-yellow-100 text-yellow-800',
-      'Bloqueado': 'bg-gray-100 text-gray-800'
+  // Função para renderizar a função com cores
+  const renderFunction = (funcao) => {
+    const functionColors = {
+      'Psicólogo': 'bg-blue-100 text-blue-800',
+      'Psicóloga': 'bg-blue-100 text-blue-800',
+      'Recepcionista': 'bg-green-100 text-green-800',
+      'Administrador': 'bg-purple-100 text-purple-800',
+      'Admin': 'bg-purple-100 text-purple-800',
+      'Gerente': 'bg-orange-100 text-orange-800'
     };
 
-    const colorClass = statusColors[status] || 'bg-gray-100 text-gray-800';
+    const colorClass = functionColors[funcao] || 'bg-gray-100 text-gray-800';
 
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
-        {status}
+        {funcao}
       </span>
+    );
+  };
+
+  // Função para renderizar horários
+  const renderSchedules = (horarios, funcao) => {
+    // Só mostra horários para psicólogos
+    const isPsychologist = funcao && (funcao.toLowerCase().includes('psicólog') || funcao.toLowerCase().includes('psycholog'));
+
+    if (!isPsychologist) {
+      return <span className="text-gray-400 text-sm">-</span>;
+    }
+
+    if (!horarios || horarios.length === 0) {
+      return <span className="text-red-500 text-sm">Não definido</span>;
+    }
+
+    return (
+      <div className="space-y-1">
+        {horarios.map((horario, index) => (
+          <div key={index} className="flex items-center text-sm text-gray-700">
+            <Clock size={12} className="mr-1" />
+            {horario}
+          </div>
+        ))}
+      </div>
     );
   };
 
@@ -114,7 +164,7 @@ const PatientsTable = () => {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2">Carregando pacientes...</span>
+        <span className="ml-2">Carregando usuários...</span>
       </div>
     );
   }
@@ -125,11 +175,12 @@ const PatientsTable = () => {
         {/* Header */}
         <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-gray-800">
-              Pacientes ({patients.length})
+            <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+              <User size={24} />
+              Usuários ({users.length})
             </h2>
             <button
-              onClick={fetchPatients}
+              onClick={fetchUsers}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center gap-2 transition-colors"
             >
               <Plus size={16} />
@@ -152,16 +203,16 @@ const PatientsTable = () => {
                   Nome
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  CPF
+                  E-mail
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Telefone
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Email
+                  Função
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
+                  Horários (Psicólogos)
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Ações
@@ -169,37 +220,38 @@ const PatientsTable = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {patients.length === 0 ? (
+              {users.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
-                    Nenhum paciente encontrado
+                    Nenhum usuário encontrado
                   </td>
                 </tr>
               ) : (
-                patients.map((patient, index) => (
-                  <tr key={patient.id || index} className="hover:bg-gray-50 transition-colors">
+                users.map((user, index) => (
+                  <tr key={user.id || index} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
-                        {patient.nome || patient.name || 'N/A'}
+                        {user.nome || user.name || 'N/A'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {patient.cpf || 'N/A'}
+                        {user.email || 'N/A'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {patient.telefone || patient.phone || 'N/A'}
+                        {user.telefone || user.phone || 'N/A'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {patient.email || 'N/A'}
-                      </div>
+                      {renderFunction(user.funcao || user.role || user.function || 'N/A')}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {renderStatus(patient.status || 'Ativo')}
+                    <td className="px-6 py-4">
+                      {renderSchedules(
+                        user.horarios || user.schedules || user.schedule,
+                        user.funcao || user.role || user.function
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
@@ -208,7 +260,7 @@ const PatientsTable = () => {
                           return (
                             <button
                               key={action.id}
-                              onClick={() => action.onClick(patient)}
+                              onClick={() => action.onClick(user)}
                               className={`${action.color} hover:scale-110 transition-all duration-200 p-1 rounded`}
                               title={action.label}
                             >
@@ -225,10 +277,15 @@ const PatientsTable = () => {
           </table>
         </div>
 
-        {/* Footer */}
+        {/* Footer com estatísticas */}
         <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
-          <div className="text-sm text-gray-700">
-            Total de pacientes: {patients.length}
+          <div className="flex justify-between text-sm text-gray-700">
+            <div>Total de usuários: {users.length}</div>
+            <div>
+              Psicólogos: {users.filter(u =>
+                (u.funcao || u.role || u.function || '').toLowerCase().includes('psicólog')
+              ).length}
+            </div>
           </div>
         </div>
       </div>
@@ -236,4 +293,4 @@ const PatientsTable = () => {
   );
 };
 
-export default PatientsTable;
+export default UsersTable;

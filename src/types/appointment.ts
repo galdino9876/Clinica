@@ -1,12 +1,11 @@
-
 export interface ConsultingRoom {
-  id: string;
+  id: number;
   name: string;
   description?: string;
 }
 
 export interface Patient {
-  id: string;
+  id: number;
   name: string;
   cpf: string;
   phone: string;
@@ -20,37 +19,37 @@ export interface Patient {
   insuranceDocument?: File | string; // Added for insurance document
 }
 
-export type PaymentMethod = 'private' | 'insurance';
-export type InsuranceType = 'Unimed' | 'SulAmérica' | 'Fusex' | 'Other' | null;
-export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'confirmed' | 'pending';
-export type AppointmentType = 'presential' | 'online';
-export type RecurrenceType = 'weekly' | 'biweekly' | null;
+export type PaymentMethod = "private" | "insurance";
+export type InsuranceType = "Unimed" | "SulAmérica" | "Fusex" | "Other" | null;
+export type AppointmentStatus = "scheduled" | "completed" | "cancelled" | "confirmed" | "pending";
+export type AppointmentType = "presential" | "online";
+export type RecurrenceType = "weekly" | "biweekly" | null;
 
 export interface Appointment {
-  id: string;
-  patient: Patient;
-  psychologistId: string;
-  psychologistName: string;
-  roomId: string;
-  roomName: string;
-  date: string; // ISO date string
-  startTime: string; // format: "HH:MM"
-  endTime: string; // format: "HH:MM"
+  id: number;
+  patient_id: number; // Referência a Patient.id
+  psychologist_id: number; // Referência a psychologist.id (tabela separada)
+  room_id: number | null; // Referência a ConsultingRoom.id
+  date: string; // ISO date string (ex.: "2025-06-10")
+  start_time: string; // format: "HH:MM" (ex.: "14:00")
+  end_time: string; // format: "HH:MM" (ex.: "15:00")
   status: AppointmentStatus;
-  paymentMethod: PaymentMethod;
-  insuranceType: InsuranceType;
-  insuranceToken?: string; // Added for insurance token
-  value: number;
-  appointmentType: AppointmentType;
-  isRecurring?: boolean; // Flag to indicate if this appointment is part of a recurring series
-  recurrenceType?: RecurrenceType; // Type of recurrence (weekly, biweekly)
-  recurrenceGroupId?: string; // ID to group recurring appointments
+  payment_method: PaymentMethod;
+  insurance_type: InsuranceType;
+  insurance_token?: string; // varchar(50), nulo permitido
+  value: number; // decimal(10,2)
+  appointment_type: AppointmentType;
+  is_recurring: boolean; // tinyint(1), mapeado de 0/1 para boolean
+  recurrence_type?: RecurrenceType;
+  recurrence_group_id?: number; // Referência a um grupo de recorrência
+  created_at: string; // timestamp
+  updated_at: string | null; // timestamp
 }
 
 export interface PatientRecord {
   id: string;
-  patientId: string;
-  appointmentId: string;
+  patientId: number;
+  appointmentId: number;
   date: string; // ISO date string
   notes: string;
   createdBy: string; // psychologist ID
@@ -63,7 +62,7 @@ export interface PendingPatientsData {
     phone: string;
     email: string;
     cpf: string;
-    appointmentId: string;
+    appointmentId: number;
     psychologistName: string;
     startTime: string;
   }>;

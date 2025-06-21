@@ -1,4 +1,4 @@
-
+import React from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, Search, FileText, Pencil, Trash, Send, CircleArrowUp, FilePlus, Calendar } from "lucide-react";
 import { Patient } from "@/types/appointment";
@@ -35,7 +35,7 @@ const PatientTable = ({
   onDeactivatePatient,
   onReactivatePatient,
   onReferralOpen,
-  onAttendanceOpen
+  onAttendanceOpen,
 }: PatientTableProps) => {
   return (
     <div className="space-y-4">
@@ -131,7 +131,7 @@ const PatientTable = ({
                         >
                           <Calendar className="h-4 w-4" />
                         </Button>
-                        
+
                         {/* Documentos para recepcionistas e psicólogos */}
                         {(canViewRecords || isAdmin || isPsychologist) && (
                           <>

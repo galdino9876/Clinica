@@ -15,13 +15,13 @@ const Index = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [selectedPsychologistId, setSelectedPsychologistId] = useState<string>("");
   const [suggestedDate, setSuggestedDate] = useState<Date>(new Date());
-  
+
   // Log for debugging when appointments change
   useEffect(() => {
     console.log("Agendamentos atualizados:", appointments);
-    
+
     // Log recurring appointments for debugging
-    const recurringAppointments = appointments.filter(app => app.isRecurring);
+    const recurringAppointments = appointments.filter(app => app.is_recurring);
     if (recurringAppointments.length > 0) {
       console.log("Agendamentos recorrentes:", recurringAppointments);
     }
@@ -51,17 +51,17 @@ const Index = () => {
         <div className="flex justify-between items-center mb-4">
           <h1 className="text-2xl font-bold">Agenda</h1>
           {(user?.role === "admin" || user?.role === "receptionist") && (
-            <Button 
-              onClick={handleCreateModalOpen} 
+            <Button
+              onClick={handleCreateModalOpen}
               className="bg-clinic-600 hover:bg-clinic-700"
             >
               <Plus className="h-4 w-4 mr-1" /> Novo Agendamento
             </Button>
           )}
         </div>
-        
+
         <AppointmentCalendar />
-        
+
         {/* Create Appointment Modal for Homepage - Independent from calendar selection */}
         <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
           <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">

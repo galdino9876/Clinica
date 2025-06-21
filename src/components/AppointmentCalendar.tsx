@@ -1,431 +1,403 @@
-import { useState, useEffect } from "react";
-import Calendar from "react-calendar";
-import { useAppointments } from "@/context/AppointmentContext";
-import { useAuth } from "@/context/AuthContext";
-import AppointmentTimeSlots from "./AppointmentTimeSlots";
-import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import "react-calendar/dist/Calendar.css";
-import AppointmentForm from "./AppointmentForm";
-
-type ValuePiece = Date | null;
-type Value = ValuePiece | [ValuePiece, ValuePiece];
+import React, { useState, useEffect } from 'react';
+import { ChevronLeft, ChevronRight, Calendar, Clock, User, MapPin, CreditCard, X } from 'lucide-react';
 
 const AppointmentCalendar = () => {
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
-  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-  const { appointments } = useAppointments();
-  const { user, getPsychologists } = useAuth();
-  const [selectedPsychologistId, setSelectedPsychologistId] = useState<string | null>(null);
-  const [fullyBookedDates, setFullyBookedDates] = useState<string[]>([]);
-  
-  // Force re-render when appointments change
-  const [, setForceUpdate] = useState<number>(0);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [appointments, setAppointments] = useState([]);
+  const [workingHours, setWorkingHours] = useState([]);
+  const [patients, setPatients] = useState([]);
+  const [users, setUsers] = useState([]);
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [showModal, setShowModal] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+
+
+  // Buscar dados das APIs
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+
+      // Buscar agendamentos
+      const appointmentsResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/appointmens');
+      if (appointmentsResponse.ok) {
+        const appointmentsData = await appointmentsResponse.json();
+        setAppointments(Array.isArray(appointmentsData) ? appointmentsData : appointmentsData.data || []);
+      } else {
+        throw new Error(`Erro ao buscar agendamentos: ${appointmentsResponse.status}`);
+      }
+
+      // Buscar horários de trabalho
+      const workingHoursResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/working_hours');
+      if (workingHoursResponse.ok) {
+        const workingHoursData = await workingHoursResponse.json();
+        setWorkingHours(Array.isArray(workingHoursData) ? workingHoursData : workingHoursData.data || []);
+      } else {
+        throw new Error(`Erro ao buscar horários de trabalho: ${workingHoursResponse.status}`);
+      }
+
+      // Buscar pacientes
+      const patientsResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/patients');
+      if (patientsResponse.ok) {
+        const patientsData = await patientsResponse.json();
+        setPatients(Array.isArray(patientsData) ? patientsData : patientsData.data || []);
+      } else {
+        throw new Error(`Erro ao buscar pacientes: ${patientsResponse.status}`);
+      }
+
+      // Buscar usuários (psicólogos)
+      const usersResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/users');
+      if (usersResponse.ok) {
+        const usersData = await usersResponse.json();
+        setUsers(Array.isArray(usersData) ? usersData : usersData.data || []);
+      } else {
+        throw new Error(`Erro ao buscar usuários: ${usersResponse.status}`);
+      }
+
+      setError(null);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Funções para buscar nomes por ID
+  const getPatientName = (patientId) => {
+    const patient = patients.find(p => p.id === patientId);
+    return patient ? (patient.nome || patient.name || `Paciente ${patientId}`) : `Paciente ${patientId}`;
+  };
+
+  const getPsychologistName = (psychologistId) => {
+    const psychologist = users.find(u => u.id === psychologistId);
+    return psychologist ? (psychologist.nome || psychologist.name || `Psicólogo ${psychologistId}`) : `Psicólogo ${psychologistId}`;
+  };
 
   useEffect(() => {
-    // Force component to re-render when appointments change
-    setForceUpdate(prev => prev + 1);
-    
-    // Calculate fully booked dates
-    calculateFullyBookedDates();
-  }, [appointments]);
-  
-  // Calculate which dates are fully booked
-  const calculateFullyBookedDates = () => {
-    const psychologists = getPsychologists();
-    
-    // Map to store available time slots for each date and psychologist
-    const availableSlotsMap = new Map<string, Map<string, number>>();
-    
-    // Map to store booked time slots for each date and psychologist
-    const bookedSlotsMap = new Map<string, Map<string, number>>();
-    
-    // First, initialize available slots for each psychologist's working days
-    psychologists.forEach(psych => {
-      if (psych.workingHours) {
-        // Get available days of week for this psychologist
-        const workingHours = psych.workingHours;
-        
-        // Check the next 60 days
-        const today = new Date();
-        for (let i = 0; i < 60; i++) {
-          const date = new Date(today);
-          date.setDate(today.getDate() + i);
-          const dayOfWeek = date.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
-          
-          // Find if this psychologist works on this day of week
-          const workingHoursForDay = workingHours.find(wh => wh.dayOfWeek === dayOfWeek);
-          
-          if (workingHoursForDay) {
-            const { startTime, endTime } = workingHoursForDay;
-            const dateStr = date.toISOString().split('T')[0];
-            
-            // Generate 1-hour slots for this day
-            const availableSlots = generateTimeSlots(startTime, endTime, 60);
-            
-            // Add these slots to the available slots map
-            if (!availableSlotsMap.has(dateStr)) {
-              availableSlotsMap.set(dateStr, new Map());
-            }
-            
-            const psychSlotsMap = availableSlotsMap.get(dateStr)!;
-            if (!psychSlotsMap.has(psych.id)) {
-              psychSlotsMap.set(psych.id, availableSlots.length);
-            } else {
-              psychSlotsMap.set(psych.id, psychSlotsMap.get(psych.id)! + availableSlots.length);
-            }
-          }
+    fetchData();
+  }, []);
+
+  // Funções auxiliares para o calendário
+  const getDaysInMonth = (date) => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  };
+
+  const getFirstDayOfMonth = (date) => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  };
+
+  const formatDate = (date) => {
+    return date.toISOString().split('T')[0];
+  };
+
+  const navigateMonth = (direction) => {
+    const newDate = new Date(currentDate);
+    newDate.setMonth(currentDate.getMonth() + direction);
+    setCurrentDate(newDate);
+  };
+
+  // Determinar o status do dia
+  const getDayStatus = (day) => {
+    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    const dateString = formatDate(date);
+    const dayOfWeek = date.getDay();
+
+    // Buscar agendamentos do dia
+    const dayAppointments = appointments.filter(apt => apt.date === dateString);
+
+    // Buscar horários de trabalho do dia
+    const dayWorkingHours = workingHours.filter(wh => wh.day_of_week === dayOfWeek);
+
+    if (dayAppointments.length === 0 && dayWorkingHours.length === 0) {
+      return { status: 'none', color: '' };
+    }
+
+    // Verificar se há agendamentos confirmados
+    const confirmedAppointments = dayAppointments.filter(apt =>
+      apt.status === 'Confirmada' || apt.status === 'confirmada' || apt.status === 'confirmed'
+    );
+
+    // Verificar se há agendamentos pendentes
+    const pendingAppointments = dayAppointments.filter(apt =>
+      apt.status === 'Pendente' || apt.status === 'pendente' || apt.status === 'pending'
+    );
+
+    // Calcular horários disponíveis vs ocupados
+    let totalSlots = 0;
+    dayWorkingHours.forEach(wh => {
+      const startHour = parseInt(wh.start_time.split(':')[0]);
+      const endHour = parseInt(wh.end_time.split(':')[0]);
+      totalSlots += endHour - startHour;
+    });
+
+    const occupiedSlots = dayAppointments.length;
+
+    if (occupiedSlots >= totalSlots && totalSlots > 0) {
+      return { status: 'full', color: 'bg-red-500 text-white' }; // Totalmente agendado
+    } else if (confirmedAppointments.length > 0) {
+      return { status: 'confirmed', color: 'bg-green-500 text-white' }; // Confirmadas
+    } else if (pendingAppointments.length > 0) {
+      return { status: 'pending', color: 'bg-orange-500 text-white' }; // Pendentes
+    } else if (dayWorkingHours.length > 0) {
+      return { status: 'available', color: 'bg-blue-500 text-white' }; // Disponível
+    }
+
+    return { status: 'none', color: '' };
+  };
+
+  // Obter detalhes do dia selecionado
+  const getDayDetails = (day) => {
+    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    const dateString = formatDate(date);
+    const dayOfWeek = date.getDay();
+
+    const dayAppointments = appointments.filter(apt => apt.date === dateString);
+    const dayWorkingHours = workingHours.filter(wh => wh.day_of_week === dayOfWeek);
+
+    // Gerar horários disponíveis
+    const availableSlots = [];
+    dayWorkingHours.forEach(wh => {
+      const startHour = parseInt(wh.start_time.split(':')[0]);
+      const endHour = parseInt(wh.end_time.split(':')[0]);
+
+      for (let hour = startHour; hour < endHour; hour++) {
+        const timeSlot = `${hour.toString().padStart(2, '0')}:00`;
+        const isOccupied = dayAppointments.some(apt => apt.start_time === timeSlot);
+
+        if (!isOccupied) {
+          availableSlots.push(timeSlot);
         }
       }
     });
-    
-    // Now count all booked slots from appointments
-    appointments.forEach(app => {
-      if (app.status === 'confirmed' || app.status === 'pending') {
-        const dateStr = app.date;
-        const psychId = app.psychologistId;
-        
-        // Initialize booked slots map for this date if needed
-        if (!bookedSlotsMap.has(dateStr)) {
-          bookedSlotsMap.set(dateStr, new Map());
-        }
-        
-        // Increment booked slots count for this psychologist on this date
-        const psychBookedMap = bookedSlotsMap.get(dateStr)!;
-        if (!psychBookedMap.has(psychId)) {
-          psychBookedMap.set(psychId, 1);
-        } else {
-          psychBookedMap.set(psychId, psychBookedMap.get(psychId)! + 1);
-        }
-      }
-    });
-    
-    // Find dates where all available slots are booked
-    const fullyBooked: string[] = [];
-    
-    availableSlotsMap.forEach((psychSlotsMap, dateStr) => {
-      let allPsychologistsFullyBooked = true;
-      
-      // Check if each psychologist is fully booked for this date
-      psychSlotsMap.forEach((availableSlots, psychId) => {
-        const bookedSlotsForDate = bookedSlotsMap.get(dateStr);
-        const bookedSlotsForPsych = bookedSlotsForDate?.get(psychId) || 0;
-        
-        // If any psychologist has available slots, the date is not fully booked
-        if (bookedSlotsForPsych < availableSlots) {
-          allPsychologistsFullyBooked = false;
-        }
-      });
-      
-      // If all psychologists are fully booked, mark this date as fully booked
-      if (allPsychologistsFullyBooked && psychSlotsMap.size > 0) {
-        fullyBooked.push(dateStr);
-      }
-    });
-    
-    setFullyBookedDates(fullyBooked);
-    console.log("Fully booked dates:", fullyBooked);
-    console.log("Available slots map:", Array.from(availableSlotsMap.entries()));
-    console.log("Booked slots map:", Array.from(bookedSlotsMap.entries()));
-  };
-  
-  // Helper function to generate time slots
-  const generateTimeSlots = (startTime: string, endTime: string, durationMinutes: number) => {
-    const slots = [];
-    const startMin = timeToMinutes(startTime);
-    const endMin = timeToMinutes(endTime);
-    
-    // Corrigido: Garantir que inclua o último horário possível antes do fim do expediente
-    for (let currentMin = startMin; currentMin + durationMinutes <= endMin; currentMin += durationMinutes) {
-      slots.push([minutesToTime(currentMin), minutesToTime(currentMin + durationMinutes)]);
-    }
-    
-    return slots;
-  };
-  
-  const timeToMinutes = (time: string) => {
-    const [hours, minutes] = time.split(':').map(Number);
-    return hours * 60 + minutes;
-  };
-  
-  const minutesToTime = (minutes: number) => {
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
-  };
-  
-  // Filter appointments based on user role and selected date
-  const getAppointmentsForDate = (date: Date) => {
-    const dateStr = date.toISOString().split('T')[0];
-    console.log(`Filtering appointments for date: ${dateStr}`);
-    
-    if (user?.role === "psychologist") {
-      return appointments.filter(
-        (app) => 
-          app.date === dateStr && 
-          app.psychologistId === user.id
-      );
-    }
-    
-    return appointments.filter((app) => app.date === dateStr);
+
+    return {
+      date: dateString,
+      appointments: dayAppointments,
+      availableSlots,
+      workingHours: dayWorkingHours
+    };
   };
 
-  // Check if a date has appointments
-  const hasAppointments = (date: Date) => {
-    const appointmentsForDate = getAppointmentsForDate(date);
-    return appointmentsForDate.length > 0;
+  const handleDayClick = (day) => {
+    setSelectedDate(day);
+    setShowModal(true);
   };
 
-  // Format date for display
-  const formatSelectedDate = (date: Date) => {
-    return format(date, "EEEE, d 'de' MMMM 'de' yyyy", { locale: ptBR });
-  };
-  
-  // Get list of all psychologists
-  const psychologists = getPsychologists();
-  
-  // Determine if a date is available for any psychologist
-  const isPsychologistAvailableOnDate = (date: Date) => {
-    if (user?.role === "psychologist") {
-      // For psychologist users, only check their own availability
-      if (!user.workingHours) return false;
-      
-      const dayOfWeek = date.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
-      return user.workingHours.some(wh => wh.dayOfWeek === dayOfWeek);
-    } else {
-      // For admin/receptionist, check all psychologists
-      return psychologists.some(psychologist => {
-        if (!psychologist.workingHours) return false;
-        
-        const dayOfWeek = date.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
-        return psychologist.workingHours.some(wh => wh.dayOfWeek === dayOfWeek);
-      });
+  const renderCalendar = () => {
+    const daysInMonth = getDaysInMonth(currentDate);
+    const firstDay = getFirstDayOfMonth(currentDate);
+    const days = [];
+
+    // Dias vazios no início
+    for (let i = 0; i < firstDay; i++) {
+      days.push(<div key={`empty-${i}`} className="p-2"></div>);
     }
+
+    // Dias do mês
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dayStatus = getDayStatus(day);
+      days.push(
+        <div
+          key={day}
+          onClick={() => handleDayClick(day)}
+          className={`p-2 text-center cursor-pointer hover:bg-gray-100 rounded transition-colors ${dayStatus.color}`}
+        >
+          {day}
+        </div>
+      );
+    }
+
+    return days;
   };
 
-  // Custom tile content to show appointment indicators
-  const tileContent = ({ date, view }: { date: Date; view: string }) => {
-    if (view !== "month") return null;
-    
-    const appointmentsForDate = getAppointmentsForDate(date);
-    const isAvailable = isPsychologistAvailableOnDate(date);
-    
-    if (appointmentsForDate.length === 0 && !isAvailable) return null;
-    
-    // Count appointments by status
-    const confirmedCount = appointmentsForDate.filter(app => app.status === "confirmed").length;
-    const pendingCount = appointmentsForDate.filter(app => app.status === "pending").length;
-    const otherCount = appointmentsForDate.length - confirmedCount - pendingCount;
-    
-    // Create appointment dots based on status and count
-    const appointmentDots = [];
-    
-    // Add confirmed appointment dots (green)
-    for (let i = 0; i < confirmedCount && i < 5; i++) {
-      appointmentDots.push(
-        <div
-          key={`confirmed-${i}`}
-          className="appointment-dot bg-green-500"
-        />
-      );
-    }
-    
-    // Add pending appointment dots (yellow)
-    for (let i = 0; i < pendingCount && i + confirmedCount < 5; i++) {
-      appointmentDots.push(
-        <div
-          key={`pending-${i}`}
-          className="appointment-dot bg-yellow-500"
-        />
-      );
-    }
-    
-    // Add others (cancelled, completed) if space permits
-    for (let i = 0; i < otherCount && i + confirmedCount + pendingCount < 5; i++) {
-      appointmentDots.push(
-        <div
-          key={`other-${i}`}
-          className="appointment-dot bg-gray-500"
-        />
-      );
-    }
-    
-    // Only show green availability dot if no appointments and psychologist is available
-    if (appointmentDots.length === 0 && isAvailable) {
-      appointmentDots.push(
-        <div 
-          key="available" 
-          className="appointment-dot bg-emerald-400" 
-        />
-      );
-    }
-    
-    const totalAppointments = appointmentsForDate.length;
-    
+  if (loading) {
     return (
-      <div className="flex flex-wrap justify-center gap-1 mt-1">
-        {appointmentDots}
-        {totalAppointments > 5 && (
-          <span className="text-xs text-gray-500 font-medium">+</span>
-        )}
+      <div className="flex justify-center items-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <span className="ml-2">Carregando calendário...</span>
       </div>
     );
-  };
-  
-  const tileClassName = ({ date, view }: { date: Date; view: string }) => {
-    if (view !== "month") return null;
-    
-    const dateStr = date.toISOString().split('T')[0];
-    if (fullyBookedDates.includes(dateStr)) {
-      return "fully-booked-date";
-    }
-    
-    if (isPsychologistAvailableOnDate(date)) {
-      return "available-date";
-    }
-    
-    return null;
-  };
+  }
 
-  const handleDateChange = (value: Value) => {
-    if (value instanceof Date) {
-      // Make sure to create a new Date object to avoid reference issues
-      const selectedDate = new Date(value);
-      console.log("Calendar selection - New date selected:", selectedDate);
-      setSelectedDate(selectedDate);
-      setIsDetailsOpen(true);
-    }
-  };
-  
-  // Update the selected psychologist when the form modal opens
-  const handleCreateModalOpen = () => {
-    // When opening the create modal directly from button, use the current selected date
-    setIsCreateModalOpen(true);
-  };
-  
-  // Create appointment for specific date from the calendar view
-  const handleCreateFromCalendar = (date: Date) => {
-    console.log("Creating appointment from calendar for date:", date);
-    setSelectedDate(date); // Set selected date before opening modal
-    setIsCreateModalOpen(true); // Open create appointment modal
-  };
-  
-  // Update selectedPsychologistId when form closes
-  const handleFormClose = () => {
-    setIsCreateModalOpen(false);
-    setSelectedPsychologistId(null);
-  };
-  
-  // Function to update selected psychologist from the form
-  const handlePsychologistSelected = (psychologistId: string) => {
-    setSelectedPsychologistId(psychologistId);
-  };
+  const dayDetails = selectedDate ? getDayDetails(selectedDate) : null;
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
-      <div className="bg-white p-6 rounded-lg shadow-sm">
-        <Calendar
-          onChange={handleDateChange}
-          value={selectedDate}
-          tileContent={tileContent}
-          tileClassName={tileClassName}
-          prevLabel={<ChevronLeft className="h-5 w-5" />}
-          nextLabel={<ChevronRight className="h-5 w-5" />}
-          prev2Label={null}
-          next2Label={null}
-          className="w-full"
-        />
-        <div className="mt-4 flex flex-wrap gap-2">
-          <p className="text-sm text-gray-500 w-full">Legenda:</p>
-          <div className="flex items-center mr-4">
-            <div className="w-3 h-3 rounded-full bg-green-500 mr-1"></div>
-            <span className="text-xs">Confirmadas</span>
+    <div className="w-full max-w-6xl mx-auto p-6">
+      <div className="bg-white shadow-lg rounded-lg overflow-hidden">
+        {/* Header */}
+        <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
+              <Calendar size={24} />
+              Calendário de Agendamentos
+            </h2>
+            <button
+              onClick={fetchData}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors"
+            >
+              Atualizar
+            </button>
           </div>
-          <div className="flex items-center mr-4">
-            <div className="w-3 h-3 rounded-full bg-yellow-500 mr-1"></div>
-            <span className="text-xs">Pendentes</span>
+          {error && (
+            <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
+              Erro ao carregar dados da API: {error}
+            </div>
+          )}
+        </div>
+
+        {/* Legenda */}
+        <div className="px-6 py-4 bg-gray-50 border-b">
+          <h3 className="text-sm font-medium text-gray-700 mb-2">Legenda:</h3>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-green-500 rounded"></div>
+              <span>Confirmadas</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-orange-500 rounded"></div>
+              <span>Pendentes</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-blue-500 rounded"></div>
+              <span>Disponibilidade</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 bg-red-500 rounded"></div>
+              <span>Totalmente agendado</span>
+            </div>
           </div>
-          <div className="flex items-center mr-4">
-            <div className="w-3 h-3 rounded-full bg-emerald-400 mr-1"></div>
-            <span className="text-xs">Disponibilidade do psicólogo</span>
+        </div>
+
+        {/* Navegação do calendário */}
+        <div className="px-6 py-4 flex justify-between items-center border-b">
+          <button
+            onClick={() => navigateMonth(-1)}
+            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors"
+          >
+            <ChevronLeft size={20} />
+            Anterior
+          </button>
+
+          <h3 className="text-lg font-semibold">
+            {currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+          </h3>
+
+          <button
+            onClick={() => navigateMonth(1)}
+            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors"
+          >
+            Próximo
+            <ChevronRight size={20} />
+          </button>
+        </div>
+
+        {/* Calendário */}
+        <div className="p-6">
+          <div className="grid grid-cols-7 gap-1 mb-4">
+            {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(day => (
+              <div key={day} className="p-2 text-center font-medium text-gray-600">
+                {day}
+              </div>
+            ))}
           </div>
-          <div className="flex items-center">
-            <div className="w-3 h-3 rounded-full bg-orange-500 mr-1"></div>
-            <span className="text-xs">Dia totalmente agendado</span>
+          <div className="grid grid-cols-7 gap-1">
+            {renderCalendar()}
           </div>
         </div>
       </div>
-      
-      {/* Modal for appointment details */}
-      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
-        <DialogContent className="w-full max-w-3xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="text-xl font-semibold capitalize">
-              {formatSelectedDate(selectedDate)}
-            </DialogTitle>
-            <DialogDescription>
-              Consultas e horários disponíveis para esta data
-            </DialogDescription>
-          </DialogHeader>
-          <AppointmentTimeSlots 
-            selectedDate={selectedDate}
-            appointments={getAppointmentsForDate(selectedDate)}
-            onCreateAppointment={() => handleCreateFromCalendar(selectedDate)}
-          />
-        </DialogContent>
-      </Dialog>
 
-      {/* Create Appointment Modal */}
-      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Novo Agendamento</DialogTitle>
-            <DialogDescription>
-              {isDetailsOpen 
-                ? "Criando agendamento para a data selecionada"
-                : "Preencha os dados para criar um novo agendamento"}
-            </DialogDescription>
-          </DialogHeader>
-          <AppointmentForm
-            selectedDate={selectedDate}
-            onClose={handleFormClose}
-            onPsychologistSelected={handlePsychologistSelected}
-            lockDate={isDetailsOpen} // Lock the date if we're creating from calendar view
-          />
-        </DialogContent>
-      </Dialog>
+      {/* Modal de detalhes do dia */}
+      {showModal && dayDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+            <div className="flex justify-between items-center p-6 border-b">
+              <h3 className="text-lg font-semibold">
+                {new Date(dayDetails.date).toLocaleDateString('pt-BR', {
+                  weekday: 'long',
+                  year: 'numeric',
+                  month: 'long',
+                  day: 'numeric'
+                })}
+              </h3>
+              <button
+                onClick={() => setShowModal(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={24} />
+              </button>
+            </div>
 
-      <style>
-        {`
-        .available-date {
-          background-color: rgba(52, 211, 153, 0.15);
-        }
-        .fully-booked-date {
-          background-color: #FEC6A1;
-        }
-        .appointment-dot {
-          width: 6px;
-          height: 6px;
-          border-radius: 50%;
-          margin-right: 2px;
-        }
-        .react-calendar__tile {
-          color: black !important;
-          font-weight: 500;
-        }
-        .react-calendar__tile--active {
-          background-color: #007bff !important;
-          color: white !important;
-        }
-        .react-calendar__tile:disabled {
-          color: #757575 !important;
-        }
-        `}
-      </style>
+            <div className="p-6">
+              {/* Agendamentos */}
+              {dayDetails.appointments.length > 0 && (
+                <div className="mb-6">
+                  <h4 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                    <Clock size={16} />
+                    Agendamentos ({dayDetails.appointments.length})
+                  </h4>
+                  <div className="space-y-3">
+                    {dayDetails.appointments.map((apt, index) => (
+                      <div key={index} className="bg-gray-50 p-3 rounded-lg">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="font-medium">{apt.start_time} - {apt.end_time}</div>
+                            <div className="text-sm text-gray-600">
+                              <strong>Paciente:</strong> {getPatientName(apt.patient_id)}
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              <strong>Psicólogo:</strong> {getPsychologistName(apt.psychologist_id)}
+                            </div>
+                            <div className="text-sm text-gray-600">
+                              <strong>Valor:</strong> R$ {apt.value} | <strong>Pagamento:</strong> {apt.payment_method}
+                            </div>
+                            {apt.insurance_type && (
+                              <div className="text-sm text-gray-600">
+                                <strong>Convênio:</strong> {apt.insurance_type}
+                              </div>
+                            )}
+                          </div>
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                            apt.status === 'Confirmada' ? 'bg-green-100 text-green-800' :
+                            apt.status === 'Pendente' ? 'bg-orange-100 text-orange-800' :
+                            'bg-gray-100 text-gray-800'
+                          }`}>
+                            {apt.status}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Horários disponíveis */}
+              {dayDetails.availableSlots.length > 0 && (
+                <div>
+                  <h4 className="font-medium text-gray-800 mb-3 flex items-center gap-2">
+                    <User size={16} />
+                    Horários Disponíveis ({dayDetails.availableSlots.length})
+                  </h4>
+                  <div className="grid grid-cols-4 gap-2">
+                    {dayDetails.availableSlots.map((slot, index) => (
+                      <div key={index} className="bg-blue-50 text-blue-800 p-2 rounded text-center text-sm">
+                        {slot}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {dayDetails.appointments.length === 0 && dayDetails.availableSlots.length === 0 && (
+                <div className="text-center text-gray-500 py-8">
+                  <Calendar size={48} className="mx-auto mb-2 opacity-50" />
+                  <p>Nenhum agendamento ou disponibilidade para este dia</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

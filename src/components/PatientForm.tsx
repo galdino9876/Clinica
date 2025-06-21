@@ -5,12 +5,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAppointments } from "@/context/AppointmentContext";
 import { Patient } from "@/types/appointment";
-import { 
-  Select, 
-  SelectContent, 
-  SelectItem, 
-  SelectTrigger, 
-  SelectValue 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue
 } from "@/components/ui/select";
 
 interface PatientFormProps {
@@ -30,7 +30,7 @@ const PatientForm = ({ patient, onSave, onCancel }: PatientFormProps) => {
   const [showInsuranceUpload, setShowInsuranceUpload] = useState(false);
   const [identityDocument, setIdentityDocument] = useState<string | null>(patient?.identityDocument as string || null);
   const [insuranceDocument, setInsuranceDocument] = useState<string | null>(patient?.insuranceDocument as string || null);
-  
+
   const idDocInputRef = useRef<HTMLInputElement>(null);
   const insuranceDocInputRef = useRef<HTMLInputElement>(null);
 
@@ -51,8 +51,8 @@ const PatientForm = ({ patient, onSave, onCancel }: PatientFormProps) => {
 
     if (patient) {
       // For existing patients, preserve their active status
-      const updatedPatient = { 
-        ...patientData, 
+      const updatedPatient = {
+        ...patientData,
         id: patient.id,
         active: patient.active !== undefined ? patient.active : true,
         deactivationReason: patient.deactivationReason,
@@ -63,7 +63,7 @@ const PatientForm = ({ patient, onSave, onCancel }: PatientFormProps) => {
     } else {
       // For new patients, set active to true by default
       const newPatient = addPatient(patientData);
-      
+
       if (newPatient) {
         onSave(newPatient);
       } else {
@@ -72,11 +72,11 @@ const PatientForm = ({ patient, onSave, onCancel }: PatientFormProps) => {
       }
     }
   };
-  
+
   const handleIdentityDocumentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      
+
       // Convert file to base64 string for demo purposes (in a real app, you'd upload to a server)
       const reader = new FileReader();
       reader.onload = () => {
@@ -87,11 +87,11 @@ const PatientForm = ({ patient, onSave, onCancel }: PatientFormProps) => {
       reader.readAsDataURL(file);
     }
   };
-  
+
   const handleInsuranceDocumentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
-      
+
       // Convert file to base64 string for demo purposes
       const reader = new FileReader();
       reader.onload = () => {
@@ -102,7 +102,7 @@ const PatientForm = ({ patient, onSave, onCancel }: PatientFormProps) => {
       reader.readAsDataURL(file);
     }
   };
-  
+
   const handleInsuranceToggle = (value: string) => {
     setShowInsuranceUpload(value === "yes");
   };
@@ -167,15 +167,15 @@ const PatientForm = ({ patient, onSave, onCancel }: PatientFormProps) => {
           />
         </div>
       </div>
-      
+
       {/* Document Upload Section */}
       <div className="space-y-4 mt-6 p-4 border border-gray-200 rounded-md">
         <h3 className="font-medium">Documentos</h3>
-        
+
         {/* Identity Document */}
         <div className="space-y-2">
           <Label htmlFor="identityDocument">Documento de Identidade</Label>
-          <div 
+          <div
             className="border-2 border-dashed rounded-md p-4 text-center cursor-pointer hover:bg-gray-50"
             onClick={() => idDocInputRef.current?.click()}
           >
@@ -213,7 +213,7 @@ const PatientForm = ({ patient, onSave, onCancel }: PatientFormProps) => {
             )}
           </div>
         </div>
-        
+
         {/* Insurance Option */}
         <div className="space-y-2">
           <Label htmlFor="hasInsurance">Paciente utiliza plano de saúde?</Label>
@@ -227,12 +227,12 @@ const PatientForm = ({ patient, onSave, onCancel }: PatientFormProps) => {
             </SelectContent>
           </Select>
         </div>
-        
+
         {/* Insurance Document Upload (conditional) */}
         {showInsuranceUpload && (
           <div className="space-y-2">
             <Label htmlFor="insuranceDocument">Documento do Plano de Saúde</Label>
-            <div 
+            <div
               className="border-2 border-dashed rounded-md p-4 text-center cursor-pointer hover:bg-gray-50"
               onClick={() => insuranceDocInputRef.current?.click()}
             >

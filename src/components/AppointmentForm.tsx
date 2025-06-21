@@ -1,999 +1,310 @@
-import { useState, useEffect } from "react";
+"use client";
+
+import React, { useEffect, useState } from "react";
+import { useForm, UseFormReturn } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { useAppointments } from "@/context/AppointmentContext";
-import { useAuth } from "@/context/AuthContext";
-import { format, addDays, addWeeks, parse } from "date-fns";
-import { Patient, AppointmentStatus, RecurrenceType, Appointment } from "@/types/appointment";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import PatientForm from "./PatientForm";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import PsychologistAvailabilityDatePicker from "./PsychologistAvailabilityDatePicker";
 import { useToast } from "@/hooks/use-toast";
-import { RepeatIcon } from "lucide-react";
-import { v4 as uuidv4 } from 'uuid';
+import { Patient, Appointment, AppointmentStatus } from "@/types/appointment";
+import { ConsultingRoom } from "@/types/consulting_rooms";
+import PsychologistAvailabilityDatePicker from "./PsychologistAvailabilityDatePicker";
+import { format } from "date-fns";
+import { SelectDynamic } from "./Selectsn";
+import { appointmentSchema, AppointmentFormData } from "@/zod/appointmentSchema"; // Ajuste o caminho
 
 interface AppointmentFormProps {
   selectedDate: Date;
   onClose: () => void;
-  existingAppointment?: any; // Para edição de agendamentos existentes
-  onPsychologistSelected?: (psychologistId: string) => void;
-  lockDate?: boolean; // New prop to lock the date field
-  independentMode?: boolean; // New prop to indicate independent mode (not calendar-triggered)
 }
 
-const AppointmentForm = ({ 
-  selectedDate, 
-  onClose, 
-  existingAppointment,
-  onPsychologistSelected,
-  lockDate = false, // Default to false (date is changeable)
-  independentMode = false // Default to false (calendar-triggered)
-}: AppointmentFormProps) => {
-  const { addAppointment, updateAppointment, patients, rooms, findNextAvailableSlot, appointments } = useAppointments();
-  const { getPsychologists, users } = useAuth();
+const AppointmentForm = ({ selectedDate: initialDate, onClose }: AppointmentFormProps) => {
   const { toast } = useToast();
-  const [isPatientFormOpen, setIsPatientFormOpen] = useState(false);
-  const [selectedPatient, setSelectedPatient] = useState<string>(existingAppointment?.patient.id || "");
-  const [psychologistId, setPsychologistId] = useState(existingAppointment?.psychologistId || "");
-  const [roomId, setRoomId] = useState(existingAppointment?.roomId || "");
-  const [date, setDate] = useState<Date>(selectedDate);
-  const [startTime, setStartTime] = useState(existingAppointment?.startTime || "09:00");
-  const [endTime, setEndTime] = useState(existingAppointment?.endTime || "10:00");
-  const [paymentMethod, setPaymentMethod] = useState(existingAppointment?.paymentMethod || "private");
-  const [insuranceType, setInsuranceType] = useState(existingAppointment?.insuranceType || null);
-  const [value, setValue] = useState(existingAppointment?.value?.toString() || "200");
-  const [availableTimes, setAvailableTimes] = useState<string[]>([]);
-  const [nextAvailableSlot, setNextAvailableSlot] = useState<{ date: Date, startTime: string, endTime: string } | null>(null);
-  const [appointmentType, setAppointmentType] = useState(existingAppointment?.appointmentType || "presential");
-  const [conflictError, setConflictError] = useState<string | null>(null);
-  const [availablePsychologists, setAvailablePsychologists] = useState<any[]>([]);
-  const [formSubmitted, setFormSubmitted] = useState(false);
-  const [submissionError, setSubmissionError] = useState<string | null>(null);
-  
-  // New recurring appointment states
-  const [isRecurring, setIsRecurring] = useState(false);
-  const [recurrenceType, setRecurrenceType] = useState<'weekly' | 'biweekly'>('weekly');
-  const [recurrenceCount, setRecurrenceCount] = useState(4); // Default to 4 recurring appointments
-  
-  // Update date when selectedDate changes (only if not in independent mode)
+  const [isPatientFormOpen, setIsPatientFormOpen] = React.useState(false);
+  const [patients, setPatients] = useState<Patient[]>([]);
+  const [rooms, setRooms] = useState<ConsultingRoom[]>([]);
+  const [psychologists, setPsychologists] = useState<{ id: string; name: string }[]>([]);
+  const [isLoading, setIsLoading] = useState<boolean>(true); // Estado de carregamento
+  const [selectedDate, setSelectedDate] = useState<Date>(initialDate); // Estado local para a data
+
+  const formMethods: UseFormReturn<AppointmentFormData> = useForm<AppointmentFormData>({
+    resolver: zodResolver(appointmentSchema),
+    defaultValues: {
+      patientId: "",
+      psychologistId: "",
+      appointmentType: "presential",
+      roomId: "",
+      startTime: "09:00",
+      endTime: "10:00",
+    },
+  });
+
+  const {
+    control,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = formMethods;
+
+  const appointmentType = watch("appointmentType");
+
   useEffect(() => {
-    if (!independentMode) {
-      setDate(selectedDate);
-    }
-  }, [selectedDate, independentMode]);
-  
-  // Obter a lista de psicólogos do sistema
-  const psychologists = getPsychologists();
-
-  // Determinar o dia da semana da data selecionada (0-6, onde 0 é domingo)
-  const dayOfWeek = date.getDay();
-
-  // Find available psychologists for the selected date
-  useEffect(() => {
-    if (date) {
-      const dayOfWeek = date.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
-      const available = psychologists.filter(psychologist => 
-        psychologist.workingHours?.some(wh => wh.dayOfWeek === dayOfWeek)
-      );
-      setAvailablePsychologists(available);
-      
-      // If previously selected psychologist is not available for this date, clear selection
-      if (psychologistId) {
-        const isAvailable = isPsychologistAvailable(psychologistId);
-        if (!isAvailable) {
-          // Clear psychologist selection if not available
-          setPsychologistId("");
-          
-          // Show toast notification
-          const psychologist = psychologists.find(p => p.id === psychologistId);
-          if (psychologist) {
-            toast({
-              title: "Psicólogo indisponível",
-              description: `${psychologist.name} não atende na data ${format(date, "dd/MM/yyyy")}. Selecione um psicólogo disponível.`,
-              variant: "destructive",
-            });
-          }
-        }
-      }
-    }
-  }, [date, psychologists, psychologistId, toast]);
-
-  // Handle psychologist selection for calendar highlighting
-  const handlePsychologistChange = (value: string) => {
-    setPsychologistId(value);
-    
-    // Check if the selected psychologist is available on the selected date
-    const psychologist = psychologists.find(p => p.id === value);
-    if (psychologist) {
-      // No independent mode, we need to find the next available slot regardless of current date
-      if (independentMode) {
-        // In independent mode, we always look for the next available slot
-        const slot = findNextAvailableSlot(value);
-        if (slot) {
-          // Set date to the suggested slot date
-          setDate(slot.date);
-          setStartTime(slot.startTime);
-          setEndTime(slot.endTime);
-          
-          toast({
-            title: "Próxima disponibilidade encontrada",
-            description: `Sugerindo ${format(slot.date, "dd/MM/yyyy")} às ${slot.startTime} para consulta com ${psychologist.name}.`,
-          });
-        }
-      } else {
-        // In calendar mode, we check if psychologist is available on selected date
-        const isAvailable = isPsychologistAvailable(value);
-        
-        if (!isAvailable) {
-          toast({
-            title: "Psicólogo indisponível",
-            description: `${psychologist.name} não atende neste dia da semana. Sugerimos escolher outra data ou outro psicólogo.`,
-            variant: "destructive",
-          });
-        } else if (!lockDate) {
-          // If psychologist is available and date is not locked, find next available slot on the current date
-          const slot = findNextAvailableSlot(value);
-          if (slot) {
-            setDate(slot.date);
-            setStartTime(slot.startTime);
-            setEndTime(slot.endTime);
-          }
-        }
-      }
-    }
-    
-    if (onPsychologistSelected) {
-      onPsychologistSelected(value);
-    }
-  };
-
-  // Modified effect to consider the independentMode prop when finding available slots
-  useEffect(() => {
-    if (psychologistId) {
-      // In independent mode, always find and suggest the next available slot
-      if (independentMode) {
-        const slot = findNextAvailableSlot(psychologistId);
-        setNextAvailableSlot(slot);
-        
-        // Se houver um slot disponível, sugerimos automaticamente
-        if (slot) {
-          setDate(slot.date);
-          setStartTime(slot.startTime);
-          setEndTime(slot.endTime);
-        }
-      } else {
-        // In calendar mode, respect the lockDate prop
-        if (!lockDate) {
-          const slot = findNextAvailableSlot(psychologistId);
-          setNextAvailableSlot(slot);
-          
-          // Se for um novo agendamento e houver um slot disponível, sugerimos automaticamente
-          if (slot && !existingAppointment) {
-            setDate(slot.date);
-            setStartTime(slot.startTime);
-            setEndTime(slot.endTime);
-          }
+    const fetchData = async () => {
+      setIsLoading(true); // Inicia o carregamento
+      try {
+        // Fetch pacientes
+        const patientsResponse = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/patients", {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (patientsResponse.ok) {
+          const data = await patientsResponse.json();
+          console.log("Resposta API pacientes (detalhada):", JSON.stringify(data, null, 2)); // Log mais detalhado
+          const fetchedPatients: Patient[] = data.map((patient: any) => ({
+            id: patient.id,
+            name: patient.name,
+            cpf: patient.cpf,
+            phone: patient.phone,
+            email: patient.email,
+            birthdate: patient.birthdate ? new Date(patient.birthdate) : null,
+            createdAt: patient.created_at ? new Date(patient.created_at) : new Date(),
+            updatedAt: patient.updated_at ? new Date(patient.updated_at) : null,
+            deactivationDate: patient.deactivation_date ? new Date(patient.deactivation_date) : null,
+            deactivationReason: patient.deactivation_reason || null,
+            address: patient.address || null,
+            identityDocument: patient.identity_document || null,
+            insuranceDocument: patient.insurance_document || null,
+            active: patient.active === 1,
+          }));
+          setPatients(fetchedPatients);
+          console.log("Pacientes carregados:", fetchedPatients); // Verifica os pacientes mapeados
         } else {
-          // When date is locked, we don't need to find the next available slot
-          // We just need to check if there are available times on the selected date
-          setNextAvailableSlot(null);
+          console.error("Erro API pacientes:", patientsResponse.status, await patientsResponse.text());
         }
+
+        // Fetch consultórios
+        const roomsResponse = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/consulting_rooms", {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (roomsResponse.ok) {
+          const data = await roomsResponse.json();
+          console.log("Resposta API consultórios (detalhada):", JSON.stringify(data, null, 2));
+          const fetchedRooms: ConsultingRoom[] = data.map((room: any) => ({
+            id: room.id,
+            name: room.name,
+            description: room.description || null,
+            createdAt: room.created_at ? new Date(room.created_at) : new Date(),
+            updatedAt: room.updated_at ? new Date(room.updated_at) : null,
+          }));
+          setRooms(fetchedRooms);
+          console.log("Consultórios carregados:", fetchedRooms);
+        } else {
+          console.error("Erro API consultórios:", roomsResponse.status, await roomsResponse.text());
+        }
+
+        // Fetch psicólogos
+        const usersResponse = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/users", {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (usersResponse.ok) {
+          const data = await usersResponse.json();
+          console.log("Resposta API usuários (detalhada):", JSON.stringify(data, null, 2));
+          const fetchedPsychologists = data
+            .filter((user: any) => user.role === "psychologist")
+            .map((user: any) => ({ id: user.id.toString(), name: user.name }));
+          setPsychologists(fetchedPsychologists);
+          console.log("Psicólogos carregados:", fetchedPsychologists);
+        } else {
+          console.error("Erro API usuários:", usersResponse.status, await usersResponse.text());
+        }
+      } catch (err) {
+        console.error("Erro ao carregar dados:", err);
+      } finally {
+        setIsLoading(false); // Finaliza o carregamento
       }
-    } else {
-      setNextAvailableSlot(null);
-    }
-  }, [psychologistId, findNextAvailableSlot, existingAppointment, lockDate, independentMode]);
+    };
+    fetchData();
+  }, []);
 
-  // Função para verificar se um horário já está ocupado pelo psicólogo
-  const isTimeSlotOccupied = (psychologistId: string, date: Date, startTime: string, endTime: string) => {
-    // Correção: Antes de verificar conflitos, certifique-se de que os parâmetros são válidos
-    if (!psychologistId || !date || !startTime || !endTime) {
-      return false;
-    }
-    
-    const dateString = format(date, 'yyyy-MM-dd');
-    
-    // Ignorar o próprio agendamento se estiver editando
-    const existingAppointments = appointments.filter(app => 
-      app.psychologistId === psychologistId && 
-      app.date === dateString && 
-      (existingAppointment ? app.id !== existingAppointment.id : true)
-    );
-
-    // Verifica se há sobreposição com algum agendamento existente
-    return existingAppointments.some(appointment => {
-      const appStartMinutes = timeToMinutes(appointment.startTime);
-      const appEndMinutes = timeToMinutes(appointment.endTime);
-      const newStartMinutes = timeToMinutes(startTime);
-      const newEndMinutes = timeToMinutes(endTime);
-
-      // Verifica se há sobreposição
-      return (
-        (newStartMinutes >= appStartMinutes && newStartMinutes < appEndMinutes) || // Novo início dentro de existente
-        (newEndMinutes > appStartMinutes && newEndMinutes <= appEndMinutes) || // Novo fim dentro de existente
-        (newStartMinutes <= appStartMinutes && newEndMinutes >= appEndMinutes) // Novo engloba existente
-      );
-    });
-  };
-
-  // Helper function to convert time strings to minutes for comparison
-  const timeToMinutes = (time: string): number => {
-    const [hours, minutes] = time.split(':').map(Number);
-    return hours * 60 + minutes;
-  };
-
-  // Função para calcular horários disponíveis com base no psicólogo selecionado
-  useEffect(() => {
-    if (!psychologistId) {
-      setAvailableTimes([]);
-      return;
-    }
-
-    const psychologist = psychologists.find(p => p.id === psychologistId);
-    if (!psychologist || !psychologist.workingHours) {
-      setAvailableTimes(generateDefaultTimeOptions());
-      return;
-    }
-
-    // Procura pela disponibilidade no dia da semana
-    const availability = psychologist.workingHours.find(
-      wh => wh.dayOfWeek === dayOfWeek
-    );
-
-    if (!availability) {
-      setAvailableTimes([]);
-      setStartTime("");
-      setEndTime("");
-      return;
-    }
-
-    console.log(`Verificando horários disponíveis para data ${format(date, "dd/MM/yyyy")} entre ${availability.startTime} e ${availability.endTime}`);
-
-    // Gera opções de horário dentro do intervalo de trabalho do psicólogo
-    const times = generateTimeOptionsInRange(availability.startTime, availability.endTime);
-    console.log("Horários potenciais:", times);
-    
-    // Filtra os horários ocupados
-    const dateString = format(date, 'yyyy-MM-dd');
-    const occupiedSlots = appointments
-      .filter(app => 
-        app.psychologistId === psychologistId && 
-        app.date === dateString && 
-        (existingAppointment ? app.id !== existingAppointment.id : true)
-      )
-      .map(app => ({ start: app.startTime, end: app.endTime }));
-    
-    console.log("Horários ocupados:", occupiedSlots);
-    
-    // Verificar cada horário individualmente se é válido para início de uma consulta
-    const availableStartTimes = times.filter(time => {
-      // Calculando horário de término (consulta de 1 hora)
-      const startMinutes = timeToMinutes(time);
-      const endMinutes = startMinutes + 60; // 1 hora depois
-      
-      // Converter de volta para string formato HH:MM para verificação de conflito
-      const hours = Math.floor(endMinutes / 60);
-      const minutes = endMinutes % 60;
-      const endTimeStr = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
-      
-      // Verificar se este horário não tem conflito com agendamentos existentes
-      const hasConflict = isTimeSlotOccupied(psychologistId, date, time, endTimeStr);
-      
-      // Verificar também se o horário de término não ultrapassa o horário de trabalho do psicólogo
-      const endTimeInWorkingHours = timeToMinutes(endTimeStr) <= timeToMinutes(availability.endTime);
-      
-      return !hasConflict && endTimeInWorkingHours;
-    });
-    
-    console.log("Horários disponíveis para início:", availableStartTimes);
-    setAvailableTimes(availableStartTimes);
-    
-    // Define um horário inicial válido se necessário
-    if (availableStartTimes.length > 0 && (!startTime || !availableStartTimes.includes(startTime))) {
-      setStartTime(availableStartTimes[0]);
-      
-      // Define o horário de término como 1 hora após o início
-      const startMinutes = timeToMinutes(availableStartTimes[0]);
-      const endMinutes = startMinutes + 60;
-      const hours = Math.floor(endMinutes / 60);
-      const minutes = endMinutes % 60;
-      const endTimeString = `${hours.toString().padStart(2, "0")}:${minutes.toString().padStart(2, "0")}`;
-      
-      setEndTime(endTimeString);
-    }
-  }, [psychologistId, dayOfWeek, date, psychologists, appointments, existingAppointment]);
-
-  // Efeito para verificar conflitos de horário quando mudam os horários selecionados
-  useEffect(() => {
-    if (!psychologistId || !startTime || !endTime) {
-      setConflictError(null);
-      return;
-    }
-
-    // CORREÇÃO: Verificar corretamente se o horário atual tem conflito com a agenda existente
-    // Isso garantirá que não haja erro ao tentar marcar horários disponíveis no fim do dia
-    const hasConflict = isTimeSlotOccupied(psychologistId, date, startTime, endTime);
-    
-    if (hasConflict) {
-      setConflictError(`O psicólogo já possui um agendamento entre ${startTime} e ${endTime} nesta data.`);
-    } else {
-      setConflictError(null);
-    }
-  }, [psychologistId, date, startTime, endTime]);
-
-  // Função para gerar opções de horário padrão (das 8:00 às 20:00)
-  const generateDefaultTimeOptions = () => {
-    const times = [];
-    for (let hour = 8; hour < 20; hour++) {
-      for (let minute = 0; minute < 60; minute += 30) {
-        const formattedHour = hour.toString().padStart(2, "0");
-        const formattedMinute = minute.toString().padStart(2, "0");
-        times.push(`${formattedHour}:${formattedMinute}`);
-      }
-    }
-    return times;
-  };
-
-  // Função para gerar opções de horário dentro de um intervalo específico
-  const generateTimeOptionsInRange = (start: string, end: string) => {
-    const times = [];
-    const startHour = parseInt(start.split(':')[0]);
-    const startMinute = parseInt(start.split(':')[1]);
-    const endHour = parseInt(end.split(':')[0]);
-    const endMinute = parseInt(end.split(':')[1]);
-    
-    // CORREÇÃO: Melhorar a geração de horários para incluir todos os horários disponíveis
-    let currentHour = startHour;
-    let currentMinute = startMinute - (startMinute % 30); // Arredondar para intervalo de 30 minutos
-    
-    // Gera opções em intervalos de 30 minutos até no máximo 1 hora antes do fim do expediente
-    const startMinutes = startHour * 60 + startMinute;
-    const endMinutes = endHour * 60 + endMinute;
-    
-    // Percorre em intervalos de 30 minutos
-    for (let currentMinutes = startMinutes; currentMinutes <= endMinutes - 60; currentMinutes += 30) {
-      const hours = Math.floor(currentMinutes / 60);
-      const minutes = currentMinutes % 60;
-      const formattedHour = hours.toString().padStart(2, "0");
-      const formattedMinute = minutes.toString().padStart(2, "0");
-      times.push(`${formattedHour}:${formattedMinute}`);
-    }
-    
-    return times;
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setFormSubmitted(true);
-    setSubmissionError(null);
-    
-    // Add debug logs
-    console.log("Form submission: ", {
-      selectedPatient,
-      psychologistId,
-      roomId: appointmentType === "online" ? "virtual" : roomId,
-      date: format(date, "yyyy-MM-dd"),
-      startTime,
-      endTime,
-      appointmentType,
-      isRecurring,
-      recurrenceType,
-      recurrenceCount
-    });
-
-    // Check for required fields
-    if (!selectedPatient || selectedPatient === "") {
-      setSubmissionError("Por favor, selecione um paciente.");
-      return;
-    }
-
-    if (!psychologistId || psychologistId === "") {
-      setSubmissionError("Por favor, selecione um psicólogo.");
-      return;
-    }
-
-    if (appointmentType === "presential" && (!roomId || roomId === "")) {
-      setSubmissionError("Por favor, selecione um consultório para a consulta presencial.");
-      return;
-    }
-
-    if (!startTime || !endTime) {
-      setSubmissionError("Por favor, selecione os horários de início e término.");
-      return;
-    }
-
-    // CORREÇÃO: Verifica novamente se há conflitos de horário para o horário atual
-    // Isso garantirá que não haja erro ao tentar marcar horários disponíveis no fim do dia
-    if (isTimeSlotOccupied(psychologistId, date, startTime, endTime)) {
-      setSubmissionError(`O psicólogo já possui um agendamento entre ${startTime} e ${endTime} nesta data.`);
-      return;
-    }
-
-    // Verifica se o psicólogo está disponível na data selecionada
-    if (!isPsychologistAvailable(psychologistId)) {
-      toast({
-        title: "Psicólogo indisponível",
-        description: `O psicólogo selecionado não atende na data escolhida. Por favor, selecione outra data ou outro psicólogo.`,
-        variant: "destructive",
-      });
-      return;
-    }
-
-    const selectedPatientData = patients.find((p) => p.id === selectedPatient);
-    if (!selectedPatientData) {
-      setSubmissionError("Erro: Dados do paciente não encontrados.");
-      return;
-    }
-
-    const selectedPsychologist = psychologists.find((p) => p.id === psychologistId);
-    if (!selectedPsychologist) {
-      setSubmissionError("Erro: Dados do psicólogo não encontrados.");
-      return;
-    }
-
-    let selectedRoom = rooms.find((r) => r.id === roomId);
-    // Para consultas online, não precisamos de sala física
-    if (appointmentType === "online") {
-      // Usar uma sala virtual
-      selectedRoom = {
-        id: "virtual",
-        name: "Sala Virtual"
-      };
-    } else if (appointmentType === "presential" && !selectedRoom) {
-      setSubmissionError("Por favor, selecione um consultório para a consulta presencial.");
-      return;
-    }
-
-    // FIX: Ensure we're using the correct date format by using format() directly on the date object
-    const formattedDate = format(date, "yyyy-MM-dd");
-    
-    const appointmentData = {
-      patient: selectedPatientData,
-      psychologistId,
-      psychologistName: selectedPsychologist.name,
-      roomId: selectedRoom ? selectedRoom.id : "virtual",
-      roomName: selectedRoom ? selectedRoom.name : "Sala Virtual",
-      date: formattedDate, // Using the formatted date
-      startTime,
-      endTime,
+  const onSubmit = async (data: AppointmentFormData) => {
+    const appointmentData: Omit<Appointment, "id"> = {
+      patient_id: parseInt(data.patientId),
+      psychologist_id: parseInt(data.psychologistId),
+      room_id: data.appointmentType === "online" ? null : data.roomId ? parseInt(data.roomId) : null,
+      date: format(selectedDate, "yyyy-MM-dd"), // Usa o estado local da data
+      start_time: data.startTime,
+      end_time: data.endTime,
       status: "pending" as AppointmentStatus,
-      paymentMethod: paymentMethod as "private" | "insurance",
-      insuranceType: paymentMethod === "insurance" ? insuranceType as any : null,
-      value: parseFloat(value),
-      appointmentType: appointmentType as "presential" | "online"
+      appointment_type: data.appointmentType as "presential" | "online",
+      created_at: new Date().toISOString(),
+      updated_at: null,
+      value: 200.0,
+      payment_method: "private",
+      insurance_type: null,
+      is_recurring: false,
     };
 
     try {
-      if (existingAppointment) {
-        updateAppointment({
-          ...appointmentData,
-          id: existingAppointment.id,
-          status: existingAppointment.status, // Manter o status existente
-          // Keep recurrence info if it exists
-          recurrenceGroupId: existingAppointment.recurrenceGroupId,
-          recurrenceType: existingAppointment.recurrenceType,
-          isRecurring: existingAppointment.isRecurring
-        });
-        toast({
-          title: "Agendamento atualizado",
-          description: `Agendamento para ${selectedPatientData.name} atualizado com sucesso.`,
-        });
+      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/schedule-appointment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(appointmentData),
+
+      });
+      if (response.ok) {
+        toast({ title: "Sucesso", description: "Consulta agendada." });
+        onClose();
       } else {
-        // Handle recurring appointments
-        if (isRecurring) {
-          createRecurringAppointments(appointmentData, recurrenceType, recurrenceCount);
-        } else {
-          // Single appointment
-          addAppointment(appointmentData);
-          toast({
-            title: "Agendamento criado",
-            description: `Nova consulta para ${selectedPatientData.name} agendada com sucesso.`,
-          });
-        }
+        throw new Error("Falha ao criar agendamento");
       }
-      
-      // Limpar o formulário e fechar
-      onClose();
     } catch (error) {
       console.error("Erro ao salvar agendamento:", error);
-      setSubmissionError("Ocorreu um erro ao salvar o agendamento. Tente novamente.");
+      toast({ title: "Erro", description: "Falha ao agendar. Tente novamente.", variant: "destructive" });
     }
   };
 
-  const createRecurringAppointments = (baseAppointment: Omit<Appointment, 'id'>, recurType: RecurrenceType, count: number) => {
-    // Generate a shared group ID for all appointments in this recurrence
-    const recurrenceGroupId = uuidv4();
-    
-    // Always add the first appointment (the base one)
-    const firstAppointment = {
-      ...baseAppointment,  // Spread the entire base appointment first
-      recurrenceGroupId,
-      recurrenceType: recurType,
-      isRecurring: true
-    };
-    addAppointment(firstAppointment);
-    
-    console.log(`Creating ${count} recurring appointments of type ${recurType}`);
-    console.log("First appointment date:", baseAppointment.date);
-    
-    // Create additional recurring appointments
-    for (let i = 1; i < count; i++) {
-      // Parse the base appointment date string into a Date
-      const baseDate = parse(baseAppointment.date, "yyyy-MM-dd", new Date());
-      
-      const newDate = recurType === 'weekly' 
-        ? addWeeks(baseDate, i)  // Weekly: add i weeks
-        : addWeeks(baseDate, i * 2); // Biweekly: add i*2 weeks
-      
-      // Format the new date as string
-      const newDateStr = format(newDate, "yyyy-MM-dd");
-      
-      console.log(`Recurring appointment ${i+1}: ${newDateStr}`);
-      
-      // Clone the base appointment with new date and shared recurrence data
-      const newAppointment = {
-        ...baseAppointment,  // Spread the entire base appointment first
-        date: newDateStr,
-        recurrenceGroupId,
-        recurrenceType: recurType,
-        isRecurring: true
-      };
-      
-      // Add the recurring appointment
-      addAppointment(newAppointment);
-    }
-    
-    // Show summary toast
-    toast({
-      title: "Agendamentos recorrentes criados",
-      description: `Foram criados ${count} agendamentos para ${baseAppointment.patient.name}.`,
-    });
-  };
-
-  const handleNewPatient = () => {
-    setIsPatientFormOpen(true);
-  };
-
+  const handleNewPatient = () => setIsPatientFormOpen(true);
   const handlePatientAdded = (newPatient: Patient) => {
-    setSelectedPatient(newPatient.id);
+    formMethods.setValue("patientId", newPatient.id.toString());
     setIsPatientFormOpen(false);
   };
 
-  // Usar o próximo slot disponível
-  const applyNextAvailableSlot = () => {
-    if (nextAvailableSlot) {
-      setDate(nextAvailableSlot.date);
-      setStartTime(nextAvailableSlot.startTime);
-      setEndTime(nextAvailableSlot.endTime);
-    }
-  };
-
-  // Função para verificar se o psicólogo está disponível no dia selecionado
-  const isPsychologistAvailable = (psychologistId: string): boolean => {
-    const psychologist = psychologists.find(p => p.id === psychologistId);
-    if (!psychologist || !psychologist.workingHours) return true;
-    
-    return psychologist.workingHours.some(wh => wh.dayOfWeek === dayOfWeek);
-  };
-
-  // Função para atualizar a data selecionada
-  const handleDateChange = (newDate: Date) => {
-    // Only allow date changes if the date is not locked
-    if (lockDate) return;
-    
-    console.log("Data alterada para:", format(newDate, "dd/MM/yyyy"));
-    setDate(newDate);
-    
-    // Verificar se o psicólogo atual está disponível na nova data
-    if (psychologistId) {
-      const psychologist = psychologists.find(p => p.id === psychologistId);
-      const isAvailable = isPsychologistAvailable(psychologistId);
-      
-      if (!isAvailable && psychologist) {
-        toast({
-          title: "Psicólogo indisponível",
-          description: `${psychologist.name} não atende neste dia da semana. Existem ${availablePsychologists.length} outros psicólogos disponíveis neste dia.`,
-          variant: "destructive",
-        });
-        
-        // Clear the psychologist selection
-        setPsychologistId("");
-      }
-    }
-  };
-
-  // Função para alternar para outro psicólogo disponível
-  const switchToAvailablePsychologist = () => {
-    if (availablePsychologists.length > 0 && psychologistId) {
-      // Encontrar o próximo psicólogo disponível diferente do atual
-      const nextPsychologist = availablePsychologists.find(p => p.id !== psychologistId);
-      if (nextPsychologist) {
-        setPsychologistId(nextPsychologist.id);
-        toast({
-          title: "Psicólogo alterado",
-          description: `Alterado para ${nextPsychologist.name} que está disponível na data selecionada.`,
-        });
-      }
-    }
-  };
-
-  // CORREÇÃO: Adicionar botão para sugerir próximo horário disponível
-  const suggestNextAvailableSlot = () => {
-    if (nextAvailableSlot) {
-      setDate(nextAvailableSlot.date);
-      setStartTime(nextAvailableSlot.startTime);
-      setEndTime(nextAvailableSlot.endTime);
-      toast({
-        title: "Próximo horário disponível",
-        description: `Horário sugerido para ${format(nextAvailableSlot.date, "dd/MM/yyyy")} às ${nextAvailableSlot.startTime}.`,
-      });
-    }
-  };
-
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
+    <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="patient">Paciente</Label>
-          <div className="flex gap-2">
-            <Select value={selectedPatient} onValueChange={setSelectedPatient} required>
-              <SelectTrigger id="patient" className="w-full">
-                <SelectValue placeholder="Selecione o paciente" />
-              </SelectTrigger>
-              <SelectContent>
-                {patients.filter(p => p.active).map((patient) => (
-                  <SelectItem key={patient.id} value={patient.id}>
-                    {patient.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button type="button" variant="outline" onClick={handleNewPatient}>
-              Novo
-            </Button>
-          </div>
-          {formSubmitted && !selectedPatient && (
-            <p className="text-xs text-red-500 mt-1">Por favor, selecione um paciente</p>
-          )}
+          <SelectDynamic
+            name="patientId"
+            control={control}
+            label="Paciente"
+            options={patients.map((patient) => ({
+              id: patient.id.toString(),
+              label: patient.name,
+            }))}
+            placeholder="Selecione o paciente"
+            required
+            errors={errors}
+            disabled={isLoading}
+            onClear={() => formMethods.setValue("patientId", "")}
+          />
+          <Button type="button" variant="outline" onClick={handleNewPatient} disabled={isLoading}>
+            Novo
+          </Button>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="psychologist">Psicólogo</Label>
-          <Select value={psychologistId} onValueChange={handlePsychologistChange} required>
-            <SelectTrigger id="psychologist">
-              <SelectValue placeholder="Selecione o psicólogo" />
-            </SelectTrigger>
-            <SelectContent>
-              {/* No independent mode, we show all psychologists */}
-              {independentMode ? (
-                psychologists.map((psychologist) => (
-                  <SelectItem 
-                    key={psychologist.id} 
-                    value={psychologist.id}
-                  >
-                    {psychologist.name}
-                  </SelectItem>
-                ))
-              ) : (
-                // In calendar mode, we filter to those available on the selected date
-                availablePsychologists.length > 0 ? (
-                  availablePsychologists.map((psychologist) => (
-                    <SelectItem 
-                      key={psychologist.id} 
-                      value={psychologist.id}
-                    >
-                      {psychologist.name}
-                    </SelectItem>
-                  ))
-                ) : (
-                  <SelectItem value="no-available" disabled>
-                    Nenhum psicólogo disponível nesta data
-                  </SelectItem>
-                )
-              )}
-            </SelectContent>
-          </Select>
-          {independentMode && psychologistId && (
-            <div className="text-xs text-green-600 mt-1">
-              Selecione um psicólogo para ver sua próxima data disponível
-            </div>
-          )}
-          {!independentMode && availablePsychologists.length > 0 && (
-            <div className="text-xs text-green-600 mt-1">
-              {availablePsychologists.length} psicólogo(s) disponível(is) na data selecionada
-            </div>
-          )}
+          <SelectDynamic
+            name="psychologistId"
+            control={control}
+            label="Psicólogo"
+            options={psychologists.map((psychologist) => ({
+              id: psychologist.id,
+              label: psychologist.name,
+            }))}
+            placeholder="Selecione o psicólogo"
+            required
+            errors={errors}
+            disabled={isLoading}
+            onClear={() => formMethods.setValue("psychologistId", "")}
+          />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="appointmentType">Tipo de Atendimento</Label>
-          <Select value={appointmentType} onValueChange={setAppointmentType} required>
-            <SelectTrigger id="appointmentType">
-              <SelectValue placeholder="Selecione o tipo" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="presential">Presencial</SelectItem>
-              <SelectItem value="online">Online</SelectItem>
-            </SelectContent>
-          </Select>
+          <SelectDynamic
+            name="appointmentType"
+            control={control}
+            label="Tipo de Atendimento"
+            options={[
+              { id: "presential", label: "Presencial" },
+              { id: "online", label: "Online" },
+            ]}
+            placeholder="Selecione o tipo"
+            required
+            errors={errors}
+            disabled={isLoading}
+          />
         </div>
 
         <div className="space-y-2">
           <Label htmlFor="date">Data</Label>
           <PsychologistAvailabilityDatePicker
-            date={date}
-            onDateChange={handleDateChange}
-            psychologistId={psychologistId}
-            disabled={lockDate}
-            onPsychologistChange={lockDate ? undefined : handlePsychologistChange}
+            date={selectedDate}
+            onDateChange={(newDate: Date) => setSelectedDate(newDate)} // Atualiza o estado da data
+            psychologistId={watch("psychologistId") || ""}
+            disabled={isLoading}
           />
-          {lockDate && (
-            <div className="text-xs text-blue-600 mt-1">
-              Data fixa selecionada do calendário
-            </div>
-          )}
-          {independentMode && psychologistId && nextAvailableSlot && (
-            <div className="text-xs text-green-600 mt-1">
-              Próxima data disponível para este psicólogo
-            </div>
-          )}
         </div>
 
         {appointmentType === "presential" && (
           <div className="space-y-2">
-            <Label htmlFor="room">Consultório</Label>
-            <Select value={roomId} onValueChange={setRoomId} required={appointmentType === "presential"}>
-              <SelectTrigger id="room">
-                <SelectValue placeholder="Selecione o consultório" />
-              </SelectTrigger>
-              <SelectContent>
-                {rooms.map((room) => (
-                  <SelectItem key={room.id} value={room.id}>
-                    {room.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <Label htmlFor="startTime">Horário de Início</Label>
-          <Select 
-            value={startTime} 
-            onValueChange={setStartTime} 
-            required
-            disabled={availableTimes.length === 0}
-          >
-            <SelectTrigger id="startTime">
-              <SelectValue placeholder="Selecione o horário" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableTimes.length > 0 ? (
-                availableTimes.map((time) => (
-                  <SelectItem key={`start-${time}`} value={time}>
-                    {time}
-                  </SelectItem>
-                ))
-              ) : (
-                <SelectItem value="no-time-available" disabled>
-                  Sem horários disponíveis
-                </SelectItem>
-              )}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="space-y-2">
-          <Label htmlFor="endTime">Horário de Término</Label>
-          <Select 
-            value={endTime} 
-            onValueChange={setEndTime} 
-            required
-            disabled={availableTimes.length === 0}
-          >
-            <SelectTrigger id="endTime">
-              <SelectValue placeholder="Selecione o horário" />
-            </SelectTrigger>
-            <SelectContent>
-              {availableTimes
-                .filter(time => time > startTime) // Apenas horários após o início
-                .length > 0 ? (
-                  availableTimes
-                    .filter(time => time > startTime)
-                    .map((time) => (
-                      <SelectItem key={`end-${time}`} value={time}>
-                        {time}
-                      </SelectItem>
-                    ))
-                ) : (
-                  <SelectItem value="no-end-time" disabled>
-                    Selecione um horário de início primeiro
-                  </SelectItem>
-                )
-              }
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* New recurring appointment options */}
-        {!existingAppointment && (
-          <div className="col-span-2 space-y-2 border p-3 rounded-md bg-gray-50">
-            <div className="flex items-center space-x-2">
-              <Checkbox 
-                id="isRecurring" 
-                checked={isRecurring}
-                onCheckedChange={(checked) => setIsRecurring(!!checked)} 
-              />
-              <Label htmlFor="isRecurring" className="flex items-center gap-2">
-                <RepeatIcon className="h-4 w-4" />
-                Agendamento recorrente
-              </Label>
-            </div>
-            
-            {isRecurring && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2 pl-6">
-                <div className="space-y-2">
-                  <Label htmlFor="recurrenceType">Frequência</Label>
-                  <Select
-                    value={recurrenceType}
-                    onValueChange={(value: 'weekly' | 'biweekly') => setRecurrenceType(value)}
-                  >
-                    <SelectTrigger id="recurrenceType">
-                      <SelectValue placeholder="Selecione a frequência" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="weekly">Semanal (toda semana)</SelectItem>
-                      <SelectItem value="biweekly">Quinzenal (a cada duas semanas)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                <div className="space-y-2">
-                  <Label htmlFor="recurrenceCount">Número de sessões</Label>
-                  <div className="flex items-center gap-2">
-                    <Input
-                      id="recurrenceCount"
-                      type="number"
-                      min="2"
-                      max="12"
-                      value={recurrenceCount}
-                      onChange={(e) => setRecurrenceCount(Math.min(12, Math.max(2, parseInt(e.target.value) || 2)))}
-                      className="w-full"
-                    />
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <div className="text-xs text-muted-foreground">
-                            (máx. 12)
-                          </div>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          <p>Máximo de 12 sessões recorrentes</p>
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {(conflictError || submissionError) && (
-          <div className="col-span-2">
-            <Alert variant="destructive">
-              <AlertDescription>{conflictError || submissionError}</AlertDescription>
-            </Alert>
-          </div>
-        )}
-
-        <div className="space-y-2">
-          <Label htmlFor="paymentMethod">Método de Pagamento</Label>
-          <Select value={paymentMethod} onValueChange={setPaymentMethod} required>
-            <SelectTrigger id="paymentMethod">
-              <SelectValue placeholder="Selecione o método" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="private">Particular</SelectItem>
-              <SelectItem value="insurance">Convênio</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {paymentMethod === "insurance" && (
-          <div className="space-y-2">
-            <Label htmlFor="insuranceType">Plano de Saúde</Label>
-            <Select
-              value={insuranceType || ""}
-              onValueChange={setInsuranceType}
+            <SelectDynamic
+              name="roomId"
+              control={control}
+              label="Consultório"
+              options={rooms.map((room) => ({
+                id: room.id.toString(),
+                label: room.name,
+              }))}
+              placeholder="Selecione o consultório"
               required
-            >
-              <SelectTrigger id="insuranceType">
-                <SelectValue placeholder="Selecione o plano" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Unimed">Unimed</SelectItem>
-                <SelectItem value="SulAmérica">SulAmérica</SelectItem>
-                <SelectItem value="Fusex">Fusex</SelectItem>
-                <SelectItem value="Other">Outro</SelectItem>
-              </SelectContent>
-            </Select>
+              errors={errors}
+              disabled={isLoading}
+              onClear={() => formMethods.setValue("roomId", "")}
+            />
           </div>
         )}
 
         <div className="space-y-2">
-          <Label htmlFor="value">Valor (R$)</Label>
-          <Input
-            id="value"
-            type="number"
-            step="0.01"
-            min="0"
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
+          <SelectDynamic
+            name="startTime"
+            control={control}
+            label="Horário de Início"
+            options={["09:00", "09:30", "10:00", "10:30", "11:00"].map((time) => ({
+              id: time,
+              label: time,
+            }))}
+            placeholder="Selecione o horário"
             required
+            errors={errors}
+            disabled={isLoading}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <SelectDynamic
+            name="endTime"
+            control={control}
+            label="Horário de Término"
+            options={["10:00", "10:30", "11:00", "11:30", "12:00"].map((time) => ({
+              id: time,
+              label: time,
+            }))}
+            placeholder="Selecione o horário"
+            required
+            errors={errors}
+            disabled={isLoading}
           />
         </div>
       </div>
 
-      {nextAvailableSlot && !lockDate && !independentMode && (
-        <div className="flex justify-center mb-4">
-          <Button 
-            type="button" 
-            variant="outline" 
-            onClick={applyNextAvailableSlot}
-            className="text-green-600 border-green-600 hover:bg-green-50"
-          >
-            Sugerir próximo horário disponível ({format(nextAvailableSlot.date, "dd/MM/yyyy")} às {nextAvailableSlot.startTime})
-          </Button>
-        </div>
-      )}
-
       <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onClose}>
+        <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
           Cancelar
         </Button>
-        <Button 
-          type="submit"
-          disabled={
-            formSubmitted &&
-            (availableTimes.length === 0 || 
-            !startTime || 
-            !endTime || 
-            !!conflictError || 
-            !isPsychologistAvailable(psychologistId) ||
-            !selectedPatient ||
-            (appointmentType === "presential" && !roomId))
-          }
-        >
-          {existingAppointment ? "Atualizar" : (isRecurring ? "Agendar Sessões Recorrentes" : "Agendar Consulta")}
+        <Button type="submit" disabled={isLoading}>
+          Agendar
         </Button>
       </div>
 
-      {/* New Patient Modal */}
       <Dialog open={isPatientFormOpen} onOpenChange={setIsPatientFormOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Novo Paciente</DialogTitle>
-            <DialogDescription>
-              Preencha os dados do novo paciente
-            </DialogDescription>
+            <DialogDescription>Preencha os dados do novo paciente</DialogDescription>
           </DialogHeader>
           <PatientForm onSave={handlePatientAdded} onCancel={() => setIsPatientFormOpen(false)} />
         </DialogContent>

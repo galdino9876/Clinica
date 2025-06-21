@@ -1,8 +1,8 @@
 
 import React, { createContext, useState, useContext, ReactNode } from 'react';
-import { 
-  Appointment, 
-  ConsultingRoom, 
+import {
+  Appointment,
+  ConsultingRoom,
   Patient,
   PatientRecord,
   AppointmentStatus,
@@ -26,21 +26,21 @@ const initialRooms: ConsultingRoom[] = [
 ];
 
 const initialPatients: Patient[] = [
-  { 
-    id: "p1", 
-    name: "Maria Silva", 
-    cpf: "123.456.789-00", 
-    phone: "(11) 98765-4321", 
+  {
+    id: "p1",
+    name: "Maria Silva",
+    cpf: "123.456.789-00",
+    phone: "(11) 98765-4321",
     email: "maria@email.com",
-    active: true 
+    active: true
   },
-  { 
-    id: "p2", 
-    name: "João Oliveira", 
-    cpf: "987.654.321-00", 
-    phone: "(11) 91234-5678", 
+  {
+    id: "p2",
+    name: "João Oliveira",
+    cpf: "987.654.321-00",
+    phone: "(11) 91234-5678",
     email: "joao@email.com",
-    active: true 
+    active: true
   },
 ];
 
@@ -142,7 +142,7 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   const updateAppointment = (appointment: Appointment) => {
-    setAppointments(prev => 
+    setAppointments(prev =>
       prev.map(a => a.id === appointment.id ? appointment : a)
     );
     toast({
@@ -165,10 +165,10 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
   const updateAppointmentStatus = (appointmentId: string, status: AppointmentStatus) => {
     const appointment = appointments.find(a => a.id === appointmentId);
     if (!appointment) return;
-    
+
     const updatedAppointment = { ...appointment, status };
     updateAppointment(updatedAppointment);
-    
+
     toast({
       title: "Status atualizado",
       description: `O status do agendamento foi alterado para ${status === 'confirmed' ? 'confirmado' : status === 'pending' ? 'pendente' : status}.`
@@ -191,35 +191,35 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
     for (let dayOffset = 0; dayOffset < 60 && !found; dayOffset++) {
       const checkDate = addDays(today, dayOffset);
       const dayOfWeek = checkDate.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
-      
+
       // Verifica se o psicólogo trabalha neste dia da semana
       const workingHoursForDay = psychologist.workingHours.find(wh => wh.dayOfWeek === dayOfWeek);
-      
+
       if (workingHoursForDay) {
         const { startTime, endTime } = workingHoursForDay;
         const dateString = format(checkDate, 'yyyy-MM-dd');
-        
+
         // Pega todos os agendamentos deste psicólogo nesta data
         const psychologistAppointmentsOnDate = appointments.filter(
           a => a.psychologistId === psychologistId && a.date === dateString
         );
-        
+
         // Gere slots de tempo a cada 30 min entre o início e fim do expediente
         const availableSlots = generateTimeSlots(startTime, endTime, 60); // 60 minutos por consulta
-        
+
         // Para cada slot de tempo potencial, verifique se está disponível
         for (const slot of availableSlots) {
           const [slotStartTime, slotEndTime] = slot;
-          
+
           // Verifique se o slot já está ocupado
           const isSlotTaken = psychologistAppointmentsOnDate.some(appointment => {
             return isOverlapping(appointment.startTime, appointment.endTime, slotStartTime, slotEndTime);
           });
-          
+
           // Se o slot estiver livre e for futuro (ou hoje, mas horário futuro)
           if (!isSlotTaken) {
             const slotDateTime = combineDateTime(checkDate, slotStartTime);
-            
+
             // Se o slot for no futuro
             if (isAfter(slotDateTime, new Date())) {
               resultDate = checkDate;
@@ -230,36 +230,36 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
             }
           }
         }
-        
+
         if (found) break;
       }
     }
-    
+
     if (found) {
-      return { 
-        date: resultDate!, 
-        startTime: resultStartTime!, 
-        endTime: resultEndTime! 
+      return {
+        date: resultDate!,
+        startTime: resultStartTime!,
+        endTime: resultEndTime!
       };
     }
-    
+
     return null;
   };
 
   const rescheduleAppointment = (appointmentId: string, newDate: string, newStartTime: string, newEndTime: string) => {
     const appointment = appointments.find(a => a.id === appointmentId);
     if (!appointment) return;
-    
-    const updatedAppointment = { 
-      ...appointment, 
+
+    const updatedAppointment = {
+      ...appointment,
       date: newDate,
       startTime: newStartTime,
       endTime: newEndTime,
       status: "pending" as AppointmentStatus // Reset to pending when rescheduled
     };
-    
+
     updateAppointment(updatedAppointment);
-    
+
     toast({
       title: "Consulta reagendada",
       description: `A consulta foi remarcada para ${format(new Date(newDate), 'dd/MM/yyyy')} às ${newStartTime}.`
@@ -274,14 +274,14 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
       // Sort by date first
       const dateComparison = new Date(a.date).getTime() - new Date(b.date).getTime();
       if (dateComparison !== 0) return dateComparison;
-      
+
       // If same date, sort by time
       return a.startTime.localeCompare(b.startTime);
     });
-    
+
     // Group by date
     const groupedByDate: Record<string, PendingPatientsData> = {};
-    
+
     pendingAppointments.forEach(app => {
       if (!groupedByDate[app.date]) {
         groupedByDate[app.date] = {
@@ -289,7 +289,7 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
           patients: []
         };
       }
-      
+
       groupedByDate[app.date].patients.push({
         name: app.patient.name,
         phone: app.patient.phone,
@@ -300,20 +300,20 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
         startTime: app.startTime
       });
     });
-    
+
     // Convert to array
     return Object.values(groupedByDate);
   };
 
   // Funções auxiliares
-  
+
   const isOverlapping = (existingStart: string, existingEnd: string, newStart: string, newEnd: string) => {
     // Converte para minutos desde 00:00 para comparação
     const existingStartMin = timeToMinutes(existingStart);
     const existingEndMin = timeToMinutes(existingEnd);
     const newStartMin = timeToMinutes(newStart);
     const newEndMin = timeToMinutes(newEnd);
-    
+
     return (
       (newStartMin >= existingStartMin && newStartMin < existingEndMin) || // new start is during existing
       (newEndMin > existingStartMin && newEndMin <= existingEndMin) || // new end is during existing
@@ -330,13 +330,13 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
     const slots = [];
     const startMin = timeToMinutes(startTime);
     const endMin = timeToMinutes(endTime);
-    
+
     for (let currentMin = startMin; currentMin + durationMinutes <= endMin; currentMin += 30) {
       const slotStartTime = minutesToTime(currentMin);
       const slotEndTime = minutesToTime(currentMin + durationMinutes);
       slots.push([slotStartTime, slotEndTime]);
     }
-    
+
     return slots;
   };
 
@@ -366,7 +366,7 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   const updateRoom = (room: ConsultingRoom) => {
-    setRooms(prev => 
+    setRooms(prev =>
       prev.map(r => r.id === room.id ? room : r)
     );
     toast({
@@ -378,7 +378,7 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
   const deleteRoom = (id: string) => {
     const roomToDelete = rooms.find(r => r.id === id);
     const hasAppointments = appointments.some(a => a.roomId === id);
-    
+
     if (hasAppointments) {
       toast({
         title: "Cannot delete room",
@@ -387,7 +387,7 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
       });
       return;
     }
-    
+
     setRooms(prev => prev.filter(r => r.id !== id));
     if (roomToDelete) {
       toast({
@@ -412,7 +412,7 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   const updatePatient = (patient: Patient) => {
-    setPatients(prev => 
+    setPatients(prev =>
       prev.map(p => p.id === patient.id ? patient : p)
     );
     toast({
@@ -424,25 +424,25 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
   const deactivatePatient = (id: string, reason: string) => {
     const patient = patients.find(p => p.id === id);
     if (!patient) return;
-    
-    const updatedPatient = { 
-      ...patient, 
+
+    const updatedPatient = {
+      ...patient,
       active: false,
       deactivationReason: reason,
       deactivationDate: new Date().toISOString().split('T')[0]
     };
-    
+
     updatePatient(updatedPatient);
-    
+
     // Cancel all future appointments for this patient
     const patientAppointments = appointments.filter(
-      app => app.patient.id === id && 
+      app => app.patient.id === id &&
       // Only cancel future appointments or those on the same day
       (new Date(app.date) >= new Date(new Date().setHours(0, 0, 0, 0))) &&
       // Only cancel pending or confirmed appointments
       (app.status === "pending" || app.status === "confirmed")
     );
-    
+
     if (patientAppointments.length > 0) {
       // Update all of these appointments to cancelled
       patientAppointments.forEach(app => {
@@ -451,13 +451,13 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
           status: "cancelled" as AppointmentStatus
         });
       });
-      
+
       toast({
         title: `${patientAppointments.length} agendamentos cancelados`,
         description: `Os agendamentos futuros do paciente ${patient.name} foram cancelados automaticamente.`,
       });
     }
-    
+
     toast({
       title: "Paciente desativado",
       description: `O paciente ${patient.name} foi desativado com sucesso.`
@@ -467,16 +467,16 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
   const reactivatePatient = (id: string) => {
     const patient = patients.find(p => p.id === id);
     if (!patient) return;
-    
-    const updatedPatient = { 
-      ...patient, 
+
+    const updatedPatient = {
+      ...patient,
       active: true,
       deactivationReason: undefined,
       deactivationDate: undefined
     };
-    
+
     updatePatient(updatedPatient);
-    
+
     toast({
       title: "Paciente reativado",
       description: `O paciente ${patient.name} foi reativado com sucesso.`
@@ -496,7 +496,7 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
   };
 
   const updatePatientRecord = (record: PatientRecord) => {
-    setPatientRecords(prev => 
+    setPatientRecords(prev =>
       prev.map(r => r.id === record.id ? record : r)
     );
     toast({
