@@ -1,87 +1,96 @@
-import React, { useState, useEffect } from 'react';
-import { Edit, Trash2, Eye, Plus } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { Edit, Trash2, Eye, Plus } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import PatientForm from "./PatientForm"; // Ajuste o caminho conforme necessário
 
 const PatientsTable = () => {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
 
   // Configuração dinâmica das ações
   const actions = [
     {
-      id: 'edit',
-      label: 'Editar',
+      id: "edit",
+      label: "Editar",
       icon: Edit,
-      color: 'text-blue-600 hover:text-blue-800',
+      color: "text-blue-600 hover:text-blue-800",
       onClick: (patient) => {
-        console.log('Editando paciente:', patient);
-        // Aqui você pode adicionar a lógica de edição
+        console.log("Editando paciente:", patient);
         alert(`Editar paciente: ${patient.nome || patient.name}`);
-      }
+      },
     },
-    {
-      id: 'delete',
-      label: 'Excluir',
-      icon: Trash2,
-      color: 'text-red-600 hover:text-red-800',
-      onClick: (patient) => {
-        console.log('Excluindo paciente:', patient);
-        if (window.confirm(`Deseja realmente excluir o paciente ${patient.nome || patient.name}?`)) {
-          // Aqui você pode adicionar a lógica de exclusão
-          alert(`Paciente ${patient.nome || patient.name} excluído!`);
-        }
-      }
+   {
+  id: 'delete',
+  label: 'Excluir',
+  icon: Trash2,
+  color: 'text-red-600 hover:text-red-800',
+  onClick: (patient) => {
+    console.log('Excluindo usuário:', patient);
+    if (window.confirm(`Deseja realmente excluir o usuário ${patient.nome || patient.name}?`)) {
+      fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/delete-patient', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: patient.id || patient.id }), // Usa o ID do usuário passado
+      })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Falha ao excluir usuário');
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log('Usuário excluído:', data);
+          alert(`Usuário ${patient.nome || patient.name} excluído com sucesso!`);
+          // Opcional: Atualize a lista de usuários removendo o item
+          // setUsers(prevUsers => prevUsers.filter(u => u.id !== user.id));
+        })
+        .catch(error => {
+          console.error('Erro ao excluir usuário:', error);
+          alert(`Erro ao excluir usuário ${patient.nome || patient.name}: ${error.message}`);
+        });
     }
-    // Você pode adicionar mais ações aqui facilmente:
-    // {
-    //   id: 'view',
-    //   label: 'Visualizar',
-    //   icon: Eye,
-    //   color: 'text-green-600 hover:text-green-800',
-    //   onClick: (patient) => {
-    //     console.log('Visualizando paciente:', patient);
-    //   }
-    // }
+  }
+}
   ];
 
   // Função para buscar os dados da API
   const fetchPatients = async () => {
     try {
       setLoading(true);
-      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/patients');
+      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/patients");
 
       if (!response.ok) {
         throw new Error(`Erro na API: ${response.status}`);
       }
 
       const data = await response.json();
-
-      // Assumindo que a resposta pode ser um array ou um objeto com array
       const patientsData = Array.isArray(data) ? data : data.patients || data.data || [];
-
       setPatients(patientsData);
       setError(null);
     } catch (err) {
-      console.error('Erro ao buscar pacientes:', err);
+      console.error("Erro ao buscar pacientes:", err);
       setError(err.message);
-      // Dados de exemplo para demonstração
       setPatients([
         {
           id: 1,
-          nome: 'João Silva',
-          cpf: '123.456.789-00',
-          telefone: '(11) 99999-9999',
-          email: 'joao@email.com',
-          status: 'Ativo'
+          nome: "João Silva",
+          cpf: "123.456.789-00",
+          telefone: "(11) 99999-9999",
+          email: "joao@email.com",
+          status: "Ativo",
         },
         {
           id: 2,
-          nome: 'Maria Santos',
-          cpf: '987.654.321-00',
-          telefone: '(11) 88888-8888',
-          email: 'maria@email.com',
-          status: 'Inativo'
-        }
+          nome: "Maria Santos",
+          cpf: "987.654.321-00",
+          telefone: "(11) 88888-8888",
+          email: "maria@email.com",
+          status: "Inativo",
+        },
       ]);
     } finally {
       setLoading(false);
@@ -95,19 +104,21 @@ const PatientsTable = () => {
   // Função para renderizar o status com cores
   const renderStatus = (status) => {
     const statusColors = {
-      'Ativo': 'bg-green-100 text-green-800',
-      'Inativo': 'bg-red-100 text-red-800',
-      'Pendente': 'bg-yellow-100 text-yellow-800',
-      'Bloqueado': 'bg-gray-100 text-gray-800'
+      Ativo: "bg-green-100 text-green-800",
+      Inativo: "bg-red-100 text-red-800",
+      Pendente: "bg-yellow-100 text-yellow-800",
+      Bloqueado: "bg-gray-100 text-gray-800",
     };
-
-    const colorClass = statusColors[status] || 'bg-gray-100 text-gray-800';
-
+    const colorClass = statusColors[status] || "bg-gray-100 text-gray-800";
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>
-        {status}
-      </span>
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${colorClass}`}>{status}</span>
     );
+  };
+
+  // Função para atualizar a lista após adicionar um paciente
+  const handlePatientAdded = (newPatient) => {
+    setPatients((prevPatients) => [...prevPatients, newPatient]);
+    setIsFormOpen(false);
   };
 
   if (loading) {
@@ -125,15 +136,13 @@ const PatientsTable = () => {
         {/* Header */}
         <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-gray-800">
-              Pacientes ({patients.length})
-            </h2>
+            <h2 className="text-xl font-semibold text-gray-800">Pacientes ({patients.length})</h2>
             <button
-              onClick={fetchPatients}
+              onClick={() => setIsFormOpen(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center gap-2 transition-colors"
             >
               <Plus size={16} />
-              Atualizar
+              Novo Paciente
             </button>
           </div>
           {error && (
@@ -180,27 +189,21 @@ const PatientsTable = () => {
                   <tr key={patient.id || index} className="hover:bg-gray-50 transition-colors">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
-                        {patient.nome || patient.name || 'N/A'}
+                        {patient.nome || patient.name || "N/A"}
                       </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="text-sm text-gray-900">{patient.cpf || "N/A"}</div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {patient.cpf || 'N/A'}
+                        {patient.telefone || patient.phone || "N/A"}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {patient.telefone || patient.phone || 'N/A'}
-                      </div>
+                      <div className="text-sm text-gray-900">{patient.email || "N/A"}</div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-gray-900">
-                        {patient.email || 'N/A'}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      {renderStatus(patient.status || 'Ativo')}
-                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">{renderStatus(patient.status || "Ativo")}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
                         {actions.map((action) => {
@@ -227,11 +230,19 @@ const PatientsTable = () => {
 
         {/* Footer */}
         <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
-          <div className="text-sm text-gray-700">
-            Total de pacientes: {patients.length}
-          </div>
+          <div className="text-sm text-gray-700">Total de pacientes: {patients.length}</div>
         </div>
       </div>
+
+      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo Paciente</DialogTitle>
+            <DialogDescription>Preencha os dados do novo paciente</DialogDescription>
+          </DialogHeader>
+          <PatientForm onSave={handlePatientAdded} onCancel={() => setIsFormOpen(false)} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

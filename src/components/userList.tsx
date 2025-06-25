@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Edit, Trash2, Eye, Plus, Clock, User } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import UserForm from "./UserForm"; // Ajuste o caminho conforme necessário
 
 const UsersTable = () => {
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isFormOpen, setIsFormOpen] = useState(false);
 
   // Configuração dinâmica das ações
   const actions = [
@@ -18,37 +21,40 @@ const UsersTable = () => {
         alert(`Editar usuário: ${user.nome || user.name}`);
       }
     },
-    {
-      id: 'delete',
-      label: 'Excluir',
-      icon: Trash2,
-      color: 'text-red-600 hover:text-red-800',
-      onClick: (user) => {
-        console.log('Excluindo usuário:', user);
-        if (window.confirm(`Deseja realmente excluir o usuário ${user.nome || user.name}?`)) {
-          alert(`Usuário ${user.nome || user.name} excluído!`);
-        }
-      }
+   {
+  id: 'delete',
+  label: 'Excluir',
+  icon: Trash2,
+  color: 'text-red-600 hover:text-red-800',
+  onClick: (user) => {
+    console.log('Excluindo usuário:', user);
+    if (window.confirm(`Deseja realmente excluir o usuário ${user.nome || user.name}?`)) {
+      fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/delete-user', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: user.id || user.id }), // Usa o ID do usuário passado
+      })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Falha ao excluir usuário');
+          }
+          return response.json();
+        })
+        .then(data => {
+          console.log('Usuário excluído:', data);
+          alert(`Usuário ${user.nome || user.name} excluído com sucesso!`);
+          // Opcional: Atualize a lista de usuários removendo o item
+          // setUsers(prevUsers => prevUsers.filter(u => u.id !== user.id));
+        })
+        .catch(error => {
+          console.error('Erro ao excluir usuário:', error);
+          alert(`Erro ao excluir usuário ${user.nome || user.name}: ${error.message}`);
+        });
     }
-    // Você pode adicionar mais ações aqui:
-    // {
-    //   id: 'view',
-    //   label: 'Visualizar',
-    //   icon: Eye,
-    //   color: 'text-green-600 hover:text-green-800',
-    //   onClick: (user) => {
-    //     console.log('Visualizando usuário:', user);
-    //   }
-    // },
-    // {
-    //   id: 'schedule',
-    //   label: 'Gerenciar Horários',
-    //   icon: Clock,
-    //   color: 'text-purple-600 hover:text-purple-800',
-    //   onClick: (user) => {
-    //     console.log('Gerenciando horários:', user);
-    //   }
-    // }
+  }
+}
   ];
 
   // Função para buscar os dados da API
@@ -62,16 +68,12 @@ const UsersTable = () => {
       }
 
       const data = await response.json();
-
-      // Assumindo que a resposta pode ser um array ou um objeto com array
       const usersData = Array.isArray(data) ? data : data.users || data.data || [];
-
       setUsers(usersData);
       setError(null);
     } catch (err) {
       console.error('Erro ao buscar usuários:', err);
       setError(err.message);
-      // Dados de exemplo para demonstração
       setUsers([
         {
           id: 1,
@@ -137,7 +139,6 @@ const UsersTable = () => {
 
   // Função para renderizar horários
   const renderSchedules = (horarios, funcao) => {
-    // Só mostra horários para psicólogos
     const isPsychologist = funcao && (funcao.toLowerCase().includes('psicólog') || funcao.toLowerCase().includes('psycholog'));
 
     if (!isPsychologist) {
@@ -160,6 +161,12 @@ const UsersTable = () => {
     );
   };
 
+  // Função para atualizar a lista após adicionar um usuário
+  const handleUserAdded = (newUser) => {
+    setUsers((prevUsers) => [...prevUsers, newUser]);
+    setIsFormOpen(false);
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -180,11 +187,11 @@ const UsersTable = () => {
               Usuários ({users.length})
             </h2>
             <button
-              onClick={fetchUsers}
+              onClick={() => setIsFormOpen(true)}
               className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center gap-2 transition-colors"
             >
               <Plus size={16} />
-              Atualizar
+              Novo Usuário
             </button>
           </div>
           {error && (
@@ -289,6 +296,16 @@ const UsersTable = () => {
           </div>
         </div>
       </div>
+
+      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo Usuário</DialogTitle>
+            <DialogDescription>Preencha os dados do novo usuário</DialogDescription>
+          </DialogHeader>
+          <UserForm onSave={handleUserAdded} onCancel={() => setIsFormOpen(false)} />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

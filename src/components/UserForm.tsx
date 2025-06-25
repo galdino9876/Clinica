@@ -1,171 +1,199 @@
+"use client";
 
 import React, { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { User, UserRole, WorkingHours, CommissionOption } from "@/types/user";
-import WorkingHoursSelector from "./WorkingHoursSelector";
-import { useAuth } from "@/context/AuthContext";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2, X } from "lucide-react";
+import { InputDynamic } from "./inputDin";
+import { SelectDynamic } from "./Selectsn";
+
+// Schema de validação
+const userSchema = z.object({
+  name: z.string().min(1, "Nome é obrigatório").max(100, "Nome deve ter no máximo 100 caracteres"),
+  email: z.string().email("E-mail inválido").max(100, "E-mail deve ter no máximo 100 caracteres"),
+  role: z.enum(["admin", "receptionist", "psychologist"], {
+    required_error: "Função é obrigatória",
+  }),
+  phone: z.string().max(20, "Telefone deve ter no máximo 20 caracteres").optional(),
+  username: z.string().max(30, "Usuário deve ter no máximo 30 caracteres").optional(),
+  password: z.string().min(1, "Senha é obrigatória").max(255, "Senha deve ter no máximo 255 caracteres"),
+});
+
+type UserFormData = z.infer<typeof userSchema>;
 
 interface UserFormProps {
-  user?: User;
-  onSave: (user: User) => void;
-  onCancel: () => void;
+  onSave?: (user: any) => void;
+  onCancel?: () => void;
+  open?: boolean;
 }
 
-const UserForm = ({ user, onSave, onCancel }: UserFormProps) => {
-  const { addUser, updateUser } = useAuth();
-  const [name, setName] = useState(user?.name || "");
-  const [email, setEmail] = useState(user?.email || "");
-  const [phone, setPhone] = useState(user?.phone || "");
-  const [role, setRole] = useState<UserRole>(user?.role || "psychologist");
-  const [workingHours, setWorkingHours] = useState<WorkingHours[]>(
-    user?.workingHours || []
-  );
-  const [username, setUsername] = useState(user?.username || "");
-  const [password, setPassword] = useState("");
-  const [commissionPercentage, setCommissionPercentage] = useState<number>(
-    user?.commissionPercentage || 50
-  );
+const UserForm = ({ onSave, onCancel, open = false }: UserFormProps) => {
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const formMethods = useForm<UserFormData>({
+    resolver: zodResolver(userSchema),
+    defaultValues: {
+      name: "",
+      email: "",
+      role: "psychologist",
+      phone: "",
+      username: "",
+      password: "",
+    },
+  });
 
-    const userData: Omit<User, "id"> = {
-      name,
-      email,
-      role,
-      phone,
-      username,
-      ...(password && { password }),
-      ...(role === "psychologist" && { 
-        workingHours,
-        commissionPercentage 
-      }),
-    };
+  const {
+    handleSubmit,
+    setValue,
+    control,
+    formState: { errors },
+    reset,
+  } = formMethods;
 
-    if (user) {
-      const updatedUser = { ...userData, id: user.id };
-      updateUser(updatedUser);
-      onSave(updatedUser);
-    } else {
-      const newUser = addUser(userData);
-      onSave(newUser);
+  const onSubmit = async (data: UserFormData) => {
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/create-user", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (response.ok) {
+        const newUser = await response.json();
+        toast({
+          title: "Sucesso",
+          description: "Usuário cadastrado com sucesso.",
+        });
+
+        if (onSave) {
+          onSave(newUser);
+        }
+
+        reset();
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Erro ao criar usuário");
+      }
+    } catch (error) {
+      console.error("Erro ao salvar usuário:", error);
+      toast({
+        title: "Erro",
+        description: error instanceof Error ? error.message : "Falha ao cadastrar usuário. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="name">Nome Completo</Label>
-          <Input
-            id="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="email">E-mail</Label>
-          <Input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="phone">Telefone</Label>
-          <Input
-            id="phone"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="(00) 00000-0000"
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="role">Função</Label>
-          <Select
-            value={role}
-            onValueChange={(value: UserRole) => setRole(value)}
-          >
-            <SelectTrigger id="role">
-              <SelectValue placeholder="Selecione a função" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="admin">Administrador</SelectItem>
-              <SelectItem value="receptionist">Recepcionista</SelectItem>
-              <SelectItem value="psychologist">Psicólogo</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="username">Nome de Usuário</Label>
-          <Input
-            id="username"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="password">Senha{user ? " (deixe em branco para manter)" : ""}</Label>
-          <Input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required={!user}
-          />
-        </div>
-      </div>
 
-      {role === "psychologist" && (
-        <>
-          <div className="space-y-2">
-            <Label htmlFor="commissionPercentage">Percentual de Comissão</Label>
-            <Select
-              value={commissionPercentage.toString()}
-              onValueChange={(value: string) => setCommissionPercentage(parseInt(value))}
-            >
-              <SelectTrigger id="commissionPercentage">
-                <SelectValue placeholder="Selecione o percentual" />
-              </SelectTrigger>
-              <SelectContent>
-                {[10, 20, 30, 40, 50, 60, 70, 80, 90, 100].map((percent) => (
-                  <SelectItem key={percent} value={percent.toString()}>
-                    {percent}%
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InputDynamic
+              name="name"
+              label="Nome"
+              control={control}
+              placeholder="Digite o nome"
+              required
+              disabled={isLoading}
+              errors={errors}
+              className="md:col-span-2"
+              onClear={() => setValue("name", "")}
+            />
+
+            <InputDynamic
+              name="email"
+              label="E-mail"
+              control={control}
+              placeholder="exemplo@email.com"
+              type="email"
+              required
+              disabled={isLoading}
+              errors={errors}
+              className="md:col-span-2"
+              onClear={() => setValue("email", "")}
+            />
+
+            <SelectDynamic
+              name="role"
+              control={control}
+              label="Função"
+              options={[
+                { id: "admin", label: "Admin" },
+                { id: "receptionist", label: "Recepcionista" },
+                { id: "psychologist", label: "Psicólogo" },
+              ]}
+              placeholder="Selecione a função"
+              required
+              errors={errors}
+              disabled={isLoading}
+            />
+
+            <InputDynamic
+              name="phone"
+              label="Telefone"
+              control={control}
+              placeholder="(11) 99999-9999"
+              type="tel"
+              disabled={isLoading}
+              errors={errors}
+              maxLength={20}
+              onClear={() => setValue("phone", "")}
+            />
+
+            <InputDynamic
+              name="username"
+              label="Usuário"
+              control={control}
+              placeholder="Digite o usuário"
+              disabled={isLoading}
+              errors={errors}
+              maxLength={30}
+              onClear={() => setValue("username", "")}
+            />
+
+            <InputDynamic
+              name="password"
+              label="Senha"
+              control={control}
+              placeholder="Digite a senha"
+              type="password"
+              required
+              disabled={isLoading}
+              errors={errors}
+              className="md:col-span-2"
+              onClear={() => setValue("password", "")}
+            />
           </div>
 
-          <WorkingHoursSelector
-            workingHours={workingHours}
-            onChange={setWorkingHours}
-          />
-        </>
-      )}
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Salvando...
+                </>
+              ) : (
+                "Cadastrar"
+              )}
+            </Button>
+          </div>
+        </form>
 
-      <div className="flex justify-end gap-2">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Cancelar
-        </Button>
-        <Button type="submit">
-          {user ? "Atualizar" : "Cadastrar"} Usuário
-        </Button>
-      </div>
-    </form>
   );
 };
 

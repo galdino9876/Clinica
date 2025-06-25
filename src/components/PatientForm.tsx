@@ -1,287 +1,236 @@
+"use client";
 
-import { useState, useRef } from "react";
+import React, { useState } from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useAppointments } from "@/context/AppointmentContext";
-import { Patient } from "@/types/appointment";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
-} from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { useToast } from "@/hooks/use-toast";
+import { Loader2, X } from "lucide-react";
+import { InputDynamic } from "./inputDin";
+
+
+// Schema de validação
+const patientSchema = z.object({
+  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
+  cpf: z.string().min(14, "CPF deve estar no formato 000.000.000-00"),
+  phone: z.string().min(14, "Telefone deve estar no formato (00) 00000-0000"),
+  email: z.string().email("E-mail inválido"),
+  address: z.string().min(10, "Endereço deve ter pelo menos 10 caracteres"),
+  birthdate: z.string().min(1, "Data de nascimento é obrigatória"),
+  identity_document: z.string().optional(),
+  insurance_document: z.string().optional(),
+});
+
+type PatientFormData = z.infer<typeof patientSchema>;
 
 interface PatientFormProps {
-  patient?: Patient;
-  onSave: (patient: Patient) => void;
-  onCancel: () => void;
+  onSave?: (patient: any) => void;
+  onCancel?: () => void;
+  open?: boolean; // Para controlar a abertura via Dialog
 }
 
-const PatientForm = ({ patient, onSave, onCancel }: PatientFormProps) => {
-  const { addPatient, updatePatient } = useAppointments();
-  const [name, setName] = useState(patient?.name || "");
-  const [cpf, setCpf] = useState(patient?.cpf || "");
-  const [phone, setPhone] = useState(patient?.phone || "");
-  const [email, setEmail] = useState(patient?.email || "");
-  const [address, setAddress] = useState(patient?.address || "");
-  const [birthdate, setBirthdate] = useState(patient?.birthdate || "");
-  const [showInsuranceUpload, setShowInsuranceUpload] = useState(false);
-  const [identityDocument, setIdentityDocument] = useState<string | null>(patient?.identityDocument as string || null);
-  const [insuranceDocument, setInsuranceDocument] = useState<string | null>(patient?.insuranceDocument as string || null);
+const PatientForm = ({ onSave, onCancel, open = false }: PatientFormProps) => {
+  const { toast } = useToast();
+  const [isLoading, setIsLoading] = useState(false);
 
-  const idDocInputRef = useRef<HTMLInputElement>(null);
-  const insuranceDocInputRef = useRef<HTMLInputElement>(null);
+  const formMethods = useForm<PatientFormData>({
+    resolver: zodResolver(patientSchema),
+    defaultValues: {
+      name: "",
+      cpf: "",
+      phone: "",
+      email: "",
+      address: "",
+      birthdate: "",
+      identity_document: "",
+      insurance_document: "",
+    },
+  });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const {
+    handleSubmit,
+    setValue,
+    control,
+    formState: { errors },
+    reset,
+  } = formMethods;
 
-    const patientData: Omit<Patient, "id"> = {
-      name,
-      cpf,
-      phone,
-      email,
-      address,
-      birthdate,
-      active: true,
-      ...(identityDocument && { identityDocument }),
-      ...(insuranceDocument && { insuranceDocument }),
-    };
+  // Máscaras para formatação
+  const validateCPF = (cpf: string) => {
+    // Regex para validar CPF no formato 000.000.000-00
+    const cpfRegex = /^\d{3}\.\d{3}\.\d{3}-\d{2}$/;
+    return cpfRegex.test(cpf);
+  };
 
-    if (patient) {
-      // For existing patients, preserve their active status
-      const updatedPatient = {
-        ...patientData,
-        id: patient.id,
-        active: patient.active !== undefined ? patient.active : true,
-        deactivationReason: patient.deactivationReason,
-        deactivationDate: patient.deactivationDate
-      };
-      updatePatient(updatedPatient);
-      onSave(updatedPatient);
-    } else {
-      // For new patients, set active to true by default
-      const newPatient = addPatient(patientData);
+  const onSubmit = async (data: PatientFormData) => {
+    if (!validateCPF(data.cpf)) {
+      toast({
+        title: "Erro",
+        description: "CPF inválido. Verifique os dados informados.",
+        variant: "destructive",
+      });
+      return;
+    }
 
-      if (newPatient) {
-        onSave(newPatient);
+    setIsLoading(true);
+
+    try {
+      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/create-patient", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (response.ok) {
+        const newPatient = await response.json();
+        toast({
+          title: "Sucesso",
+          description: "Paciente cadastrado com sucesso.",
+        });
+
+        if (onSave) {
+          onSave(newPatient);
+        }
+
+        reset();
       } else {
-        console.error("Warning: addPatient did not return a patient object");
-        onSave({ ...patientData, id: Math.random().toString(36).substring(2, 11) });
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || "Erro no servidor");
       }
+    } catch (error) {
+      console.error("Erro ao salvar paciente:", error);
+      toast({
+        title: "Erro",
+        description: error instanceof Error ? error.message : "Falha ao cadastrar paciente. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
     }
-  };
-
-  const handleIdentityDocumentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-
-      // Convert file to base64 string for demo purposes (in a real app, you'd upload to a server)
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          setIdentityDocument(reader.result);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleInsuranceDocumentChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-
-      // Convert file to base64 string for demo purposes
-      const reader = new FileReader();
-      reader.onload = () => {
-        if (typeof reader.result === 'string') {
-          setInsuranceDocument(reader.result);
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleInsuranceToggle = (value: string) => {
-    setShowInsuranceUpload(value === "yes");
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="space-y-2">
-          <Label htmlFor="name">Nome Completo</Label>
-          <Input
-            id="name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="cpf">CPF</Label>
-          <Input
-            id="cpf"
-            value={cpf}
-            onChange={(e) => setCpf(e.target.value)}
-            placeholder="000.000.000-00"
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="phone">Telefone</Label>
-          <Input
-            id="phone"
-            value={phone}
-            onChange={(e) => setPhone(e.target.value)}
-            placeholder="(00) 00000-0000"
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="email">E-mail</Label>
-          <Input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="address">Endereço</Label>
-          <Input
-            id="address"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
-          />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="birthdate">Data de Nascimento</Label>
-          <Input
-            id="birthdate"
-            type="date"
-            value={birthdate}
-            onChange={(e) => setBirthdate(e.target.value)}
-          />
-        </div>
-      </div>
 
-      {/* Document Upload Section */}
-      <div className="space-y-4 mt-6 p-4 border border-gray-200 rounded-md">
-        <h3 className="font-medium">Documentos</h3>
-
-        {/* Identity Document */}
-        <div className="space-y-2">
-          <Label htmlFor="identityDocument">Documento de Identidade</Label>
-          <div
-            className="border-2 border-dashed rounded-md p-4 text-center cursor-pointer hover:bg-gray-50"
-            onClick={() => idDocInputRef.current?.click()}
-          >
-            <input
-              ref={idDocInputRef}
-              id="identityDocument"
-              type="file"
-              accept="image/*,.pdf"
-              className="hidden"
-              onChange={handleIdentityDocumentChange}
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <InputDynamic
+              name="name"
+              label="Nome Completo"
+              control={control}
+              placeholder="Digite o nome completo"
+              required
+              disabled={isLoading}
+              errors={errors}
+              className="md:col-span-2"
+              onClear={() => setValue("name", "")}
             />
-            {identityDocument ? (
-              <div className="flex items-center justify-center">
-                <div className="bg-green-100 text-green-800 px-2 py-1 rounded-md text-sm">
-                  Documento carregado ✓
-                </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="text-red-500 ml-2"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIdentityDocument(null);
-                  }}
-                >
-                  Remover
-                </Button>
-              </div>
-            ) : (
-              <div>
-                <p className="text-sm text-gray-500">Clique para selecionar ou arraste o arquivo</p>
-                <p className="text-xs text-gray-400 mt-1">Formatos aceitos: JPG, PNG, PDF</p>
-              </div>
-            )}
+
+            <InputDynamic
+              name="cpf"
+              label="CPF"
+              control={control}
+              placeholder="000.000.000-00"
+              required
+              disabled={isLoading}
+              errors={errors}
+              maxLength={14}
+            type="cpf"
+              onClear={() => setValue("cpf", "")}
+            />
+
+            <InputDynamic
+              name="phone"
+              label="Telefone"
+              control={control}
+              placeholder="(11) 99999-9999"
+              type="tel"
+              required
+              disabled={isLoading}
+              errors={errors}
+              maxLength={15}
+              onClear={() => setValue("phone", "")}
+            />
+
+            <InputDynamic
+              name="email"
+              label="E-mail"
+              control={control}
+              placeholder="exemplo@email.com"
+              type="email"
+              required
+              disabled={isLoading}
+              errors={errors}
+              className="md:col-span-2"
+              onClear={() => setValue("email", "")}
+            />
+
+            <InputDynamic
+              name="address"
+              label="Endereço"
+              control={control}
+              placeholder="Rua, número, bairro - Cidade/UF"
+              required
+              disabled={isLoading}
+              errors={errors}
+              className="md:col-span-2"
+              onClear={() => setValue("address", "")}
+            />
+
+            <InputDynamic
+              name="birthdate"
+              label="Data de Nascimento"
+              control={control}
+              type="date"
+              required
+              disabled={isLoading}
+              errors={errors}
+              onClear={() => setValue("birthdate", "")}
+            />
+
+            <InputDynamic
+              name="identity_document"
+              label="Documento de Identidade"
+              control={control}
+              placeholder="RG, CNH, etc."
+              disabled={isLoading}
+              errors={errors}
+              onClear={() => setValue("identity_document", "")}
+            />
+
+            <InputDynamic
+              name="insurance_document"
+              label="Carteirinha do Convênio"
+              control={control}
+              placeholder="Número da carteirinha"
+              disabled={isLoading}
+              errors={errors}
+              className="md:col-span-2"
+              onClear={() => setValue("insurance_document", "")}
+            />
           </div>
-        </div>
 
-        {/* Insurance Option */}
-        <div className="space-y-2">
-          <Label htmlFor="hasInsurance">Paciente utiliza plano de saúde?</Label>
-          <Select defaultValue={showInsuranceUpload ? "yes" : "no"} onValueChange={handleInsuranceToggle}>
-            <SelectTrigger id="hasInsurance">
-              <SelectValue placeholder="Selecione uma opção" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="yes">Sim</SelectItem>
-              <SelectItem value="no">Não</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Insurance Document Upload (conditional) */}
-        {showInsuranceUpload && (
-          <div className="space-y-2">
-            <Label htmlFor="insuranceDocument">Documento do Plano de Saúde</Label>
-            <div
-              className="border-2 border-dashed rounded-md p-4 text-center cursor-pointer hover:bg-gray-50"
-              onClick={() => insuranceDocInputRef.current?.click()}
-            >
-              <input
-                ref={insuranceDocInputRef}
-                id="insuranceDocument"
-                type="file"
-                accept="image/*,.pdf"
-                className="hidden"
-                onChange={handleInsuranceDocumentChange}
-              />
-              {insuranceDocument ? (
-                <div className="flex items-center justify-center">
-                  <div className="bg-green-100 text-green-800 px-2 py-1 rounded-md text-sm">
-                    Documento carregado ✓
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    className="text-red-500 ml-2"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setInsuranceDocument(null);
-                    }}
-                  >
-                    Remover
-                  </Button>
-                </div>
+          <div className="flex justify-end gap-2">
+            <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Salvando...
+                </>
               ) : (
-                <div>
-                  <p className="text-sm text-gray-500">Clique para selecionar ou arraste o arquivo</p>
-                  <p className="text-xs text-gray-400 mt-1">Formatos aceitos: JPG, PNG, PDF</p>
-                </div>
+                "Cadastrar"
               )}
-            </div>
+            </Button>
           </div>
-        )}
-      </div>
+        </form>
 
-      <div className="flex justify-end gap-2 mt-4">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          Cancelar
-        </Button>
-        <Button type="submit">
-          {patient ? "Atualizar" : "Cadastrar"} Paciente
-        </Button>
-      </div>
-    </form>
   );
 };
 
