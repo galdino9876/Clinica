@@ -1,16 +1,86 @@
 import React, { useState, useEffect } from "react";
-import { Edit, Trash2, Eye, Plus } from "lucide-react";
+import { Edit, Trash2, Eye, Plus, FileText, FilePlus, Activity, Send, CircleArrowUp } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import PatientForm from "./PatientForm"; // Ajuste o caminho conforme necessário
+import PatientAppointmentHistory from "./PatientAppointmentHistory";
+import PatientRecords from "./PatientRecords";
+import ReferralDialog from "./patient/ReferralDialog";
 
 const PatientsTable = () => {
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isAdmin] = useState(false); // Simulação, substitua por lógica real
+  const [canManagePatients] = useState(true); // Simulação, substitua por lógica real
+  const [canViewRecords] = useState(false); // Simulação, substitua por lógica real
+  const [isPsychologist] = useState(false); // Simulação, substitua por lógica real
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedPatient, setSelectedPatient] = useState(null); // Para os Dialogs
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false); // Dialog de Detalhes
+  const [isRecordsOpen, setIsRecordsOpen] = useState(false); // Dialog de Prontuários
+  const [isReferralOpen, setIsReferralOpen] = useState(false); // Dialog de Encaminhamento
+  const [isReceptionist] = useState(false); // Simulação, substitua por lógica real
 
   // Configuração dinâmica das ações
   const actions = [
+    {
+      id: "viewDetails",
+      label: "Ver Detalhes",
+      icon: Eye,
+      color: "text-gray-600 hover:text-gray-800",
+      onClick: (patient) => {
+        setSelectedPatient(patient);
+        setIsDetailsOpen(true);
+      },
+      visible: true,
+    },
+    {
+      id: "viewRecords",
+      label: "Prontuários",
+      icon: FileText,
+      color: "text-purple-600 hover:text-purple-800",
+      onClick: async (patient) => {
+        const details = await fetchPatientDetails(patient.id);
+        if (details) {
+          setSelectedPatient(details);
+          setIsRecordsOpen(true);
+        }
+      },
+      visible: true,
+    },
+    {
+      id: "referral",
+      label: "Encaminhamento",
+      icon: Send,
+      color: "text-yellow-600 hover:text-yellow-800",
+      onClick: (patient) => {
+        setSelectedPatient(patient);
+        setIsReferralOpen(true);
+      },
+      visible: canViewRecords || isAdmin || isPsychologist || canManagePatients,
+    },
+    {
+      id: "attendance",
+      label: "Atestado",
+      icon: CircleArrowUp,
+      color: "text-indigo-600 hover:text-indigo-800",
+      onClick: (patient) => {
+        console.log("Abrindo atestado para:", patient);
+        alert(`Atestado para: ${patient.nome || patient.name}`);
+      },
+    },
+    {
+      id: "reactivate",
+      label: "Reativar",
+      icon: Activity,
+      color: "text-green-600 hover:text-green-800",
+      onClick: (patient) => {
+        console.log("Reativando paciente:", patient);
+        alert(`Reativar paciente: ${patient.nome || patient.name}`);
+      },
+    },
     {
       id: "edit",
       label: "Editar",
@@ -21,40 +91,43 @@ const PatientsTable = () => {
         alert(`Editar paciente: ${patient.nome || patient.name}`);
       },
     },
-   {
-  id: 'delete',
-  label: 'Excluir',
-  icon: Trash2,
-  color: 'text-red-600 hover:text-red-800',
-  onClick: (patient) => {
-    console.log('Excluindo usuário:', patient);
-    if (window.confirm(`Deseja realmente excluir o usuário ${patient.nome || patient.name}?`)) {
-      fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/delete-patient', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ id: patient.id || patient.id }), // Usa o ID do usuário passado
-      })
-        .then(response => {
-          if (!response.ok) {
-            throw new Error('Falha ao excluir usuário');
-          }
-          return response.json();
-        })
-        .then(data => {
-          console.log('Usuário excluído:', data);
-          alert(`Usuário ${patient.nome || patient.name} excluído com sucesso!`);
-          // Opcional: Atualize a lista de usuários removendo o item
-          // setUsers(prevUsers => prevUsers.filter(u => u.id !== user.id));
-        })
-        .catch(error => {
-          console.error('Erro ao excluir usuário:', error);
-          alert(`Erro ao excluir usuário ${patient.nome || patient.name}: ${error.message}`);
-        });
-    }
-  }
-}
+    {
+      id: "delete",
+      label: "Excluir",
+      icon: Trash2,
+      color: "text-red-600 hover:text-red-800",
+      onClick: (patient) => {
+        console.log("Tentando excluir paciente - Clique detectado:", patient);
+        if (patient && patient.id && window.confirm(`Deseja realmente excluir o paciente ${patient.nome || patient.name}?`)) {
+          fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/delete-patient`, {
+            method: "DELETE",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ id: patient.id }),
+          })
+            .then((response) => {
+              if (!response.ok) {
+                throw new Error(`Falha ao excluir paciente: ${response.status} - ${response.statusText}`);
+              }
+              return response.json();
+            })
+            .then((data) => {
+              console.log("Resposta da API:", data);
+              alert(`Paciente ${patient.nome || patient.name} excluído com sucesso!`);
+              // Re-carrega a lista de pacientes para refletir a exclusão
+              fetchPatients();
+            })
+            .catch((error) => {
+              console.error("Erro ao excluir paciente:", error);
+              alert(`Erro ao excluir paciente ${patient.nome || patient.name}: ${error.message}`);
+            });
+        } else {
+          console.log("Exclusão cancelada ou ID inválido:", patient);
+        }
+      },
+      visible: canManagePatients,
+    },
   ];
 
   // Função para buscar os dados da API
@@ -97,6 +170,22 @@ const PatientsTable = () => {
     }
   };
 
+  // Função para buscar detalhes do paciente da API
+  const fetchPatientDetails = async (patientId: number) => {
+    try {
+      const response = await fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/patients/${patientId}`);
+      if (!response.ok) {
+        throw new Error(`Erro ao buscar detalhes do paciente: ${response.status}`);
+      }
+      const data = await response.json();
+      return data; // Espera-se um objeto Patient detalhado
+    } catch (err) {
+      console.error("Erro ao buscar detalhes do paciente:", err);
+      setError(err.message);
+      return null;
+    }
+  };
+
   useEffect(() => {
     fetchPatients();
   }, []);
@@ -121,6 +210,14 @@ const PatientsTable = () => {
     setIsFormOpen(false);
   };
 
+  // Filtrar pacientes com base no termo de busca
+  const filteredPatients = patients.filter((patient) =>
+    (patient.nome || patient.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (patient.cpf || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (patient.telefone || patient.phone || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (patient.email || "").toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -136,18 +233,27 @@ const PatientsTable = () => {
         {/* Header */}
         <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-gray-800">Pacientes ({patients.length})</h2>
-            <button
-              onClick={() => setIsFormOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center gap-2 transition-colors"
-            >
-              <Plus size={16} />
-              Novo Paciente
-            </button>
+            <h2 className="text-xl font-semibold text-gray-800">Pacientes ({filteredPatients.length})</h2>
+            <div className="flex space-x-2">
+              {canManagePatients && (
+                <button
+                  onClick={() => setIsFormOpen(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center gap-2 transition-colors"
+                >
+                  <Plus size={16} />
+                  Novo Paciente
+                </button>
+              )}
+            </div>
           </div>
           {error && (
             <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
               Erro ao carregar dados da API: {error}. Exibindo dados de exemplo.
+            </div>
+          )}
+          {isPsychologist && filteredPatients.length === 0 && (
+            <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-md p-4 mt-4">
+              <p>Você ainda não possui pacientes vinculados. Os pacientes serão exibidos aqui quando forem agendados para consulta com você.</p>
             </div>
           )}
         </div>
@@ -178,15 +284,15 @@ const PatientsTable = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {patients.length === 0 ? (
+              {filteredPatients.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-4 text-center text-gray-500">
                     Nenhum paciente encontrado
                   </td>
                 </tr>
               ) : (
-                patients.map((patient, index) => (
-                  <tr key={patient.id || index} className="hover:bg-gray-50 transition-colors">
+                filteredPatients.map((patient, index) => (
+                  <tr key={patient.id || index} className={`hover:bg-gray-50 transition-colors ${patient.status === "Inativo" ? "bg-gray-50" : ""}`}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
                         {patient.nome || patient.name || "N/A"}
@@ -206,19 +312,22 @@ const PatientsTable = () => {
                     <td className="px-6 py-4 whitespace-nowrap">{renderStatus(patient.status || "Ativo")}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
-                        {actions.map((action) => {
-                          const IconComponent = action.icon;
-                          return (
-                            <button
-                              key={action.id}
-                              onClick={() => action.onClick(patient)}
-                              className={`${action.color} hover:scale-110 transition-all duration-200 p-1 rounded`}
-                              title={action.label}
-                            >
-                              <IconComponent size={16} />
-                            </button>
-                          );
-                        })}
+                        {actions
+                          .filter((action) => action.visible === undefined || action.visible)
+                          .map((action) => {
+                            const IconComponent = action.icon;
+                            return (
+                              <button
+                                key={action.id}
+                                onClick={() => action.onClick(patient)}
+                                className={`${action.color} hover:scale-110 transition-all duration-200 p-1 rounded`}
+                                title={action.label}
+                                disabled={!action.visible}
+                              >
+                                <IconComponent size={16} />
+                              </button>
+                            );
+                          })}
                       </div>
                     </td>
                   </tr>
@@ -230,7 +339,7 @@ const PatientsTable = () => {
 
         {/* Footer */}
         <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
-          <div className="text-sm text-gray-700">Total de pacientes: {patients.length}</div>
+          <div className="text-sm text-gray-700">Total de pacientes: {filteredPatients.length}</div>
         </div>
       </div>
 
@@ -241,6 +350,64 @@ const PatientsTable = () => {
             <DialogDescription>Preencha os dados do novo paciente</DialogDescription>
           </DialogHeader>
           <PatientForm onSave={handlePatientAdded} onCancel={() => setIsFormOpen(false)} />
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Detalhes do Paciente */}
+      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Detalhes do Paciente - {selectedPatient?.name || selectedPatient?.nome || "Carregando..."}
+            </DialogTitle>
+          </DialogHeader>
+          {isReceptionist ? (
+            <PatientAppointmentHistory patient={selectedPatient} />
+          ) : (
+            <Tabs defaultValue="records" className="w-full">
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="records">Prontuário</TabsTrigger>
+                <TabsTrigger value="appointments">Histórico de Consultas</TabsTrigger>
+              </TabsList>
+              <TabsContent value="records" className="pt-4">
+                <PatientRecords
+                  patient={selectedPatient}
+                  onClose={() => setIsDetailsOpen(false)}
+                />
+              </TabsContent>
+              <TabsContent value="appointments" className="pt-4">
+                <PatientAppointmentHistory patient={selectedPatient} />
+              </TabsContent>
+            </Tabs>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Prontuários */}
+      <Dialog open={isRecordsOpen} onOpenChange={setIsRecordsOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Prontuários - {selectedPatient?.name || selectedPatient?.nome || "Carregando..."}
+            </DialogTitle>
+            <DialogDescription>Visualize os prontuários do paciente</DialogDescription>
+          </DialogHeader>
+          {selectedPatient && (
+            <PatientRecords
+              patient={selectedPatient}
+              onClose={() => setIsRecordsOpen(false)}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog de Encaminhamento */}
+      <Dialog open={isReferralOpen} onOpenChange={setIsReferralOpen}>
+        <DialogContent>
+          <ReferralDialog
+            patient={selectedPatient}
+            onClose={() => setIsReferralOpen(false)}
+          />
         </DialogContent>
       </Dialog>
     </div>

@@ -24,7 +24,7 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
   const [isGeneratePdfOpen, setIsGeneratePdfOpen] = useState(false);
   const [customNotes, setCustomNotes] = useState("");
   const [includeAllRecords, setIncludeAllRecords] = useState(true);
-  
+
   const isAdmin = user?.role === "admin";
   const isPsychologist = user?.role === "psychologist";
   // Admin ou Psicólogo podem gerenciar prontuários
@@ -39,7 +39,7 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
 
     addPatientRecord({
       patientId: patient.id,
-      appointmentId: "", // Sem agendamento específico
+      appointmentId: 0, // Sem agendamento específico
       date: new Date().toISOString().split("T")[0],
       notes,
       createdBy: user?.id || "",
@@ -47,7 +47,7 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
 
     setNotes("");
   };
-  
+
   const handleDeleteRecord = (recordId: string) => {
     if (window.confirm("Tem certeza que deseja excluir este prontuário?")) {
       deletePatientRecord(recordId);
@@ -78,7 +78,7 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
     pdfContent += `Data: ${format(new Date(), "dd/MM/yyyy", { locale: ptBR })}\n\n`;
     pdfContent += `PACIENTE: ${patient.name}\n`;
     pdfContent += `CPF: ${patient.cpf}\n\n`;
-    
+
     if (includeAllRecords) {
       pdfContent += `HISTÓRICO DE ATENDIMENTOS:\n\n`;
       records.forEach(record => {
@@ -87,12 +87,12 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
         pdfContent += `Anotações: ${record.notes}\n\n`;
       });
     }
-    
+
     if (customNotes) {
       pdfContent += `OBSERVAÇÕES ADICIONAIS:\n\n`;
       pdfContent += customNotes;
     }
-    
+
     console.log("Conteúdo do PDF:", pdfContent);
     alert("PDF gerado com sucesso!");
     setIsGeneratePdfOpen(false);
@@ -116,7 +116,7 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
   return (
     <div className="space-y-4">
       {patientStatus}
-      
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div className="space-y-1">
           <p className="text-sm font-medium text-gray-500">Nome</p>
@@ -139,8 +139,8 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">Histórico de Prontuários</h3>
         {canManageRecords && records.length > 0 && (
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             size="sm"
             onClick={handleGeneratePdf}
           >
@@ -149,7 +149,7 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
           </Button>
         )}
       </div>
-      
+
       {records.length === 0 ? (
         <p className="text-gray-500">Nenhum registro encontrado.</p>
       ) : (
@@ -163,9 +163,9 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
                     <p className="text-xs text-gray-500">Psicólogo: {getRecordCreator(record.createdBy)}</p>
                   </div>
                   {canManageRecords && (
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => handleDeleteRecord(record.id)}
                       className="text-red-500 hover:bg-red-50 hover:text-red-600"
                     >
@@ -204,7 +204,7 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
           <DialogHeader>
             <DialogTitle>Gerar Relatório do Paciente</DialogTitle>
           </DialogHeader>
-          
+
           <div className="space-y-4">
             <div className="space-y-2">
               <div className="flex items-center">

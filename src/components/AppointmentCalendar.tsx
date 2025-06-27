@@ -11,8 +11,19 @@ const AppointmentCalendar = () => {
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [loggedUser, setLoggedUser] = useState(null); // Simula o usuário logado
 
-
+  // Simulação de usuário logado (substitua por autenticação real)
+  useEffect(() => {
+    // Exemplo: Simula um psicólogo logado (ID: 1, role: psychologist)
+    const simulateLoggedUser = {
+      id: 1, // ID do psicólogo logado
+      role: 'psychologist', // Ou 'admin'
+      nome: 'Dr. João Silva',
+    };
+    setLoggedUser(simulateLoggedUser);
+    // Na prática, use um contexto ou API de autenticação aqui
+  }, []);
 
   // Buscar dados das APIs
   const fetchData = async () => {
@@ -23,7 +34,16 @@ const AppointmentCalendar = () => {
       const appointmentsResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/appointmens');
       if (appointmentsResponse.ok) {
         const appointmentsData = await appointmentsResponse.json();
-        setAppointments(Array.isArray(appointmentsData) ? appointmentsData : appointmentsData.data || []);
+        const rawAppointments = Array.isArray(appointmentsData) ? appointmentsData : appointmentsData.data || [];
+
+        // Filtrar agendamentos com base no usuário logado
+        const filteredAppointments = loggedUser
+          ? loggedUser.role === 'psychologist'
+            ? rawAppointments.filter(apt => apt.psychologist_id === loggedUser.id)
+            : rawAppointments // Admin vê todos
+          : rawAppointments;
+
+        setAppointments(filteredAppointments);
       } else {
         throw new Error(`Erro ao buscar agendamentos: ${appointmentsResponse.status}`);
       }
@@ -76,7 +96,7 @@ const AppointmentCalendar = () => {
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [loggedUser]); // Reexecuta fetchData se o usuário logado mudar
 
   // Funções auxiliares para o calendário
   const getDaysInMonth = (date) => {
@@ -103,44 +123,42 @@ const AppointmentCalendar = () => {
     const dateString = formatDate(date);
     const dayOfWeek = date.getDay();
 
-    // Buscar agendamentos do dia
-    const dayAppointments = appointments.filter(apt => apt.date === dateString);
+    // Filtrar agendamentos do dia com base no usuário logado
+    const dayAppointments = loggedUser
+      ? loggedUser.role === 'psychologist'
+        ? appointments.filter(apt => apt.date === dateString && apt.psychologist_id === loggedUser.id)
+        : appointments.filter(apt => apt.date === dateString) // Admin vê todos
+      : appointments.filter(apt => apt.date === dateString);
 
-    // Buscar horários de trabalho do dia
     const dayWorkingHours = workingHours.filter(wh => wh.day_of_week === dayOfWeek);
 
     if (dayAppointments.length === 0 && dayWorkingHours.length === 0) {
       return { status: 'none', color: '' };
     }
 
-    // Verificar se há agendamentos confirmados
     const confirmedAppointments = dayAppointments.filter(apt =>
       apt.status === 'Confirmada' || apt.status === 'confirmada' || apt.status === 'confirmed'
     );
-
-    // Verificar se há agendamentos pendentes
     const pendingAppointments = dayAppointments.filter(apt =>
       apt.status === 'Pendente' || apt.status === 'pendente' || apt.status === 'pending'
     );
 
-    // Calcular horários disponíveis vs ocupados
     let totalSlots = 0;
     dayWorkingHours.forEach(wh => {
       const startHour = parseInt(wh.start_time.split(':')[0]);
       const endHour = parseInt(wh.end_time.split(':')[0]);
       totalSlots += endHour - startHour;
     });
-
     const occupiedSlots = dayAppointments.length;
 
     if (occupiedSlots >= totalSlots && totalSlots > 0) {
-      return { status: 'full', color: 'bg-red-500 text-white' }; // Totalmente agendado
+      return { status: 'full', color: 'bg-red-500 text-white' };
     } else if (confirmedAppointments.length > 0) {
-      return { status: 'confirmed', color: 'bg-green-500 text-white' }; // Confirmadas
+      return { status: 'confirmed', color: 'bg-green-500 text-white' };
     } else if (pendingAppointments.length > 0) {
-      return { status: 'pending', color: 'bg-orange-500 text-white' }; // Pendentes
+      return { status: 'pending', color: 'bg-orange-500 text-white' };
     } else if (dayWorkingHours.length > 0) {
-      return { status: 'available', color: 'bg-blue-500 text-white' }; // Disponível
+      return { status: 'available', color: 'bg-blue-500 text-white' };
     }
 
     return { status: 'none', color: '' };
@@ -152,10 +170,15 @@ const AppointmentCalendar = () => {
     const dateString = formatDate(date);
     const dayOfWeek = date.getDay();
 
-    const dayAppointments = appointments.filter(apt => apt.date === dateString);
+    // Filtrar agendamentos do dia com base no usuário logado
+    const dayAppointments = loggedUser
+      ? loggedUser.role === 'psychologist'
+        ? appointments.filter(apt => apt.date === dateString && apt.psychologist_id === loggedUser.id)
+        : appointments.filter(apt => apt.date === dateString) // Admin vê todos
+      : appointments.filter(apt => apt.date === dateString);
+
     const dayWorkingHours = workingHours.filter(wh => wh.day_of_week === dayOfWeek);
 
-    // Gerar horários disponíveis
     const availableSlots = [];
     dayWorkingHours.forEach(wh => {
       const startHour = parseInt(wh.start_time.split(':')[0]);
@@ -189,12 +212,10 @@ const AppointmentCalendar = () => {
     const firstDay = getFirstDayOfMonth(currentDate);
     const days = [];
 
-    // Dias vazios no início
     for (let i = 0; i < firstDay; i++) {
       days.push(<div key={`empty-${i}`} className="p-2"></div>);
     }
 
-    // Dias do mês
     for (let day = 1; day <= daysInMonth; day++) {
       const dayStatus = getDayStatus(day);
       days.push(
