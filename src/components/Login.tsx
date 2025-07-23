@@ -1,28 +1,74 @@
+"use client";
 
-import { useState } from "react";
+import React from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAuth } from "@/context/AuthContext";
+import { InputDynamic } from "./inputDin"; // Ajuste o caminho conforme necessário
+
+// Schema de validação
+const loginSchema = z.object({
+  email: z.string().min(1, "Nome de usuário ou e-mail é obrigatório"),
+  password: z.string().min(1, "Senha é obrigatória"),
+});
+
+type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function Login() {
-  const [usernameOrEmail, setUsernameOrEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const { login } = useAuth();
   const navigate = useNavigate();
+  const [isLoading, setIsLoading] = React.useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const formMethods = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
+
+  const {
+    handleSubmit,
+    control,
+    formState: { errors },
+    setValue,
+  } = formMethods;
+
+  const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
-    
+
     try {
-      const success = await login(usernameOrEmail, password);
-      if (success) {
-        navigate("/");
+      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(data),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text(); // Captura o texto da resposta para depuração
+        throw new Error(`Falha no login: ${response.status} - ${errorText || "Sem detalhes"}`);
       }
+
+      const responseText = await response.text();
+      let result;
+      try {
+        result = responseText ? JSON.parse(responseText) : {};
+      } catch (parseError) {
+        throw new Error("Resposta da API não é um JSON válido");
+      }
+
+      if (result.success) {
+        navigate("/");
+      } else {
+        throw new Error("Credenciais inválidas");
+      }
+    } catch (error) {
+      console.error("Erro no login:", error);
+      alert("Erro ao fazer login. Verifique suas credenciais ou contate o administrador. Detalhes: " + error.message);
     } finally {
       setIsLoading(false);
     }
@@ -38,26 +84,23 @@ export default function Login() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="usernameOrEmail">Nome de usuário ou E-mail</Label>
-              <Input
-                id="usernameOrEmail"
-                type="text"
-                placeholder="Digite seu nome de usuário ou e-mail"
-                value={usernameOrEmail}
-                onChange={(e) => setUsernameOrEmail(e.target.value)}
+              <InputDynamic
+                name="email"
+                label="Nome de usuário ou E-mail"
+                control={control}
+                placeholder="Digite seu e-mail"
                 required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
-              <Input
-                id="password"
-                type="password"
+              <InputDynamic
+                name="password"
+                label="Senha"
+                control={control}
                 placeholder="Digite sua senha"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                type="password"
                 required
               />
             </div>
