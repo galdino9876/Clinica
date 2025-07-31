@@ -11,7 +11,7 @@ import { InputDynamic } from "./inputDin"; // Ajuste o caminho conforme necessá
 
 // Schema de validação
 const loginSchema = z.object({
-  email: z.string().min(1, "Nome de usuário ou e-mail é obrigatório"),
+  email: z.string().min(1, "Nome de usuário ou e-mail é obrigatório").email("E-mail inválido"),
   password: z.string().min(1, "Senha é obrigatória"),
 });
 
@@ -33,7 +33,6 @@ export default function Login() {
     handleSubmit,
     control,
     formState: { errors },
-    setValue,
   } = formMethods;
 
   const onSubmit = async (data: LoginFormData) => {
@@ -48,27 +47,17 @@ export default function Login() {
         body: JSON.stringify(data),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text(); // Captura o texto da resposta para depuração
-        throw new Error(`Falha no login: ${response.status} - ${errorText || "Sem detalhes"}`);
-      }
-
-      const responseText = await response.text();
-      let result;
-      try {
-        result = responseText ? JSON.parse(responseText) : {};
-      } catch (parseError) {
-        throw new Error("Resposta da API não é um JSON válido");
-      }
-
-      if (result.success) {
-        navigate("/");
+      if (response.status === 200) {
+        // Login bem-sucedido, redireciona para a página principal
+        navigate("/index"); // Ajuste o caminho conforme necessário
       } else {
-        throw new Error("Credenciais inválidas");
+        // Login falhou
+        const errorData = await response.json();
+        alert(`Erro ao fazer login: ${errorData.message || "Credenciais inválidas"}`);
       }
     } catch (error) {
       console.error("Erro no login:", error);
-      alert("Erro ao fazer login. Verifique suas credenciais ou contate o administrador. Detalhes: " + error.message);
+      alert("Erro ao fazer login. Verifique sua conexão ou contate o administrador.");
     } finally {
       setIsLoading(false);
     }
@@ -88,11 +77,12 @@ export default function Login() {
             <div className="space-y-2">
               <InputDynamic
                 name="email"
-                label="Nome de usuário ou E-mail"
+                label="E-mail"
                 control={control}
                 placeholder="Digite seu e-mail"
                 required
               />
+              {errors.email && <p className="text-xs text-red-600">{errors.email.message}</p>}
             </div>
             <div className="space-y-2">
               <InputDynamic
@@ -103,6 +93,7 @@ export default function Login() {
                 type="password"
                 required
               />
+              {errors.password && <p className="text-xs text-red-600">{errors.password.message}</p>}
             </div>
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? "Entrando..." : "Entrar"}
