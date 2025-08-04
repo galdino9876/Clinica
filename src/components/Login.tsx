@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { useAuth } from "@/context/AuthContext";
 
 export default function Login() {
-  const [usernameOrEmail, setUsernameOrEmail] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
@@ -17,9 +17,9 @@ export default function Login() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
+
     try {
-      const success = await login(usernameOrEmail, password);
+      const success = await login(email, password);
       if (success) {
         navigate("/");
       }
@@ -42,11 +42,11 @@ export default function Login() {
             <div className="space-y-2">
               <Label htmlFor="usernameOrEmail">Nome de usuário ou E-mail</Label>
               <Input
-                id="usernameOrEmail"
+                id="email"
                 type="text"
                 placeholder="Digite seu nome de usuário ou e-mail"
-                value={usernameOrEmail}
-                onChange={(e) => setUsernameOrEmail(e.target.value)}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
               />
             </div>

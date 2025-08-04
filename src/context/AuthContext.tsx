@@ -1,4 +1,3 @@
-
 import React, { createContext, useState, useContext, ReactNode } from "react";
 import { User, UserRole, WorkingHours } from "../types/user";
 import { useToast } from "@/components/ui/use-toast";
@@ -6,52 +5,18 @@ import { useToast } from "@/components/ui/use-toast";
 interface AuthContextType {
   user: User | null;
   users: User[];
-  login: (usernameOrEmail: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
   isAuthenticated: boolean;
-  addUser: (userData: Omit<User, "id">) => User;
-  updateUser: (user: User) => void;
-  deleteUser: (id: string) => void;
-  getUserById: (id: string) => User | undefined;
+  addUser: (userData: Omit<User, "id">) => Promise<User>;
+  deleteUser: (id: string) => Promise<void>;
+  getUserByEmail: (email: string) => Promise<User | undefined>;
   getPsychologists: () => User[];
-  changePassword: (userId: string, newPassword: string) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-// Mock users for demonstration
-const initialUsers: User[] = [
-  { id: "1", name: "Admin User", email: "admin@example.com", role: "admin", username: "admin", password: "password" },
-  { id: "2", name: "Receptionist User", email: "receptionist@example.com", role: "receptionist", username: "recepcao", password: "password" },
-  { 
-    id: "3", 
-    name: "Dr. John Smith", 
-    email: "john@example.com", 
-    role: "psychologist",
-    phone: "(11) 99999-8888",
-    username: "drjohn",
-    password: "password",
-    workingHours: [
-      { dayOfWeek: 1, startTime: "09:00", endTime: "18:00" },
-      { dayOfWeek: 3, startTime: "09:00", endTime: "18:00" }
-    ]
-  },
-  { 
-    id: "4", 
-    name: "Dr. Sarah Johnson", 
-    email: "sarah@example.com", 
-    role: "psychologist",
-    phone: "(11) 99888-7777",
-    username: "drsarah",
-    password: "password",
-    workingHours: [
-      { dayOfWeek: 2, startTime: "13:00", endTime: "19:00" },
-      { dayOfWeek: 4, startTime: "13:00", endTime: "19:00" }
-    ]
-  },
-];
-
-// Function to generate random ID
+// Função para gerar ID aleatório (caso necessário)
 const generateId = (): string => Math.random().toString(36).substring(2, 11);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -59,29 +24,53 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const savedUser = localStorage.getItem("user");
     return savedUser ? JSON.parse(savedUser) : null;
   });
-  const [users, setUsers] = useState<User[]>(initialUsers);
+  const [users, setUsers] = useState<User[]>(() => {
+    const savedUsers = localStorage.getItem("users");
+    return savedUsers ? JSON.parse(savedUsers) : [];
+  });
   const { toast } = useToast();
 
-  const login = async (usernameOrEmail: string, password: string): Promise<boolean> => {
-    // In a real app, this would be an API call
-    const foundUser = users.find(u => 
-      (u.email === usernameOrEmail || u.username === usernameOrEmail)
-    );
-    
-    if (foundUser && foundUser.password === password) {
-      // Remove senha antes de salvar no estado
-      const { password: _, ...userWithoutPassword } = foundUser;
-      setUser(userWithoutPassword);
-      localStorage.setItem("user", JSON.stringify(userWithoutPassword));
-      toast({
-        title: "Login realizado com sucesso",
-        description: `Bem-vindo(a), ${foundUser.name}!`,
+  const login = async (email: string, password: string): Promise<boolean> => {
+    try {
+      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
-      return true;
-    } else {
+
+      if (response.status === 200) {
+        // Busca o usuário após login bem-sucedido usando o email
+        const fetchedUser = await getUserByEmail(email);
+        if (fetchedUser) {
+          setUser(fetchedUser);
+          localStorage.setItem("user", JSON.stringify(fetchedUser));
+          toast({
+            title: "Login realizado com sucesso",
+            description: `Bem-vindo(a), ${fetchedUser.name || email.split("@")[0]}!`,
+          });
+          return true;
+        } else {
+          toast({
+            title: "Erro",
+            description: "Usuário não encontrado após login.",
+            variant: "destructive",
+          });
+          return false;
+        }
+      } else {
+        const errorData = await response.json();
+        toast({
+          title: "Falha no login",
+          description: errorData.message || "Usuário ou senha inválidos",
+          variant: "destructive",
+        });
+        return false;
+      }
+    } catch (error) {
+      console.error("Erro no login:", error);
       toast({
-        title: "Falha no login",
-        description: "Usuário ou senha inválidos",
+        title: "Erro",
+        description: "Falha na conexão com o servidor. Tente novamente.",
         variant: "destructive",
       });
       return false;
@@ -97,84 +86,76 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     });
   };
 
-  const addUser = (userData: Omit<User, "id">): User => {
-    const newUser: User = {
-      id: generateId(),
-      ...userData
-    };
-    setUsers(prev => [...prev, newUser]);
-    toast({
-      title: "Usuário adicionado",
-      description: `O usuário ${userData.name} foi adicionado.`
-    });
-    return newUser;
-  };
-
-  const updateUser = (user: User) => {
-    setUsers(prev => 
-      prev.map(u => {
-        if (u.id === user.id) {
-          // Se a senha não estiver presente no objeto user, mantenha a senha atual
-          if (!user.password && u.password) {
-            return { ...user, password: u.password };
-          }
-          return user;
-        }
-        return u;
-      })
-    );
-    toast({
-      title: "Usuário atualizado",
-      description: `O usuário ${user.name} foi atualizado.`
-    });
-  };
-
-  const deleteUser = (id: string) => {
-    const userToDelete = users.find(u => u.id === id);
-    
-    setUsers(prev => prev.filter(u => u.id !== id));
-    if (userToDelete) {
-      toast({
-        title: "Usuário excluído",
-        description: `O usuário ${userToDelete.name} foi removido.`
+  const addUser = async (userData: Omit<User, "id">): Promise<User> => {
+    try {
+      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/create-user", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(userData),
       });
+      if (!response.ok) throw new Error("Falha ao criar usuário");
+      const newUser = await response.json();
+      const updatedUsers = [...users, newUser];
+      setUsers(updatedUsers);
+      localStorage.setItem("users", JSON.stringify(updatedUsers));
+      toast({
+        title: "Usuário adicionado",
+        description: `O usuário ${userData.name} foi adicionado.`,
+      });
+      return newUser;
+    } catch (error) {
+      console.error("Erro ao adicionar usuário:", error);
+      toast({
+        title: "Erro",
+        description: "Falha ao criar usuário. Tente novamente.",
+        variant: "destructive",
+      });
+      throw error;
     }
   };
 
-  const getUserById = (id: string) => {
-    return users.find(user => user.id === id);
+  const deleteUser = async (id: string): Promise<void> => {
+    try {
+      const response = await fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/delete-user`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!response.ok) throw new Error("Falha ao excluir usuário");
+      const updatedUsers = users.filter(u => u.id !== id);
+      setUsers(updatedUsers);
+      localStorage.setItem("users", JSON.stringify(updatedUsers));
+      toast({
+        title: "Usuário excluído",
+        description: `O usuário foi removido.`,
+      });
+    } catch (error) {
+      console.error("Erro ao excluir usuário:", error);
+      toast({
+        title: "Erro",
+        description: "Falha ao excluir usuário. Tente novamente.",
+        variant: "destructive",
+      });
+      throw error;
+    }
+  };
+
+  const getUserByEmail = async (email: string): Promise<User | undefined> => {
+    try {
+      const response = await fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/usersEmail/${email}`);
+      if (!response.ok) throw new Error("Usuário não encontrado");
+      const data = await response.json();
+      // Garante que retorna o objeto correto, mesmo que venha como array
+      const user = Array.isArray(data) ? data[0] : data;
+      return user;
+    } catch (error) {
+      console.error("Erro ao buscar usuário por email:", error);
+      return undefined;
+    }
   };
 
   const getPsychologists = () => {
     return users.filter(user => user.role === "psychologist");
-  };
-
-  const changePassword = (userId: string, newPassword: string): boolean => {
-    const userIndex = users.findIndex(u => u.id === userId);
-    
-    if (userIndex === -1) {
-      toast({
-        title: "Erro",
-        description: "Usuário não encontrado",
-        variant: "destructive",
-      });
-      return false;
-    }
-    
-    const updatedUsers = [...users];
-    updatedUsers[userIndex] = {
-      ...updatedUsers[userIndex],
-      password: newPassword
-    };
-    
-    setUsers(updatedUsers);
-    
-    toast({
-      title: "Senha alterada",
-      description: "A senha foi alterada com sucesso",
-    });
-    
-    return true;
   };
 
   return (
@@ -186,11 +167,9 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         logout,
         isAuthenticated: !!user,
         addUser,
-        updateUser,
         deleteUser,
-        getUserById,
+        getUserByEmail,
         getPsychologists,
-        changePassword,
       }}
     >
       {children}

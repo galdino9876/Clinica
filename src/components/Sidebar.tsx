@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import { Calendar, Users, BarChart3, LogOut, User, Key } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -8,6 +8,11 @@ import ChangePasswordModal from "./ChangePasswordModal";
 const Sidebar = () => {
   const { user, logout } = useAuth();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
+
+  // Debug para verificar o estado do user
+  useEffect(() => {
+    console.log("User no Sidebar:", user);
+  }, [user]);
 
   const getNavItems = () => {
     const baseItems = [
@@ -41,7 +46,6 @@ const Sidebar = () => {
     return baseItems;
   };
 
-  
   return (
     <div className="hidden md:flex min-h-screen w-64 flex-col bg-white border-r border-gray-200">
       <div className="flex flex-col justify-between h-full">
@@ -52,8 +56,14 @@ const Sidebar = () => {
           <div className="p-4">
             <div className="mb-2">
               <p className="text-sm text-gray-500">Logado como</p>
-              <p className="font-medium">{user?.name}</p>
-              <p className="text-xs text-gray-500 capitalize">{user?.role}</p>
+              {user ? (
+                <>
+                  <p className="font-medium">{user.name}</p>
+                  <p className="text-xs text-gray-500 capitalize">{user.role}</p>
+                </>
+              ) : (
+                <p className="font-medium">Carregando...</p>
+              )}
             </div>
           </div>
           <nav className="mt-2 px-2">
@@ -97,9 +107,9 @@ const Sidebar = () => {
         </div>
       </div>
 
-      <ChangePasswordModal 
-        isOpen={isPasswordModalOpen} 
-        onClose={() => setIsPasswordModalOpen(false)} 
+      <ChangePasswordModal
+        isOpen={isPasswordModalOpen}
+        onClose={() => setIsPasswordModalOpen(false)}
       />
     </div>
   );
