@@ -1,11 +1,21 @@
+"use client";
 
-import { useState } from "react";
+import React from "react";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAuth } from "@/context/AuthContext";
+import { InputDynamic } from "./inputDin"; // Ajuste o caminho conforme necessário
+
+// Schema de validação
+const loginSchema = z.object({
+  email: z.string().min(1, "Nome de usuário ou e-mail é obrigatório").email("E-mail inválido"),
+  password: z.string().min(1, "Senha é obrigatória"),
+});
+
+type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -13,9 +23,23 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [isLoading, setIsLoading] = React.useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const formMethods = useForm<LoginFormData>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: {
+      email: "",
+      password: "",
+    },
+  });
+
+  const {
+    handleSubmit,
+    control,
+    formState: { errors },
+  } = formMethods;
+
+  const onSubmit = async (data: LoginFormData) => {
     setIsLoading(true);
 
     try {
@@ -23,6 +47,9 @@ export default function Login() {
       if (success) {
         navigate("/");
       }
+    } catch (error) {
+      console.error("Erro no login:", error);
+      alert("Erro ao fazer login. Verifique sua conexão ou contate o administrador.");
     } finally {
       setIsLoading(false);
     }
@@ -38,7 +65,7 @@ export default function Login() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="usernameOrEmail">Nome de usuário ou E-mail</Label>
               <Input
@@ -49,17 +76,18 @@ export default function Login() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
               />
+              {errors.email && <p className="text-xs text-red-600">{errors.email.message}</p>}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Senha</Label>
-              <Input
-                id="password"
-                type="password"
+              <InputDynamic
+                name="password"
+                label="Senha"
+                control={control}
                 placeholder="Digite sua senha"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+                type="password"
                 required
               />
+              {errors.password && <p className="text-xs text-red-600">{errors.password.message}</p>}
             </div>
             <Button type="submit" className="w-full" disabled={isLoading}>
               {isLoading ? "Entrando..." : "Entrar"}
