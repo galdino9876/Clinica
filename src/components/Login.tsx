@@ -18,6 +18,10 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function Login() {
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  const { login } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = React.useState(false);
 
@@ -39,21 +43,9 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/login", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
-      });
-
-      if (response.status === 200) {
-        // Login bem-sucedido, redireciona para a página principal
-        navigate("/index"); // Ajuste o caminho conforme necessário
-      } else {
-        // Login falhou
-        const errorData = await response.json();
-        alert(`Erro ao fazer login: ${errorData.message || "Credenciais inválidas"}`);
+      const success = await login(email, password);
+      if (success) {
+        navigate("/");
       }
     } catch (error) {
       console.error("Erro no login:", error);
@@ -75,11 +67,13 @@ export default function Login() {
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <InputDynamic
-                name="email"
-                label="E-mail"
-                control={control}
-                placeholder="Digite seu e-mail"
+              <Label htmlFor="usernameOrEmail">Nome de usuário ou E-mail</Label>
+              <Input
+                id="email"
+                type="text"
+                placeholder="Digite seu nome de usuário ou e-mail"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
               />
               {errors.email && <p className="text-xs text-red-600">{errors.email.message}</p>}

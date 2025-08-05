@@ -48,11 +48,11 @@ export interface Appointment {
 
 export interface PatientRecord {
   id: string;
-  patientId: number;
-  appointmentId: number;
+  patient_id: number;
+  appointment_id: number;
   date: string; // ISO date string
   notes: string;
-  createdBy: string; // psychologist ID
+  created_by: number; // psychologist ID
 }
 
 export interface PendingPatientsData {
