@@ -122,7 +122,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         body: JSON.stringify({ id }),
       });
       if (!response.ok) throw new Error("Falha ao excluir usuário");
-      const updatedUsers = users.filter(u => u.id !== id);
+      const updatedUsers = users.filter(u => u.id);
       setUsers(updatedUsers);
       localStorage.setItem("users", JSON.stringify(updatedUsers));
       toast({

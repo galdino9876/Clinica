@@ -1,6 +1,7 @@
+
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -8,6 +9,8 @@ import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { InputDynamic } from "./inputDin"; // Ajuste o caminho conforme necessário
+import { useAuth } from "@/context/AuthContext";
+import { Input } from "./ui/input";
 
 // Schema de validação
 const loginSchema = z.object({
@@ -18,12 +21,9 @@ const loginSchema = z.object({
 type LoginFormData = z.infer<typeof loginSchema>;
 
 export default function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [isLoading, setIsLoading] = React.useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   const formMethods = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -35,6 +35,7 @@ export default function Login() {
 
   const {
     handleSubmit,
+    register,
     control,
     formState: { errors },
   } = formMethods;
@@ -43,7 +44,7 @@ export default function Login() {
     setIsLoading(true);
 
     try {
-      const success = await login(email, password);
+      const success = await login(data.email, data.password);
       if (success) {
         navigate("/");
       }
@@ -67,14 +68,14 @@ export default function Login() {
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="usernameOrEmail">Nome de usuário ou E-mail</Label>
+              <label htmlFor="email" className="text-sm font-medium">
+                Nome de usuário ou E-mail
+              </label>
               <Input
                 id="email"
                 type="text"
                 placeholder="Digite seu nome de usuário ou e-mail"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
+                {...register("email")}
               />
               {errors.email && <p className="text-xs text-red-600">{errors.email.message}</p>}
             </div>

@@ -7,6 +7,8 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card, CardContent } from "@/components/ui/card";
 import { Trash } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
+
 
 interface PatientRecordsProps {
   patient: Patient;
@@ -16,13 +18,12 @@ interface PatientRecordsProps {
 const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
   const [notes, setNotes] = useState("");
   const [records, setRecords] = useState<PatientRecord[]>([]);
-  const [showAll, setShowAll] = useState(true); // Alterado para true: exibe todos por padrão
+  const [showAll, setShowAll] = useState(true); // Exibe todos por padrão
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [psychologists, setPsychologists] = useState<{ [key: number]: string }>({}); // Mapeamento ID -> Nome
 
-  // Substitua com autenticação real (número inteiro)
-  const userId = 1;
+  const { user } = useAuth();
 
   // Função para buscar nome do psicólogo
   const fetchPsychologistName = async (psychologistId: number) => {
@@ -88,8 +89,8 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
       setError("ID do paciente inválido.");
       return;
     }
-    if (!Number.isInteger(userId)) {
-      setError("ID do usuário inválido.");
+    if (!user || !Number.isInteger(user.id)) {
+      setError("Usuário não autenticado ou ID inválido. Faça login novamente.");
       return;
     }
 
@@ -98,7 +99,7 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
       appointment_id: null,
       date: new Date().toISOString().split("T")[0],
       notes: notes.trim(),
-      created_by: userId,
+      created_by: user.id,
     };
 
     try {
@@ -123,12 +124,12 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
         appointment_id: savedRecord.appointment_id || savedRecord.appointmentId || null,
         date: savedRecord.date || newRecord.date,
         notes: savedRecord.notes || newRecord.notes,
-        created_by: Number(savedRecord.created_by || savedRecord.createdBy || userId),
+        created_by: Number(savedRecord.created_by || savedRecord.createdBy || user.id),
       };
       setRecords([normalizedRecord, ...records].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setNotes("");
-      const psychologistName = await fetchPsychologistName(userId);
-      setPsychologists((prev) => ({ ...prev, [userId]: psychologistName }));
+      const psychologistName = await fetchPsychologistName(user.id);
+      setPsychologists((prev) => ({ ...prev, [user.id]: psychologistName }));
     } catch (err: any) {
       setError(err.message || "Erro ao salvar prontuário. Tente novamente.");
     } finally {
@@ -232,7 +233,7 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
                       {formatDate(record.date)}
                     </p>
                     <p className="text-xs text-gray-500">
-                      Criado por: {psychologists[record.created_by] || "Carregando..."}
+                      Criado por: {user.name} 
                     </p>
                   </div>
                   <Button

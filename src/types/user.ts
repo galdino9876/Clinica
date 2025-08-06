@@ -8,7 +8,7 @@ export interface WorkingHours {
 }
 
 export interface User {
-  id: string;
+  id: number;
   isAuthenticated?: boolean; // Indica se o usuário está autenticado
   name: string;
   email: string;
