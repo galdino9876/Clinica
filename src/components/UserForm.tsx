@@ -56,45 +56,64 @@ const UserForm = ({ onSave, onCancel, open = false }: UserFormProps) => {
     reset,
   } = formMethods;
 
-  const onSubmit = async (data: UserFormData) => {
-    setIsLoading(true);
+const onSubmit = async (data: UserFormData) => {
+  setIsLoading(true);
 
-    try {
-      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/create-user", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(data),
+  try {
+    const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/create-user", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
+
+    if (response.ok) {
+      const newUser = await response.json();
+      toast({
+        title: "Sucesso",
+        description: "Usuário cadastrado com sucesso.",
       });
 
-      if (response.ok) {
-        const newUser = await response.json();
+      if (onSave) {
+        onSave(newUser);
+      }
+
+      // Resetar o formulário
+      reset({
+        name: "",
+        email: "",
+        role: "psychologist",
+        phone: "",
+        username: "",
+        password: "",
+      });
+
+      // Forçar recarregamento da página
+      window.location.reload();
+    } else {
+      const errorData = await response.json().catch(() => ({}));
+      if (errorData.message && errorData.message.includes("User já existe")) {
         toast({
-          title: "Sucesso",
-          description: "Usuário cadastrado com sucesso.",
+          title: "Erro",
+          description: "Este usuário já existe. Por favor, utilize outro e-mail ou usuário.",
+          variant: "destructive",
         });
-
-        if (onSave) {
-          onSave(newUser);
-        }
-
-        reset();
       } else {
-        const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || "Erro ao criar usuário");
       }
-    } catch (error) {
-      console.error("Erro ao salvar usuário:", error);
-      toast({
-        title: "Erro",
-        description: error instanceof Error ? error.message : "Falha ao cadastrar usuário. Tente novamente.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
     }
-  };
+  } catch (error) {
+    console.error("Erro ao salvar usuário:", error);
+    toast({
+      title: "Erro",
+      description: error instanceof Error ? error.message : "Falha ao cadastrar usuário. Tente novamente.",
+      variant: "destructive",
+    });
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
 

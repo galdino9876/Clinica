@@ -45,8 +45,7 @@ const UsersTable = () => {
         .then(data => {
           console.log('Usuário excluído:', data);
           alert(`Usuário ${user.nome || user.name} excluído com sucesso!`);
-          // Opcional: Atualize a lista de usuários removendo o item
-          // setUsers(prevUsers => prevUsers.filter(u => u.id !== user.id));
+         window.location.reload();
         })
         .catch(error => {
           console.error('Erro ao excluir usuário:', error);
