@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Edit, Trash2, Eye, Plus, FileText, Activity, Send, CircleArrowUp } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -6,8 +5,9 @@ import PatientForm from "./PatientForm";
 import PatientAppointmentHistory from "./PatientAppointmentHistory";
 import PatientRecords from "./PatientRecords";
 import ReferralDialog from "./patient/ReferralDialog";
-
+import { useAuth } from "@/context/AuthContext";
 const PatientsTable = () => {
+  const { user } = useAuth(); // Adicionado para obter o usuário autenticado
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -21,7 +21,7 @@ const PatientsTable = () => {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isRecordsOpen, setIsRecordsOpen] = useState(false);
   const [isReferralOpen, setIsReferralOpen] = useState(false);
-
+const isReceptionist = user?.role === "receptionist";
   const fetchPatients = async () => {
     try {
       setLoading(true);
@@ -89,7 +89,7 @@ const PatientsTable = () => {
         setSelectedPatient(patient);
         setIsRecordsOpen(true);
       },
-      visible: true,
+      visible: !isReceptionist, // Se for recepcionista, visible = false; se não, visible = true
     },
     {
       id: "referral",
