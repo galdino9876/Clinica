@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from "react";
 import { Clock, Save, X, Trash2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast"; // Ajuste o caminho conforme necessário
 
 const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
+  const { toast } = useToast(); // Hook para exibir toasts
   const [formData, setFormData] = useState({
     user_id: userId || 0,
     day_of_week: 0, // Definido como 0 (Domingo) como valor inicial válido
@@ -94,12 +96,17 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Falha ao criar carga horária");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Erro ${response.status}: Falha ao criar o horário`);
       }
 
       const result = await response.json();
       console.log("Carga horária criada com sucesso:", result);
+
+      toast({
+        title: "Sucesso",
+        description: "Novo agendamento criado com sucesso!",
+      });
 
       if (onSave) {
         onSave(result);
@@ -108,14 +115,19 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
       // Reset form e atualiza a lista de horários
       setFormData({
         user_id: userId || 0,
-        day_of_week: 0, // Reseta para 0 (Domingo) como padrão
+        day_of_week: 0,
         start_time: "",
         end_time: ""
       });
-      await fetchWorkingHours(); // Atualiza a lista após salvar
+      await fetchWorkingHours();
     } catch (err) {
       console.error("Erro ao criar carga horária:", err);
       setError(err.message || "Erro interno do servidor");
+      toast({
+        title: "Erro",
+        description: err.message || "Falha ao criar novo agendamento. Tente novamente.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -124,7 +136,7 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
   const handleCancel = () => {
     setFormData({
       user_id: userId || 0,
-      day_of_week: 0, // Reseta para 0 (Domingo) como padrão
+      day_of_week: 0,
       start_time: "",
       end_time: ""
     });
@@ -144,18 +156,28 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ id }), // Envia o ID do horário a ser deletado
+        body: JSON.stringify({ id }),
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "Falha ao excluir horário");
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.message || `Erro ${response.status}: Falha ao excluir o horário`);
       }
 
-      await fetchWorkingHours(); // Atualiza a lista após exclusão
+      toast({
+        title: "Sucesso",
+        description: "Agendamento excluído com sucesso!",
+      });
+
+      await fetchWorkingHours();
     } catch (err) {
       console.error("Erro ao excluir horário:", err);
       setError(err.message || "Erro interno do servidor");
+      toast({
+        title: "Erro",
+        description: err.message || "Falha ao excluir agendamento. Tente novamente.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
