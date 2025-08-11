@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Edit, Trash2, Eye, Plus, Clock, User } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import UserForm from "./UserForm";
-import ScheduleForm from "./ScheduleForm"; // Ajuste o caminho
+import ScheduleForm from "./WorkingHoursForm"; // Ajuste o caminho
 
 const UsersTable = () => {
   const [users, setUsers] = useState([]);
