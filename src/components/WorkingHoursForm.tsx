@@ -105,7 +105,7 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
 
       toast({
         title: "Sucesso",
-        description: "Novo agendamento criado com sucesso!",
+        description: "Novo horário de trabalho criado com sucesso!",
       });
 
       if (onSave) {
@@ -125,7 +125,7 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
       setError(err.message || "Erro interno do servidor");
       toast({
         title: "Erro",
-        description: err.message || "Falha ao criar novo agendamento. Tente novamente.",
+        description: err.message || "Falha ao criar novo horário de trabalho. Tente novamente.",
         variant: "destructive",
       });
     } finally {
@@ -166,7 +166,7 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
 
       toast({
         title: "Sucesso",
-        description: "Agendamento excluído com sucesso!",
+        description: "Horário de trabalho excluído com sucesso!",
       });
 
       await fetchWorkingHours();
@@ -175,7 +175,7 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
       setError(err.message || "Erro interno do servidor");
       toast({
         title: "Erro",
-        description: err.message || "Falha ao excluir agendamento. Tente novamente.",
+        description: err.message || "Falha ao excluir horário de trabalho. Tente novamente.",
         variant: "destructive",
       });
     } finally {
