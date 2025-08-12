@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft, ChevronRight, Calendar, Clock, User, MapPin, CreditCard, X } from 'lucide-react';
+import { useAuth } from "../context/AuthContext"; // Adicionado para autenticação real
 
 const AppointmentCalendar = () => {
+  const { user } = useAuth(); // Obtém o usuário autenticado do contexto
   const [currentDate, setCurrentDate] = useState(new Date());
   const [appointments, setAppointments] = useState([]);
   const [workingHours, setWorkingHours] = useState([]);
@@ -11,19 +13,6 @@ const AppointmentCalendar = () => {
   const [showModal, setShowModal] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [loggedUser, setLoggedUser] = useState(null); // Simula o usuário logado
-
-  // Simulação de usuário logado (substitua por autenticação real)
-  useEffect(() => {
-    // Exemplo: Simula um psicólogo logado (ID: 1, role: psychologist)
-    const simulateLoggedUser = {
-      id: 1, // ID do psicólogo logado
-      role: 'psychologist', // Ou 'admin'
-      nome: 'Dr. João Silva',
-    };
-    setLoggedUser(simulateLoggedUser);
-    // Na prática, use um contexto ou API de autenticação aqui
-  }, []);
 
   // Buscar dados das APIs
   const fetchData = async () => {
@@ -31,19 +20,18 @@ const AppointmentCalendar = () => {
       setLoading(true);
 
       // Buscar agendamentos
-      const appointmentsResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/appointmens');
+      let appointmentsResponse;
+      if (user && user.role === 'psychologist') {
+        // Endpoint específico para o psicólogo logado
+        appointmentsResponse = await fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/appointmens/${user.id}`);
+      } else {
+        // Endpoint genérico para admin ou sem autenticação
+        appointmentsResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/appointmens');
+      }
       if (appointmentsResponse.ok) {
         const appointmentsData = await appointmentsResponse.json();
         const rawAppointments = Array.isArray(appointmentsData) ? appointmentsData : appointmentsData.data || [];
-
-        // Filtrar agendamentos com base no usuário logado
-        const filteredAppointments = loggedUser
-          ? loggedUser.role === 'psychologist'
-            ? rawAppointments.filter(apt => apt.psychologist_id === loggedUser.id)
-            : rawAppointments // Admin vê todos
-          : rawAppointments;
-
-        setAppointments(filteredAppointments);
+        setAppointments(rawAppointments);
       } else {
         throw new Error(`Erro ao buscar agendamentos: ${appointmentsResponse.status}`);
       }
@@ -96,7 +84,7 @@ const AppointmentCalendar = () => {
 
   useEffect(() => {
     fetchData();
-  }, [loggedUser]); // Reexecuta fetchData se o usuário logado mudar
+  }, [user]); // Reexecuta fetchData se o usuário mudar
 
   // Funções auxiliares para o calendário
   const getDaysInMonth = (date) => {
@@ -123,12 +111,8 @@ const AppointmentCalendar = () => {
     const dateString = formatDate(date);
     const dayOfWeek = date.getDay();
 
-    // Filtrar agendamentos do dia com base no usuário logado
-    const dayAppointments = loggedUser
-      ? loggedUser.role === 'psychologist'
-        ? appointments.filter(apt => apt.date === dateString && apt.psychologist_id === loggedUser.id)
-        : appointments.filter(apt => apt.date === dateString) // Admin vê todos
-      : appointments.filter(apt => apt.date === dateString);
+    // Usar os agendamentos já filtrados pelo endpoint
+    const dayAppointments = appointments.filter(apt => apt.date === dateString);
 
     const dayWorkingHours = workingHours.filter(wh => wh.day_of_week === dayOfWeek);
 
@@ -137,10 +121,10 @@ const AppointmentCalendar = () => {
     }
 
     const confirmedAppointments = dayAppointments.filter(apt =>
-      apt.status === 'Confirmada' || apt.status === 'confirmada' || apt.status === 'confirmed'
+      apt.status === 'scheduled' || apt.status === 'completed'
     );
     const pendingAppointments = dayAppointments.filter(apt =>
-      apt.status === 'Pendente' || apt.status === 'pendente' || apt.status === 'pending'
+      apt.status === 'cancelled'
     );
 
     let totalSlots = 0;
@@ -170,12 +154,8 @@ const AppointmentCalendar = () => {
     const dateString = formatDate(date);
     const dayOfWeek = date.getDay();
 
-    // Filtrar agendamentos do dia com base no usuário logado
-    const dayAppointments = loggedUser
-      ? loggedUser.role === 'psychologist'
-        ? appointments.filter(apt => apt.date === dateString && apt.psychologist_id === loggedUser.id)
-        : appointments.filter(apt => apt.date === dateString) // Admin vê todos
-      : appointments.filter(apt => apt.date === dateString);
+    // Usar os agendamentos já filtrados pelo endpoint
+    const dayAppointments = appointments.filter(apt => apt.date === dateString);
 
     const dayWorkingHours = workingHours.filter(wh => wh.day_of_week === dayOfWeek);
 
@@ -379,8 +359,8 @@ const AppointmentCalendar = () => {
                             )}
                           </div>
                           <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                            apt.status === 'Confirmada' ? 'bg-green-100 text-green-800' :
-                            apt.status === 'Pendente' ? 'bg-orange-100 text-orange-800' :
+                            apt.status === 'scheduled' ? 'bg-green-100 text-green-800' :
+                            apt.status === 'cancelled' ? 'bg-orange-100 text-orange-800' :
                             'bg-gray-100 text-gray-800'
                           }`}>
                             {apt.status}
