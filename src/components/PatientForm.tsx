@@ -16,7 +16,9 @@ import { InputDynamic } from "./inputDin";
 const patientSchema = z.object({
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres"),
   cpf: z.string().min(14, "CPF deve estar no formato 000.000.000-00"),
-  phone: z.string().min(14, "Telefone deve estar no formato (00) 00000-0000"),
+  phone: z.string()
+  .min(11, "Telefone deve conter no minimo 11 digitos")
+  .transform(v => v.replace(/\D/g, '')),
   email: z.string().email("E-mail inválido"),
   address: z.string().min(10, "Endereço deve ter pelo menos 10 caracteres"),
   birthdate: z.string().min(1, "Data de nascimento é obrigatória"),
