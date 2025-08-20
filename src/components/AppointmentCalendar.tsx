@@ -37,7 +37,15 @@ const AppointmentCalendar = () => {
       }
 
       // Buscar horários de trabalho
-      const workingHoursResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/working_hours');
+      let workingHoursResponse;
+      if (user && user.role === 'psychologist') {
+        // Buscar horários específicos do psicólogo logado
+        workingHoursResponse = await fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/working_hours/${user.id}`);
+      } else {
+        // Buscar horários de todos os psicólogos
+        workingHoursResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/working_hours');
+      }
+      
       if (workingHoursResponse.ok) {
         const workingHoursData = await workingHoursResponse.json();
         setWorkingHours(Array.isArray(workingHoursData) ? workingHoursData : workingHoursData.data || []);
@@ -198,13 +206,25 @@ const AppointmentCalendar = () => {
 
     for (let day = 1; day <= daysInMonth; day++) {
       const dayStatus = getDayStatus(day);
+      
+      // Verificar se há agendamentos para este dia
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+      const dateString = date.toISOString().split('T')[0];
+      const dayAppointments = appointments.filter(apt => apt.date === dateString);
+      const hasAppointments = dayAppointments.length > 0;
+      
       days.push(
         <div
           key={day}
           onClick={() => handleDayClick(day)}
-          className={`p-2 text-center cursor-pointer hover:bg-gray-100 rounded transition-colors ${dayStatus.color}`}
+          className={`p-2 text-center cursor-pointer hover:bg-gray-100 rounded transition-colors ${dayStatus.color} relative`}
         >
-          {day}
+          <div className="relative">
+            {day}
+            {hasAppointments && (
+              <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-yellow-400 rounded-full"></div>
+            )}
+          </div>
         </div>
       );
     }
@@ -266,6 +286,10 @@ const AppointmentCalendar = () => {
             <div className="flex items-center gap-2">
               <div className="w-4 h-4 bg-red-500 rounded"></div>
               <span>Totalmente agendado</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
+              <span>Com agendamento</span>
             </div>
           </div>
         </div>

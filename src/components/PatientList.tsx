@@ -25,7 +25,7 @@ const isReceptionist = user?.role === "receptionist";
   const fetchPatients = async () => {
     try {
       setLoading(true);
-      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/patients");
+      const response = await fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/patients?id=${user.id}&role=${user.role}`);
       if (!response.ok) throw new Error("Erro ao carregar pacientes");
       const data = await response.json();
       setPatients(Array.isArray(data) ? data : data.patients || data.data || []);

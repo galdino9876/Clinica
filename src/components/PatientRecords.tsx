@@ -28,13 +28,27 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
   // Função para buscar nome do psicólogo
   const fetchPsychologistName = async (psychologistId: number) => {
     try {
+      // Validação para garantir que o ID existe
+      if (!psychologistId || !Number.isInteger(psychologistId)) {
+        console.warn("ID do psicólogo inválido:", psychologistId);
+        return "Desconhecido";
+      }
+
+      console.log("Buscando psicólogo com ID:", psychologistId);
       const response = await fetch(
         `https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/users/${psychologistId}`
       );
-      if (!response.ok) throw new Error("Erro ao buscar psicólogo");
+      
+      if (!response.ok) {
+        console.error("Erro na resposta da API:", response.status, response.statusText);
+        throw new Error("Erro ao buscar psicólogo");
+      }
+      
       const data = await response.json();
+      console.log("Resposta da API para psicólogo:", data);
       return data.name || "Desconhecido";
-    } catch {
+    } catch (error) {
+      console.error("Erro ao buscar psicólogo:", error);
       return "Desconhecido";
     }
   };
@@ -43,11 +57,20 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
   const loadPsychologistNames = async (records: PatientRecord[]) => {
     const uniqueIds = [...new Set(records.map((r) => r.created_by))];
     const names: { [key: number]: string } = {};
+    
+    console.log("IDs únicos de psicólogos encontrados:", uniqueIds);
+    
     for (const id of uniqueIds) {
-      if (!psychologists[id]) {
+      // Valida se o ID é válido antes de fazer a requisição
+      if (id && Number.isInteger(id) && !psychologists[id]) {
+        console.log("Carregando nome para psicólogo ID:", id);
         names[id] = await fetchPsychologistName(id);
+      } else if (!id || !Number.isInteger(id)) {
+        console.warn("ID inválido encontrado:", id);
+        names[id] = "ID Inválido";
       }
     }
+    
     setPsychologists((prev) => ({ ...prev, ...names }));
   };
 
@@ -72,13 +95,23 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
   };
 
   useEffect(() => {
+    // Verifica se o usuário está autenticado
+    if (!user || !user.id) {
+      console.error("Usuário não autenticado ou sem ID:", user);
+      setError("Usuário não autenticado. Faça login novamente.");
+      setLoading(false);
+      return;
+    }
+
+    console.log("Usuário autenticado:", user);
+    
     if (patient?.id && Number.isInteger(patient.id)) {
       fetchRecords(patient.id);
     } else {
       setError("Paciente inválido.");
       setLoading(false);
     }
-  }, [patient]);
+  }, [patient, user]);
 
   const handleSaveRecord = async () => {
     if (!notes.trim()) {
@@ -233,7 +266,7 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
                       {formatDate(record.date)}
                     </p>
                     <p className="text-xs text-gray-500">
-                      Criado por: {user.name} 
+                      Criado por: {psychologists[record.created_by] || "Carregando..."} 
                     </p>
                   </div>
                   <Button
