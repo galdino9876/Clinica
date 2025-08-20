@@ -11,6 +11,7 @@ export const appointmentSchema = z.object({
   roomId: z.string().optional(),
   startTime: z.string().min(1, { message: "O horário de início é obrigatório!" }),
   endTime: z.string().min(1, { message: "O horário de término é obrigatório!" }),
+  value: z.coerce.number().min(0.01, { message: "O valor deve ser maior que 0!" }),
 });
 
 export type AppointmentFormData = z.infer<typeof appointmentSchema>;
