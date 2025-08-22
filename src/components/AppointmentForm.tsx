@@ -14,10 +14,17 @@ import PsychologistAvailabilityDatePicker from "./PsychologistAvailabilityDatePi
 import { format } from "date-fns";
 import { SelectDynamic } from "./Selectsn";
 import { appointmentSchema, AppointmentFormData } from "@/zod/appointmentSchema"; // Ajuste o caminho
+import { InputDynamic } from "./inputDin";
 
 interface AppointmentFormProps {
   selectedDate: Date;
   onClose: () => void;
+}
+
+interface WorkingHour {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
 }
 
 const AppointmentForm = ({ selectedDate: initialDate, onClose }: AppointmentFormProps) => {
@@ -28,6 +35,11 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose }: AppointmentForm
   const [psychologists, setPsychologists] = useState<{ id: string; name: string }[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true); // Estado de carregamento
   const [selectedDate, setSelectedDate] = useState<Date>(initialDate); // Estado local para a data
+  
+  // Novos estados para horários do psicólogo
+  const [psychologistWorkingHours, setPsychologistWorkingHours] = useState<WorkingHour[]>([]);
+  const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
+  const [isLoadingPsychologistHours, setIsLoadingPsychologistHours] = useState(false);
 
   const formMethods: UseFormReturn<AppointmentFormData> = useForm<AppointmentFormData>({
     resolver: zodResolver(appointmentSchema),
@@ -38,6 +50,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose }: AppointmentForm
       roomId: "",
       startTime: "09:00",
       endTime: "10:00",
+      value: 200.0,
     },
   });
 
@@ -45,10 +58,90 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose }: AppointmentForm
     control,
     handleSubmit,
     watch,
+    setValue,
     formState: { errors },
   } = formMethods;
 
   const appointmentType = watch("appointmentType");
+  const selectedPsychologistId = watch("psychologistId");
+
+  // Função para buscar horários de trabalho do psicólogo
+  const fetchPsychologistWorkingHours = async (psychologistId: string) => {
+    if (!psychologistId) {
+      setPsychologistWorkingHours([]);
+      setAvailableTimeSlots([]);
+      return;
+    }
+
+    setIsLoadingPsychologistHours(true);
+    try {
+      const response = await fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/working_hours/${psychologistId}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        const fetchedWorkingHours = Array.isArray(data) ? data : data.data || [];
+        setPsychologistWorkingHours(fetchedWorkingHours);
+        
+        // Gerar slots de horário disponíveis baseado nos horários de trabalho
+        const timeSlots: string[] = [];
+        fetchedWorkingHours.forEach(wh => {
+          const startHour = parseInt(wh.start_time.split(':')[0]);
+          const endHour = parseInt(wh.end_time.split(':')[0]);
+          
+          for (let hour = startHour; hour < endHour; hour++) {
+            const timeSlot = `${hour.toString().padStart(2, '0')}:00`;
+            if (!timeSlots.includes(timeSlot)) {
+              timeSlots.push(timeSlot);
+            }
+          }
+        });
+        
+        // Ordenar horários
+        timeSlots.sort((a, b) => a.localeCompare(b));
+        setAvailableTimeSlots(timeSlots);
+        
+        // Preencher automaticamente os campos de horário com o primeiro e segundo horário disponível
+        if (timeSlots.length >= 2) {
+          setValue("startTime", timeSlots[0]);
+          setValue("endTime", timeSlots[1]);
+        } else if (timeSlots.length === 1) {
+          setValue("startTime", timeSlots[0]);
+          // Para o horário de término, adicionar 1 hora ao horário de início
+          const startHour = parseInt(timeSlots[0].split(':')[0]);
+          const endHour = startHour + 1;
+          const endTime = `${endHour.toString().padStart(2, '0')}:00`;
+          setValue("endTime", endTime);
+        }
+        
+        console.log('Horários do psicólogo carregados:', fetchedWorkingHours);
+        console.log('Slots de horário disponíveis:', timeSlots);
+      } else {
+        console.error('Erro ao buscar horários do psicólogo:', response.status);
+        setPsychologistWorkingHours([]);
+        setAvailableTimeSlots([]);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar horários do psicólogo:', error);
+      setPsychologistWorkingHours([]);
+      setAvailableTimeSlots([]);
+    } finally {
+      setIsLoadingPsychologistHours(false);
+    }
+  };
+
+  // Monitorar mudanças no psicólogo selecionado
+  useEffect(() => {
+    if (selectedPsychologistId) {
+      fetchPsychologistWorkingHours(selectedPsychologistId);
+    } else {
+      // Limpar horários quando nenhum psicólogo estiver selecionado
+      setPsychologistWorkingHours([]);
+      setAvailableTimeSlots([]);
+      // Resetar para valores padrão
+      setValue("startTime", "09:00");
+      setValue("endTime", "10:00");
+    }
+  }, [selectedPsychologistId, setValue]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -142,7 +235,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose }: AppointmentForm
       appointment_type: data.appointmentType as "presential" | "online",
       created_at: new Date().toISOString(),
       updated_at: null,
-      value: 200.0,
+      value: Number(data.value),
       payment_method: "private",
       insurance_type: null,
       is_recurring: false,
@@ -172,6 +265,21 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose }: AppointmentForm
     formMethods.setValue("patientId", newPatient.id.toString());
     setIsPatientFormOpen(false);
   };
+
+  // Gerar opções de horário de término baseado no horário de início selecionado
+  const generateEndTimeOptions = (startTime: string) => {
+    if (!startTime || availableTimeSlots.length === 0) return [];
+    
+    const startHour = parseInt(startTime.split(':')[0]);
+    return availableTimeSlots
+      .filter(time => {
+        const timeHour = parseInt(time.split(':')[0]);
+        return timeHour > startHour;
+      })
+      .map(time => ({ id: time, label: time }));
+  };
+
+  const currentStartTime = watch("startTime");
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
@@ -211,6 +319,12 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose }: AppointmentForm
             disabled={isLoading}
             onClear={() => formMethods.setValue("psychologistId", "")}
           />
+          {isLoadingPsychologistHours && (
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600"></div>
+              Carregando horários disponíveis...
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -263,15 +377,21 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose }: AppointmentForm
             name="startTime"
             control={control}
             label="Horário de Início"
-            options={["09:00", "09:30", "10:00", "10:30", "11:00"].map((time) => ({
-              id: time,
-              label: time,
-            }))}
+            options={availableTimeSlots.length > 0 
+              ? availableTimeSlots.map((time) => ({ id: time, label: time }))
+              : [{ id: "09:00", label: "09:00" }]
+            }
             placeholder="Selecione o horário"
             required
             errors={errors}
-            disabled={isLoading}
+            disabled={isLoading || !selectedPsychologistId || isLoadingPsychologistHours}
+            onClear={() => formMethods.setValue("startTime", availableTimeSlots[0] || "09:00")}
           />
+          {selectedPsychologistId && availableTimeSlots.length > 0 && (
+            <div className="text-xs text-gray-500">
+              Horários disponíveis: {availableTimeSlots.join(', ')}
+            </div>
+          )}
         </div>
 
         <div className="space-y-2">
@@ -279,14 +399,31 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose }: AppointmentForm
             name="endTime"
             control={control}
             label="Horário de Término"
-            options={["10:00", "10:30", "11:00", "11:30", "12:00"].map((time) => ({
-              id: time,
-              label: time,
-            }))}
+            options={generateEndTimeOptions(currentStartTime)}
             placeholder="Selecione o horário"
             required
             errors={errors}
+            disabled={isLoading || !selectedPsychologistId || isLoadingPsychologistHours || !currentStartTime}
+            onClear={() => {
+              const startHour = parseInt(currentStartTime.split(':')[0]);
+              const endHour = startHour + 1;
+              const endTime = `${endHour.toString().padStart(2, '0')}:00`;
+              formMethods.setValue("endTime", endTime);
+            }}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <InputDynamic
+            name="value"
+            label="Valor do Atendimento (R$)"
+            control={control}
+            type="number"
+            placeholder="200.00"
+            required
             disabled={isLoading}
+            errors={errors}
+            onClear={() => formMethods.setValue("value", 200.0)}
           />
         </div>
       </div>

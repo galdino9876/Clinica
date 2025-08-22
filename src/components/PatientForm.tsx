@@ -239,41 +239,7 @@ const PatientForm = ({ onSave, onCancel, open = false }: PatientFormProps) => {
           onClear={() => setValue("insurance_document", "")}
         />
 
-        <div className="space-y-2">
-          <label className="block text-sm font-semibold mb-1" htmlFor={valueId}>
-            Valor da Consulta
-            <span className="text-red-500">*</span>
-          </label>
-          <div className="relative">
-            <input
-              type="text"
-              id={valueId}
-              value={formatCurrency(watch("value") || 0)}
-              onChange={e => handleCurrencyChange(e.target.value)}
-              placeholder="R$ 0,00"
-              disabled={isLoading}
-              className={`w-full border rounded px-3 py-2 text-sm ${
-                errors.value ? "border-red-500" : "border-gray-300"
-              }`}
-            />
-            {watch("value") && (
-              <button
-                type="button"
-                className="absolute right-2 top-2 text-red-500"
-                onClick={() => setValue("value", 0)}
-                tabIndex={-1}
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-          {errors.value && (
-            <span className="flex items-center gap-1 text-red-600 text-xs mt-1">
-              <X className="w-4 h-4" />
-              {errors.value.message}
-            </span>
-          )}
-        </div>
+        
       </div>
 
       <div className="flex justify-end gap-2">

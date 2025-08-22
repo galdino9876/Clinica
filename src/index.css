@@ -130,3 +130,20 @@
 .appointment-purple {
   @apply bg-purple-500;
 }
+
+/* Psychologist Mini Calendar Styles */
+.psychologist-mini-calendar .rdp-day:not([aria-disabled="true"]) {
+  background-color: #dcfce7 !important;
+  color: #166534 !important;
+  border: 1px solid #86efac !important;
+}
+
+.psychologist-mini-calendar .rdp-day:not([aria-disabled="true"]):hover {
+  background-color: #bbf7d0 !important;
+}
+
+.psychologist-mini-calendar .rdp-day:not([aria-disabled="true"]):focus {
+  background-color: #bbf7d0 !important;
+  outline: 2px solid #16a34a !important;
+  outline-offset: 2px !important;
+}

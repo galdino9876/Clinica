@@ -7,103 +7,192 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { useAuth } from "@/context/AuthContext";
 
 interface PsychologistAvailabilityDatePickerProps {
   date: Date;
   onDateChange: (date: Date) => void;
   psychologistId?: string;
-  disabled?: boolean; // Add disabled prop
-  onPsychologistChange?: (psychologistId: string) => void; // Add new prop to listen to psychologist changes
+  disabled?: boolean;
+}
+
+interface WorkingHour {
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
 }
 
 const PsychologistAvailabilityDatePicker = ({
   date,
   onDateChange,
   psychologistId,
-  disabled = false, // Default to false (not disabled)
-  onPsychologistChange
+  disabled = false
 }: PsychologistAvailabilityDatePickerProps) => {
   const [open, setOpen] = useState(false);
-  const { users } = useAuth();
-  const [nextAvailableDate, setNextAvailableDate] = useState<Date | null>(null);
+  const [workingHours, setWorkingHours] = useState<WorkingHour[]>([]);
+  const [isLoadingHours, setIsLoadingHours] = useState(false);
+  const [hasLoadedHours, setHasLoadedHours] = useState(false);
+  const [currentPsychologistId, setCurrentPsychologistId] = useState<string | undefined>(undefined);
 
-  // Listen to psychologist changes and find the next available date
+  // Monitorar mudanças no psychologistId e limpar dados anteriores
   useEffect(() => {
-    if (psychologistId && !disabled && onPsychologistChange) {
-      // If we have a psychologist and date is not locked, find next available date
-      const psychologist = users.find((u) => u.id === psychologistId);
-      if (psychologist && psychologist.workingHours) {
-        // Find the next available date based on working hours
-        const today = new Date();
-        for (let i = 0; i < 30; i++) { // Check for the next 30 days
-          const checkDate = new Date(today);
-          checkDate.setDate(today.getDate() + i);
-          
-          const dayOfWeek = checkDate.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
-          const isWorkingDay = psychologist.workingHours.some(
-            (wh) => wh.dayOfWeek === dayOfWeek
-          );
-          
-          if (isWorkingDay) {
-            setNextAvailableDate(checkDate);
-            // Set the next available date automatically
-            onDateChange(checkDate);
-            break;
-          }
-        }
+    if (psychologistId !== currentPsychologistId) {
+      // Psicólogo mudou, limpar dados anteriores
+      setWorkingHours([]);
+      setHasLoadedHours(false);
+      setIsLoadingHours(false);
+      setCurrentPsychologistId(psychologistId);
+      
+      // Se há um psicólogo selecionado, limpar a data também
+      if (psychologistId) {
+        onDateChange(new Date()); // Reset para data atual
       }
     }
-  }, [psychologistId, disabled, onPsychologistChange, users, onDateChange]);
+  }, [psychologistId, currentPsychologistId, onDateChange]);
 
-  // Function to determine which days should be disabled based on psychologist availability
+  // Função para buscar horários de trabalho do psicólogo
+  const fetchWorkingHours = async () => {
+    if (!psychologistId) {
+      setWorkingHours([]);
+      return;
+    }
+
+    setIsLoadingHours(true);
+    try {
+      // Usar o mesmo webhook do calendário principal
+      const response = await fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/working_hours/${psychologistId}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        const fetchedWorkingHours = Array.isArray(data) ? data : data.data || [];
+        setWorkingHours(fetchedWorkingHours);
+        setHasLoadedHours(true);
+        
+        // Se não há data selecionada, encontrar a próxima data disponível
+        if (!date) {
+          const today = new Date();
+          for (let i = 0; i < 30; i++) {
+            const checkDate = new Date(today);
+            checkDate.setDate(today.getDate() + i);
+            
+            const dayOfWeek = checkDate.getDay();
+            const isWorkingDay = fetchedWorkingHours.some(
+              (wh) => wh.day_of_week === dayOfWeek
+            );
+            
+            if (isWorkingDay) {
+              onDateChange(checkDate);
+              break;
+            }
+          }
+        }
+      } else {
+        console.error('Erro ao buscar horários de trabalho:', response.status);
+        setWorkingHours([]);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar horários de trabalho:', error);
+      setWorkingHours([]);
+    } finally {
+      setIsLoadingHours(false);
+    }
+  };
+
+  // Função para abrir o calendário e buscar dados se necessário
+  const handleOpenChange = (newOpen: boolean) => {
+    if (newOpen && psychologistId && !hasLoadedHours) {
+      // Primeira vez abrindo com este psicólogo, buscar dados
+      fetchWorkingHours();
+    }
+    setOpen(newOpen);
+  };
+
+  // Função para determinar quais dias devem ser desabilitados
   const disabledDays = (date: Date) => {
-    // If no psychologist is selected, don't disable any days
-    if (!psychologistId) return false;
+    // Se não há psicólogo selecionado ou dados não carregados, desabilita todos os dias
+    if (!psychologistId || !hasLoadedHours || workingHours.length === 0) return true;
 
-    const psychologist = users.find((u) => u.id === psychologistId);
-    if (!psychologist || !psychologist.workingHours) return false;
-
-    const dayOfWeek = date.getDay() as 0 | 1 | 2 | 3 | 4 | 5 | 6;
-    const isWorkingDay = psychologist.workingHours.some(
-      (wh) => wh.dayOfWeek === dayOfWeek
+    const dayOfWeek = date.getDay();
+    const isWorkingDay = workingHours.some(
+      (wh) => wh.day_of_week === dayOfWeek
     );
 
-    // If it's a working day, don't disable it
+    // Se NÃO for dia de trabalho, desabilita
     return !isWorkingDay;
   };
 
+  // Verificar se o mini calendário deve estar habilitado
+  const isCalendarEnabled = psychologistId && hasLoadedHours && workingHours.length > 0;
+
+  // Função para selecionar data
+  const handleDateSelect = (selectedDate: Date | undefined) => {
+    if (selectedDate) {
+      onDateChange(selectedDate);
+      setOpen(false); // Fecha o calendário após seleção
+    }
+  };
+
   return (
-    <Popover open={open && !disabled} onOpenChange={disabled ? undefined : setOpen}>
+    <Popover open={open} onOpenChange={handleOpenChange}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"
           className={cn(
             "w-full justify-start text-left font-normal",
             !date && "text-muted-foreground",
-            disabled && "opacity-70 cursor-not-allowed"
+            (!psychologistId || disabled) && "opacity-50 cursor-not-allowed"
           )}
-          disabled={disabled}
+          disabled={!psychologistId || disabled}
+          onClick={() => {
+            if (!psychologistId) {
+              alert("Selecione um psicólogo primeiro para ver as datas disponíveis");
+            }
+          }}
         >
           <CalendarIcon className="mr-2 h-4 w-4" />
-          {date ? format(date, "PPP", { locale: ptBR }) : <span>Selecione a data</span>}
+          {!psychologistId ? (
+            <span>Selecione um psicólogo primeiro</span>
+          ) : isLoadingHours ? (
+            <span>Carregando disponibilidade...</span>
+          ) : !hasLoadedHours ? (
+            <span>Clique para ver datas disponíveis</span>
+          ) : workingHours.length === 0 ? (
+            <span>Psicólogo sem horários configurados</span>
+          ) : date ? (
+            format(date, "PPP", { locale: ptBR })
+          ) : (
+            <span>Selecione a data</span>
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-auto p-0" align="start">
-        <Calendar
-          mode="single"
-          selected={date}
-          onSelect={(date) => {
-            if (date) {
-              onDateChange(date);
-              setOpen(false);
-            }
-          }}
-          disabled={disabledDays}
-          initialFocus
-          locale={ptBR}
-          className="pointer-events-auto"
-        />
+        {isLoadingHours ? (
+          <div className="p-6 text-center">
+            <div className="text-sm text-gray-600">Carregando disponibilidade...</div>
+          </div>
+        ) : hasLoadedHours && workingHours.length > 0 ? (
+          <>
+            <div className="p-3 border-b">
+              <div className="text-sm font-medium text-gray-700 mb-2">Legenda:</div>
+              <div className="flex items-center gap-2 text-xs">
+                <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
+                <span>Dias disponíveis</span>
+              </div>
+            </div>
+            <Calendar
+              mode="single"
+              selected={date}
+              onSelect={handleDateSelect}
+              disabled={disabledDays}
+              initialFocus
+              locale={ptBR}
+              className="pointer-events-auto psychologist-mini-calendar"
+            />
+          </>
+        ) : hasLoadedHours && workingHours.length === 0 ? (
+          <div className="p-6 text-center">
+            <div className="text-sm text-gray-600">Este psicólogo não possui horários configurados</div>
+          </div>
+        ) : null}
       </PopoverContent>
     </Popover>
   );
