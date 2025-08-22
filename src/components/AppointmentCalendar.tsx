@@ -1,653 +1,1132 @@
-import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Clock, User, MapPin, CreditCard, X, Loader2 } from 'lucide-react';
-import { useAuth } from "../context/AuthContext"; // Adicionado para autenticação real
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { ChevronLeft, ChevronRight, Calendar, Clock, User, MapPin, X, Loader2 } from 'lucide-react';
+import { useAuth } from "../context/AuthContext";
 
-const AppointmentCalendar = () => {
-  const { user } = useAuth(); // Obtém o usuário autenticado do contexto
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [appointments, setAppointments] = useState([]);
-  const [workingHours, setWorkingHours] = useState([]);
-  const [patients, setPatients] = useState([]);
-  const [users, setUsers] = useState([]);
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [showModal, setShowModal] = useState(false);
+// Tipos para melhorar a tipagem
+interface Appointment {
+  id: string;
+  date: string;
+  appointment_date?: string;
+  scheduled_date?: string;
+  start_time: string;
+  end_time: string;
+  patient_id: string;
+  psychologist_id: string;
+  room_id?: string;
+  status: 'pending' | 'confirmed' | 'canceled';
+  value?: number;
+  // Campos alternativos que podem vir da API
+  endTime?: string;
+  startTime?: string;
+  time?: string;
+  price?: number;
+}
+
+interface WorkingHour {
+  id: string;
+  day_of_week: number;
+  start_time: string;
+  end_time: string;
+}
+
+interface Patient {
+  id: string;
+  nome?: string;
+  name?: string;
+}
+
+interface User {
+  id: string;
+  nome?: string;
+  name?: string;
+}
+
+interface DayStatus {
+  status: 'none' | 'available' | 'confirmed' | 'pending' | 'full';
+  color: string;
+}
+
+interface DayDetails {
+  date: string;
+  appointments: Appointment[];
+  workingHours: WorkingHour[];
+}
+
+interface TimeSlot {
+  time: string;
+  appointments: Appointment[];
+  hasAppointments: boolean;
+  availablePsychologists?: Array<{
+    id: string;
+    name: string;
+    workingHours: WorkingHour[];
+  }>;
+}
+
+// Constantes para melhorar manutenibilidade
+const STATUS_COLORS = {
+  pending: 'bg-amber-500',
+  confirmed: 'bg-emerald-600',
+  canceled: 'bg-rose-600'
+} as const;
+
+const STATUS_LABELS = {
+  pending: 'Pendente',
+  confirmed: 'Confirmado',
+  canceled: 'Cancelado'
+} as const;
+
+const STATUS_BADGE_COLORS = {
+  pending: 'bg-amber-100 text-amber-800 border-amber-200',
+  confirmed: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+  canceled: 'bg-rose-100 text-rose-800 border-rose-200'
+} as const;
+
+// Cores para os dias do calendário
+const DAY_STATUS_COLORS = {
+  none: '',
+  available: 'bg-sky-100 text-sky-800 border border-sky-200 hover:bg-sky-200',
+  confirmed: 'bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200',
+  pending: '',
+  full: 'bg-rose-100 text-rose-800 border border-rose-200 hover:bg-rose-200'
+} as const;
+
+const DAYS_OF_WEEK = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'] as const;
+
+// Hook customizado para gerenciar dados da API
+const useAppointmentData = (user: any) => {
+  const [data, setData] = useState({
+    appointments: [] as Appointment[],
+    workingHours: [] as WorkingHour[],
+    patients: [] as Patient[],
+    users: [] as User[]
+  });
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [selectedDateDetails, setSelectedDateDetails] = useState(null);
-  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  // Buscar dados das APIs
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
+    // Cancelar requisição anterior se existir
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    
+    abortControllerRef.current = new AbortController();
+    
     try {
       setLoading(true);
-
-      // Buscar agendamentos
-      let appointmentsResponse;
-      if (user && user.role === 'psychologist') {
-        // Endpoint específico para o psicólogo logado
-        appointmentsResponse = await fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/appointmens/${user.id}`);
-      } else {
-        // Endpoint genérico para admin ou sem autenticação
-        appointmentsResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/appointmens');
-      }
-      if (appointmentsResponse.ok) {
-        const appointmentsData = await appointmentsResponse.json();
-        const rawAppointments = Array.isArray(appointmentsData) ? appointmentsData : appointmentsData.data || [];
-        setAppointments(rawAppointments);
-      } else {
-        throw new Error(`Erro ao buscar agendamentos: ${appointmentsResponse.status}`);
-      }
-
-      // Buscar horários de trabalho
-      let workingHoursResponse;
-      if (user && user.role === 'psychologist') {
-        // Buscar horários específicos do psicólogo logado
-        workingHoursResponse = await fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/working_hours/${user.id}`);
-      } else {
-        // Buscar horários de todos os psicólogos
-        workingHoursResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/working_hours');
-      }
-      
-      if (workingHoursResponse.ok) {
-        const workingHoursData = await workingHoursResponse.json();
-        setWorkingHours(Array.isArray(workingHoursData) ? workingHoursData : workingHoursData.data || []);
-      } else {
-        throw new Error(`Erro ao buscar horários de trabalho: ${workingHoursResponse.status}`);
-      }
-
-      // Buscar pacientes
-      const patientsResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/patients');
-      if (patientsResponse.ok) {
-        const patientsData = await patientsResponse.json();
-        setPatients(Array.isArray(patientsData) ? patientsData : patientsData.data || []);
-      } else {
-        throw new Error(`Erro ao buscar pacientes: ${patientsResponse.status}`);
-      }
-
-      // Buscar usuários (psicólogos)
-      const usersResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/users');
-      if (usersResponse.ok) {
-        const usersData = await usersResponse.json();
-        setUsers(Array.isArray(usersData) ? usersData : usersData.data || []);
-      } else {
-        throw new Error(`Erro ao buscar usuários: ${usersResponse.status}`);
-      }
-
       setError(null);
+
+      const baseUrl = 'https://webhook.essenciasaudeintegrada.com.br/webhook';
+      const psychologistId = user?.role === 'psychologist' ? user.id : null;
+      
+      // URLs baseadas no role do usuário
+      const urls = {
+        appointments: psychologistId 
+          ? `${baseUrl}/d52c9494-5de9-4444-877e-9e8d01662962/appointmens/${psychologistId}`
+          : `${baseUrl}/appointmens`,
+        workingHours: psychologistId
+          ? `${baseUrl}/d52c9494-5de9-4444-877e-9e8d01662962/working_hours/${psychologistId}`
+          : `${baseUrl}/working_hours`,
+        patients: `${baseUrl}/patients`,
+        users: `${baseUrl}/users`
+      };
+
+      // Fetch paralelo para melhor performance com timeout
+      const timeoutId = setTimeout(() => abortControllerRef.current?.abort(), 30000); // 30s timeout
+      
+      const [appointmentsRes, workingHoursRes, patientsRes, usersRes] = await Promise.all([
+        fetch(urls.appointments, { signal: abortControllerRef.current.signal }),
+        fetch(urls.workingHours, { signal: abortControllerRef.current.signal }),
+        fetch(urls.patients, { signal: abortControllerRef.current.signal }),
+        fetch(urls.users, { signal: abortControllerRef.current.signal })
+      ]);
+
+      clearTimeout(timeoutId);
+
+      // Verificar se as respostas são válidas
+      if (!appointmentsRes.ok || !workingHoursRes.ok || !patientsRes.ok || !usersRes.ok) {
+        throw new Error(`Erro na API: ${appointmentsRes.status} ${workingHoursRes.status} ${patientsRes.status} ${usersRes.status}`);
+      }
+
+      // Processar respostas
+      const [appointmentsData, workingHoursData, patientsData, usersData] = await Promise.all([
+        appointmentsRes.json(),
+        workingHoursRes.json(),
+        patientsRes.json(),
+        usersRes.json()
+      ]);
+
+      // Validar e normalizar os dados dos agendamentos
+      const normalizedAppointments = (Array.isArray(appointmentsData) ? appointmentsData : appointmentsData.data || [])
+        .filter(apt => apt && apt.id) // Filtrar dados inválidos
+        .map(apt => {
+          // Log para debug - verificar estrutura dos dados
+          console.log('Dados do agendamento recebidos:', apt);
+          
+          return {
+            ...apt,
+            // Garantir que end_time seja sempre o campo correto para horário de término
+            end_time: apt.end_time || apt.endTime || '00:00',
+            // Usar o status diretamente da API (pending, confirmed, canceled)
+            status: apt.status || 'pending',
+            // Garantir que start_time seja sempre o campo correto para horário de início
+            start_time: apt.start_time || apt.startTime || apt.time || '00:00',
+            // Garantir que date seja sempre o campo correto para data
+            date: apt.date || apt.appointment_date || apt.scheduled_date || new Date().toISOString().split('T')[0],
+            // Garantir que value seja sempre um número válido
+            value: Math.max(0, parseFloat(String(apt.value || apt.price || 0)) || 0)
+          };
+        });
+
+      console.log('Agendamentos normalizados:', normalizedAppointments);
+      console.log('IDs dos agendamentos:', normalizedAppointments.map(apt => apt.id));
+
+      setData({
+        appointments: normalizedAppointments,
+        workingHours: Array.isArray(workingHoursData) ? workingHoursData : workingHoursData.data || [],
+        patients: Array.isArray(patientsData) ? patientsData : patientsData.data || [],
+        users: Array.isArray(usersData) ? usersData : usersData.data || []
+      });
     } catch (err) {
-      setError(err.message);
+      if (err instanceof Error && err.name === 'AbortError') {
+        // Requisição foi cancelada, não é um erro
+        return;
+      }
+      setError(err instanceof Error ? err.message : 'Erro desconhecido ao carregar dados');
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-  // Função para buscar detalhes detalhados de uma data específica
-  const fetchDateDetails = async (dateString) => {
+  useEffect(() => {
+    fetchData();
+    
+    // Cleanup function para cancelar requisições pendentes
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [fetchData]);
+
+  return { ...data, loading, error, refetch: fetchData };
+};
+
+// Hook customizado para formatação de datas
+const useDateUtils = () => {
+  const formatDate = useCallback((date: Date): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  }, []);
+
+  const getDaysInMonth = useCallback((date: Date): number => {
+    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+  }, []);
+
+  const getFirstDayOfMonth = useCallback((date: Date): number => {
+    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+  }, []);
+
+  const formatDisplayDate = useCallback((dateString: string): string => {
     try {
-      setLoadingDetails(true);
+      console.log('formatDisplayDate - input dateString:', dateString);
       
-      // Fazer fetch para a API de detalhes baseado no role do usuário
-      let response;
-      if (user && user.role === 'psychologist') {
-        // Endpoint específico para o psicólogo logado
-        response = await fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/appointmens/${user.id}`);
+      // Tentar diferentes formatos de data
+      let date: Date;
+      
+      if (dateString.includes('T')) {
+        // Formato ISO (2024-01-01T00:00:00.000Z)
+        date = new Date(dateString);
+      } else if (dateString.includes('-')) {
+        // Formato YYYY-MM-DD (2024-01-01)
+        date = new Date(dateString + 'T00:00:00');
       } else {
-        // Endpoint genérico para admin ou sem autenticação
-        response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/appointmens');
+        // Formato DD/MM/YYYY ou outro
+        date = new Date(dateString);
       }
       
-              if (response.ok) {
-          const data = await response.json();
-          const appointmentsForDate = Array.isArray(data) ? data : data.data || [];
-          
-          // Normalizar os dados para lidar com diferentes estruturas de API
-          const normalizedAppointments = appointmentsForDate.map(apt => ({
-            ...apt,
-            // Para admin: status contém o horário de término, para psicólogo: end_time separado
-            end_time: apt.end_time || apt.status,
-            // Garantir que o status seja o campo correto
-            status: apt.status && apt.status.includes(':') ? 'pending' : apt.status
-          }));
-          
-          // Filtrar agendamentos para a data específica
-          const filteredAppointments = normalizedAppointments.filter(apt => {
-            // Verificar diferentes formatos de data possíveis
-            return apt.date === dateString || 
-                   apt.appointment_date === dateString || 
-                   apt.scheduled_date === dateString;
-          });
-          
-          setSelectedDateDetails({
-            date: dateString,
-            appointments: filteredAppointments
-          });
-        } else {
-        throw new Error(`Erro ao buscar detalhes: ${response.status}`);
+      // Verificar se a data é válida
+      if (isNaN(date.getTime())) {
+        console.error('Data inválida:', dateString);
+        return 'Data inválida';
       }
-    } catch (err) {
-      console.error('Erro ao buscar detalhes da data:', err);
-      setError(err.message);
+      
+      console.log('formatDisplayDate - parsed date:', date);
+      
+      const formattedDate = date.toLocaleDateString('pt-BR', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+      });
+      
+      console.log('formatDisplayDate - formatted result:', formattedDate);
+      return formattedDate;
+      
+    } catch (error) {
+      console.error('Erro ao formatar data:', error, 'dateString:', dateString);
+      return 'Erro na formatação da data';
+    }
+  }, []);
+
+  return { formatDate, getDaysInMonth, getFirstDayOfMonth, formatDisplayDate };
+};
+
+// Hook customizado para lógica de status dos dias
+const useDayStatus = (appointments: Appointment[], workingHours: WorkingHour[]) => {
+  const getDayStatus = useCallback((day: number, currentDate: Date, formatDate: (date: Date) => string): DayStatus => {
+    const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    const dateString = formatDate(date);
+    const dayOfWeek = date.getDay();
+
+    const dayAppointments = appointments.filter(apt => {
+      const aptDate = apt.date || apt.appointment_date || apt.scheduled_date;
+      return aptDate === dateString;
+    });
+    const dayWorkingHours = workingHours.filter(wh => wh.day_of_week === dayOfWeek);
+
+    // Se não há horários configurados para este dia, retorna sem status
+    if (dayWorkingHours.length === 0) {
+      return { status: 'none', color: '' };
+    }
+
+    // Calcular total de slots disponíveis para este dia
+    const totalSlots = dayWorkingHours.reduce((total, wh) => {
+      const startHour = parseInt(wh.start_time.split(':')[0]);
+      const endHour = parseInt(wh.end_time.split(':')[0]);
+      // Considerar que cada hora é um slot disponível
+      return total + Math.max(0, endHour - startHour);
+    }, 0);
+
+    const occupiedSlots = dayAppointments.length;
+    const confirmedAppointments = dayAppointments.filter(apt => apt.status === 'confirmed');
+
+    // Debug: Log para verificar os valores
+    console.log(`Dia ${day}: totalSlots=${totalSlots}, occupiedSlots=${occupiedSlots}, confirmed=${confirmedAppointments.length}`);
+
+    // Se todos os horários estão agendados
+    if (occupiedSlots >= totalSlots && totalSlots > 0) {
+      // Se todos os agendamentos estão confirmados = VERDE (Confirmados)
+      if (confirmedAppointments.length === occupiedSlots && occupiedSlots > 0) {
+        console.log(`Dia ${day}: Status CONFIRMADO (verde)`);
+        return { status: 'confirmed', color: '' };
+      } else {
+        // Se nem todos estão confirmados = VERMELHO (Totalmente agendado)
+        console.log(`Dia ${day}: Status TOTALMENTE AGENDADO (vermelho)`);
+        return { status: 'full', color: '' };
+      }
+    } else if (dayWorkingHours.length > 0 && totalSlots > 0) {
+      // Se há horários disponíveis = AZUL (Disponibilidade)
+      console.log(`Dia ${day}: Status DISPONÍVEL (azul)`);
+      return { status: 'available', color: '' };
+    }
+
+    // Caso padrão
+    return { status: 'none', color: '' };
+  }, [appointments, workingHours]);
+
+  return { getDayStatus };
+};
+
+// Componente para a legenda do calendário
+const CalendarLegend = () => (
+  <div className="px-6 py-3 bg-gradient-to-r from-gray-50 to-gray-100 border-b">
+    <div className="flex flex-wrap items-center gap-6 text-sm">
+      {[
+        { 
+          color: 'bg-emerald-100 border-emerald-300', 
+          label: 'Confirmados'
+        },
+        { 
+          color: 'bg-sky-100 border-sky-300', 
+          label: 'Disponibilidade'
+        },
+        { 
+          color: 'bg-rose-100 border-rose-300', 
+          label: 'Totalmente agendado'
+        },
+        { 
+          color: 'w-2.5 h-2.5 bg-amber-500 rounded-full border-amber-600', 
+          label: 'Indicador de agendamento'
+        }
+      ].map((item, index) => (
+        <div key={index} className="flex items-center gap-2">
+          <div className={`w-4 h-4 ${item.color.includes('w-2') ? item.color : item.color + ' border-2 rounded'}`}></div>
+          <span className="font-medium text-gray-700">{item.label}</span>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+// Componente para navegação do calendário
+const CalendarNavigation = ({ 
+  currentDate, 
+  onNavigate 
+}: { 
+  currentDate: Date; 
+  onNavigate: (direction: number) => void; 
+}) => (
+  <div className="px-6 py-6 flex justify-between items-center border-b bg-gradient-to-r from-gray-50 to-gray-100">
+    <button
+      onClick={() => onNavigate(-1)}
+      className="flex items-center gap-2 px-4 py-3 text-gray-700 hover:text-gray-900 hover:bg-white rounded-lg transition-all duration-200 ease-in-out border border-gray-200 hover:border-gray-300 hover:shadow-md font-medium"
+    >
+      <ChevronLeft size={20} />
+      Mês Anterior
+    </button>
+
+    <div className="text-center">
+      <h3 className="text-2xl font-bold text-gray-800 capitalize">
+        {currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+      </h3>
+      <p className="text-sm text-gray-500 mt-1">Navegue pelos meses para visualizar os agendamentos</p>
+    </div>
+
+    <button
+      onClick={() => onNavigate(1)}
+      className="flex items-center gap-2 px-4 py-3 text-gray-700 hover:text-gray-900 hover:bg-white rounded-lg transition-all duration-200 ease-in-out border border-gray-200 hover:border-gray-300 hover:shadow-md font-medium"
+    >
+      Próximo Mês
+      <ChevronRight size={20} />
+    </button>
+  </div>
+);
+
+// Componente para o cabeçalho dos dias da semana
+const CalendarHeader = () => (
+  <div className="grid grid-cols-7 gap-1 mb-4">
+    {DAYS_OF_WEEK.map(day => (
+      <div key={day} className="p-3 text-center font-semibold text-gray-700 bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg border border-gray-200">
+        {day}
+      </div>
+    ))}
+  </div>
+);
+
+// Componente para um slot de horário
+const TimeSlot = ({ 
+  slot, 
+  getPatientName, 
+  getPsychologistName,
+  userRole,
+  onStatusChange,
+  availablePsychologists
+}: { 
+  slot: TimeSlot; 
+  getPatientName: (id: string) => string; 
+  getPsychologistName: (id: string) => string;
+  userRole?: string;
+  onStatusChange: (appointmentId: string, action: 'confirmar' | 'cancelar') => Promise<void>;
+  availablePsychologists: Array<{id: string, name: string, workingHours: WorkingHour[]}>;
+}) => (
+  <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+    <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 border-b border-gray-200">
+      <div className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+        <Clock className="w-5 h-5 text-gray-600" />
+        {slot.time}
+      </div>
+    </div>
+    
+    <div className="p-4">
+      {slot.hasAppointments ? (
+        <div className="space-y-3">
+          {slot.appointments.map((apt: Appointment, aptIndex: number) => (
+            <AppointmentCard 
+              key={aptIndex} 
+              appointment={apt} 
+              getPatientName={getPatientName} 
+              getPsychologistName={getPsychologistName}
+              userRole={userRole}
+              onStatusChange={onStatusChange}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <div className="w-3 h-3 rounded-full bg-sky-500 border border-sky-600"></div>
+            <div className="text-lg font-medium text-sky-700 font-semibold">Horário Livre</div>
+          </div>
+          
+          {/* Mostrar psicólogos disponíveis para este horário específico */}
+          {(() => {
+            // Filtrar psicólogos que têm horário disponível para este slot específico
+            const currentHour = parseInt(slot.time.split(':')[0]);
+            const psychsForThisSlot = availablePsychologists.filter(psych => {
+              return psych.workingHours.some(wh => {
+                const startHour = parseInt(wh.start_time.split(':')[0]);
+                const endHour = parseInt(wh.end_time.split(':')[0]);
+                return currentHour >= startHour && currentHour < endHour;
+              });
+            });
+
+            if (psychsForThisSlot.length > 0) {
+              return (
+                <div className="pl-6">
+                  <p className="text-sm text-gray-600 mb-2">
+                    {psychsForThisSlot.length === 1 ? 'Psicólogo disponível:' : 'Psicólogos disponíveis:'}
+                  </p>
+                  <div className="space-y-1">
+                    {psychsForThisSlot.map((psych) => {
+                      // Encontrar o horário específico deste psicólogo para este slot
+                      const relevantWorkingHour = psych.workingHours.find(wh => {
+                        const startHour = parseInt(wh.start_time.split(':')[0]);
+                        const endHour = parseInt(wh.end_time.split(':')[0]);
+                        return currentHour >= startHour && currentHour < endHour;
+                      });
+                      
+                      return (
+                        <div key={psych.id} className="flex items-center gap-2 text-sm">
+                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                          <span className="text-gray-700 font-medium">{psych.name}</span>
+                          {relevantWorkingHour && (
+                            <span className="text-xs text-gray-500 ml-2">
+                              ({relevantWorkingHour.start_time} - {relevantWorkingHour.end_time})
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
+        </div>
+      )}
+    </div>
+  </div>
+);
+
+// Componente para um card de agendamento
+const AppointmentCard = React.memo(({ 
+  appointment, 
+  getPatientName, 
+  getPsychologistName,
+  userRole,
+  onStatusChange
+}: { 
+  appointment: Appointment; 
+  getPatientName: (id: string) => string; 
+  getPsychologistName: (id: string) => string;
+  userRole?: string;
+  onStatusChange: (appointmentId: string, action: 'confirmar' | 'cancelar') => Promise<void>;
+}) => {
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  // Log para debug - verificar status recebido
+  console.log('AppointmentCard - appointment status:', appointment.status);
+  console.log('AppointmentCard - appointment object:', appointment);
+
+  const getStatusColor = useCallback((status: string) => {
+    console.log('getStatusColor - status:', status);
+    const color = STATUS_COLORS[status as keyof typeof STATUS_COLORS] || 'bg-gray-500';
+    console.log('getStatusColor - color:', color);
+    return color;
+  }, []);
+
+  const getStatusLabel = useCallback((status: string) => {
+    console.log('getStatusLabel - status:', status);
+    const label = STATUS_LABELS[status as keyof typeof STATUS_LABELS] || status;
+    console.log('getStatusLabel - label:', label);
+    return label;
+  }, []);
+
+  const getStatusBadgeColor = useCallback((status: string) => {
+    console.log('getStatusBadgeColor - status:', status);
+    const badgeColor = STATUS_BADGE_COLORS[status as keyof typeof STATUS_BADGE_COLORS] || 'bg-gray-100 text-gray-800';
+    console.log('getStatusBadgeColor - badgeColor:', badgeColor);
+    return badgeColor;
+  }, []);
+
+  const handleConfirm = async () => {
+    if (isUpdating) return;
+    setIsUpdating(true);
+    try {
+      await onStatusChange(appointment.id, 'confirmar');
+    } catch (error) {
+      console.error('Erro ao confirmar agendamento:', error);
     } finally {
-      setLoadingDetails(false);
+      setIsUpdating(false);
     }
   };
 
-  // Funções para buscar nomes por ID
-  const getPatientName = (patientId) => {
+  const handleCancel = async () => {
+    if (isUpdating) return;
+    setIsUpdating(true);
+    try {
+      await onStatusChange(appointment.id, 'cancelar');
+    } catch (error) {
+      console.error('Erro ao cancelar agendamento:', error);
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const showActionButtons = userRole && userRole !== 'psychologist';
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-all duration-200 shadow-sm hover:shadow-md">
+      <div className="flex items-start justify-between">
+        <div className="flex-1">
+          <div className="flex items-center gap-3 mb-3">
+            <div className={`w-3 h-3 rounded-full ${getStatusColor(appointment.status)}`}></div>
+            <h5 className="text-lg font-semibold text-gray-900">
+              {getPatientName(appointment.patient_id)} <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusBadgeColor(appointment.status)}`}>
+                  {getStatusLabel(appointment.status)}
+                </span>
+            </h5>
+          </div>
+          
+          <div className="space-y-4">
+            {/* Primeira linha: Psicólogo - Início */}
+            <div className="grid grid-cols-2 gap-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <User className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Psicólogo</span>
+                  <p className="font-semibold text-gray-900">{getPsychologistName(appointment.psychologist_id)}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-lg">
+                  <Clock className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Início</span>
+                  <p className="font-semibold text-gray-900">{appointment.start_time || 'N/A'}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Segunda linha: Sala - Término - Valor */}
+            <div className="grid grid-cols-3 gap-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <MapPin className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Sala</span>
+                  <p className="font-semibold text-gray-900">Sala {appointment.room_id || 'N/A'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-rose-100 rounded-lg">
+                  <Clock className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Término</span>
+                  <p className="font-semibold text-gray-900">{appointment.end_time || 'N/A'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-lg">
+                  <div className="w-5 h-5 flex items-center justify-center">
+                    <span className="text-emerald-600 font-bold">R$</span>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Valor</span>
+                  <p className="text-lg font-bold text-emerald-600">
+                    {appointment.value?.toFixed(2) || '0.00'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          
+
+          {/* Botões de ação para usuários não-psicólogos */}
+          {showActionButtons && (
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <div className="flex gap-3">
+                <button
+                  onClick={handleConfirm}
+                  disabled={isUpdating}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
+                  aria-label={`Confirmar agendamento de ${getPatientName(appointment.patient_id)}`}
+                >
+                  {isUpdating ? (
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                      Confirmando...
+                    </div>
+                  ) : (
+                    'Confirmar'
+                  )}
+                </button>
+                <button
+                  onClick={handleCancel}
+                  disabled={isUpdating}
+                  className="flex-1 bg-rose-600 hover:bg-rose-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
+                  aria-label={`Cancelar agendamento de ${getPatientName(appointment.patient_id)}`}
+                >
+                  {isUpdating ? (
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                      Cancelando...
+                    </div>
+                  ) : (
+                    'Cancelar'
+                  )}
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-2 text-center opacity-75">
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+AppointmentCard.displayName = 'AppointmentCard';
+
+// Componente principal do calendário
+const AppointmentCalendar = () => {
+  const { user } = useAuth();
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<number | null>(null);
+  const [showModal, setShowModal] = useState(false);
+  const [selectedDateDetails, setSelectedDateDetails] = useState<DayDetails | null>(null);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [availablePsychologists, setAvailablePsychologists] = useState<Array<{id: string, name: string, workingHours: WorkingHour[]}>>([]);
+
+  const { appointments, workingHours, patients, users, loading, error, refetch } = useAppointmentData(user);
+  const { formatDate, getDaysInMonth, getFirstDayOfMonth, formatDisplayDate } = useDateUtils();
+  const { getDayStatus } = useDayStatus(appointments, workingHours);
+
+  // Funções auxiliares memoizadas
+  const getPatientName = useCallback((patientId: string): string => {
     const patient = patients.find(p => p.id === patientId);
     return patient ? (patient.nome || patient.name || `Paciente ${patientId}`) : `Paciente ${patientId}`;
-  };
+  }, [patients]);
 
-  const getPsychologistName = (psychologistId) => {
+  const getPsychologistName = useCallback((psychologistId: string): string => {
     const psychologist = users.find(u => u.id === psychologistId);
     return psychologist ? (psychologist.nome || psychologist.name || `Psicólogo ${psychologistId}`) : `Psicólogo ${psychologistId}`;
-  };
+  }, [users]);
 
-     useEffect(() => {
-     fetchData();
-   }, [user]); // Reexecuta fetchData se o usuário mudar
+  const navigateMonth = useCallback((direction: number) => {
+    setCurrentDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(prev.getMonth() + direction);
+      return newDate;
+    });
+  }, []);
 
-   // Debug: log dos dados quando mudam
-   useEffect(() => {
-     console.log('appointments:', appointments);
-     console.log('workingHours:', workingHours);
-     console.log('patients:', patients);
-     console.log('users:', users);
-   }, [appointments, workingHours, patients, users]);
+  const handleDayClick = useCallback(async (day: number) => {
+    const clickedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+    const dateString = formatDate(clickedDate);
+    
+    console.log('handleDayClick - day clicked:', day);
+    console.log('handleDayClick - currentDate:', currentDate);
+    console.log('handleDayClick - clickedDate:', clickedDate);
+    console.log('handleDayClick - dateString (formatDate):', dateString);
+    
+    setSelectedDate(day);
+    setShowModal(true);
+    
+    // Buscar detalhes da data
+    try {
+      setLoadingDetails(true);
+      
+      // Filtrar agendamentos para a data específica
+      const dayAppointments = appointments.filter(apt => {
+        const aptDate = apt.date || apt.appointment_date || apt.scheduled_date;
+        console.log('handleDayClick - comparing aptDate:', aptDate, 'with dateString:', dateString);
+        return aptDate === dateString;
+      }).map(apt => ({
+        ...apt,
+        // Garantir que os campos estejam corretos
+        end_time: apt.end_time || apt.endTime || '00:00',
+        // Usar o status diretamente da API (pending, confirmed, canceled)
+        status: apt.status || 'pending',
+        start_time: apt.start_time || apt.startTime || apt.time || '00:00',
+        value: Math.max(0, parseFloat(String(apt.value || apt.price || 0)) || 0)
+      }));
+      
+      const dayWorkingHours = workingHours.filter(wh => wh.day_of_week === clickedDate.getDay());
+      
+      console.log('handleDayClick - dayAppointments found:', dayAppointments.length);
+      console.log('handleDayClick - dayWorkingHours found:', dayWorkingHours.length);
+      console.log('handleDayClick - setting selectedDateDetails with date:', dateString);
+      
+      setSelectedDateDetails({
+        date: dateString,
+        appointments: dayAppointments,
+        workingHours: dayWorkingHours
+      });
 
-  // Funções auxiliares para o calendário
-  const getDaysInMonth = (date) => {
-    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  };
+      // Buscar psicólogos disponíveis para esta data e seus horários de trabalho
+      try {
+        const psychologistsResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/users');
+        if (psychologistsResponse.ok) {
+          const psychologistsData = await psychologistsResponse.json();
+          const psychologists = psychologistsData.filter((user: any) => user.role === 'psychologist');
+          
+          // Para cada psicólogo, buscar seus horários de trabalho
+          const psychsWithWorkingHours = await Promise.all(
+            psychologists.map(async (psych: any) => {
+              try {
+                const workingHoursResponse = await fetch(
+                  `https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/working_hours/${psych.id}`
+                );
+                
+                if (workingHoursResponse.ok) {
+                  const workingHoursData = await workingHoursResponse.json();
+                  const workingHours = Array.isArray(workingHoursData) ? workingHoursData : workingHoursData.data || [];
+                  
+                  // Filtrar apenas horários para o dia da semana selecionado
+                  const dayWorkingHours = workingHours.filter((wh: any) => wh.day_of_week === clickedDate.getDay());
+                  
+                  if (dayWorkingHours.length > 0) {
+                    return {
+                      id: psych.id,
+                      name: psych.nome || psych.name || `Psicólogo ${psych.id}`,
+                      workingHours: dayWorkingHours
+                    };
+                  }
+                }
+              } catch (error) {
+                console.error(`Erro ao buscar horários do psicólogo ${psych.id}:`, error);
+              }
+              return null;
+            })
+          );
+          
+          // Filtrar psicólogos que realmente têm horários para este dia
+          const availablePsychs = psychsWithWorkingHours.filter(psych => psych !== null);
+          setAvailablePsychologists(availablePsychs);
+          console.log('Psicólogos disponíveis para', clickedDate.toDateString(), ':', availablePsychs);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar psicólogos:', err);
+        setAvailablePsychologists([]);
+      }
+    } catch (err) {
+      console.error('Erro ao buscar detalhes da data:', err);
+    } finally {
+      setLoadingDetails(false);
+    }
+  }, [currentDate, formatDate, appointments, workingHours]);
 
-  const getFirstDayOfMonth = (date) => {
-    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-  };
+  const closeModal = useCallback(() => {
+    setShowModal(false);
+    setSelectedDate(null);
+    setSelectedDateDetails(null);
+  }, []);
 
-                                   const formatDate = (date) => {
-       // Usar uma abordagem mais robusta para evitar problemas de timezone
-       const year = date.getFullYear();
-       const month = String(date.getMonth() + 1).padStart(2, '0');
-       const day = String(date.getDate()).padStart(2, '0');
-       const formatted = `${year}-${month}-${day}`;
-       
-       console.log('formatDate - input date:', date);
-       console.log('formatDate - year:', year, 'month:', month, 'day:', day);
-       console.log('formatDate - formatted result:', formatted);
-       return formatted;
-     };
+  // Função para alterar status do agendamento
+  const handleStatusChange = useCallback(async (appointmentId: string, action: 'confirmar' | 'cancelar') => {
+    try {
+      // Log para debug - verificar ID recebido
+      console.log('Alterando status do agendamento:', { appointmentId, action });
+      
+      const webhookUrl = `https://webhook.essenciasaudeintegrada.com.br/webhook/appoiments?id=${appointmentId}&action=${action}`;
+      
+      console.log('URL do webhook:', webhookUrl);
+      
+      const response = await fetch(webhookUrl, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
 
-  const navigateMonth = (direction) => {
-    const newDate = new Date(currentDate);
-    newDate.setMonth(currentDate.getMonth() + direction);
-    setCurrentDate(newDate);
-  };
+      if (!response.ok) {
+        throw new Error(`Erro na API: ${response.status} ${response.statusText}`);
+      }
 
-        // Determinar o status do dia
-   const getDayStatus = (day) => {
-     const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-     const dateString = formatDate(date);
-     const dayOfWeek = date.getDay();
+      console.log('Resposta do webhook:', response.status, response.statusText);
 
-     // Usar os agendamentos já filtrados pelo endpoint
-     const dayAppointments = appointments.filter(apt => apt.date === dateString);
-
-     const dayWorkingHours = workingHours.filter(wh => wh.day_of_week === dayOfWeek);
-
-     if (dayAppointments.length === 0 && dayWorkingHours.length === 0) {
-       return { status: 'none', color: '' };
-     }
-
-     const confirmedAppointments = dayAppointments.filter(apt =>
-       apt.status === 'scheduled' || apt.status === 'completed'
-     );
-     const pendingAppointments = dayAppointments.filter(apt =>
-       apt.status === 'cancelled'
-     );
-
-     let totalSlots = 0;
-     dayWorkingHours.forEach(wh => {
-       const startHour = parseInt(wh.start_time.split(':')[0]);
-       const endHour = parseInt(wh.end_time.split(':')[0]);
-       totalSlots += endHour - startHour;
-     });
-     const occupiedSlots = dayAppointments.length;
-
-     if (occupiedSlots >= totalSlots && totalSlots > 0) {
-       return { status: 'full', color: 'bg-red-500 text-white' };
-     } else if (confirmedAppointments.length > 0) {
-       return { status: 'confirmed', color: 'bg-green-500 text-white' };
-     } else if (pendingAppointments.length > 0) {
-       return { status: 'pending', color: 'bg-orange-500 text-white' };
-     } else if (dayWorkingHours.length > 0) {
-       return { status: 'available', color: 'bg-blue-500 text-white' };
-     }
-
-     return { status: 'none', color: '' };
-   };
-
-                                   // Obter detalhes do dia selecionado
-     const getDayDetails = (day) => {
-       // Criar a data correta baseada no dia clicado
-       const selectedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-       const dateString = formatDate(selectedDate);
-       const dayOfWeek = selectedDate.getDay();
-
-       console.log('getDayDetails - day clicked:', day);
-       console.log('getDayDetails - selectedDate:', selectedDate);
-       console.log('getDayDetails - dateString:', dateString);
-       console.log('getDayDetails - dayOfWeek:', dayOfWeek);
-
-       // Usar os agendamentos já filtrados pelo endpoint
-       // Verificar diferentes possíveis campos de data
-       const dayAppointments = appointments.filter(apt => {
-         console.log('Comparing apt.date:', apt.date, 'with dateString:', dateString);
-         console.log('apt object:', apt);
-         return apt.date === dateString || apt.appointment_date === dateString || apt.scheduled_date === dateString;
-       });
-
-       const dayWorkingHours = workingHours.filter(wh => wh.day_of_week === dayOfWeek);
-
-       console.log('getDayDetails - dayAppointments:', dayAppointments);
-       console.log('getDayDetails - dayWorkingHours:', dayWorkingHours);
-
-       return {
-         date: dateString,
-         appointments: dayAppointments,
-         workingHours: dayWorkingHours
-       };
-     };
-
-                                                                       const handleDayClick = async (day) => {
-        console.log('handleDayClick - day clicked:', day);
-        console.log('handleDayClick - currentDate:', currentDate);
-        console.log('handleDayClick - currentDate.getMonth():', currentDate.getMonth());
-        console.log('handleDayClick - currentDate.getFullYear():', currentDate.getFullYear());
+      // Atualizar os dados locais após sucesso
+      await refetch();
+      
+      // Re-buscar detalhes da data selecionada para refletir a mudança
+      if (selectedDateDetails) {
+        const updatedAppointments = appointments.filter(apt => {
+          const aptDate = apt.date || apt.appointment_date || apt.scheduled_date;
+          return aptDate === selectedDateDetails.date;
+        }).map(apt => ({
+          ...apt,
+          // Atualizar status se for o agendamento modificado
+          status: apt.id === appointmentId 
+            ? (action === 'confirmar' ? 'confirmed' : 'canceled')
+            : apt.status || 'pending',
+          start_time: apt.start_time || apt.startTime || apt.time || '00:00',
+          end_time: apt.end_time || apt.endTime || '00:00',
+          value: Math.max(0, parseFloat(String(apt.value || apt.price || 0)) || 0)
+        }));
         
-        // Criar a data correta para verificação
-        const clickedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-        console.log('handleDayClick - clickedDate:', clickedDate);
-        console.log('handleDayClick - clickedDate.toISOString():', clickedDate.toISOString());
-        
-        setSelectedDate(day);
-        setShowModal(true);
-        
-        // Buscar detalhes detalhados da data
-        const dateString = formatDate(clickedDate);
-        await fetchDateDetails(dateString);
-      };
+        const updatedWorkingHours = workingHours.filter(wh => wh.day_of_week === new Date(selectedDateDetails.date).getDay());
 
-   const handleAppointmentClick = (appointment) => {
-     // Aqui você pode implementar a lógica para mostrar detalhes do agendamento
-     // Por exemplo, abrir outro modal ou navegar para uma página de detalhes
-     console.log('Detalhes do agendamento:', appointment);
-     alert(`Detalhes do agendamento:\nPaciente: ${getPatientName(appointment.patient_id)}\nHorário: ${appointment.start_time} - ${appointment.end_time}\nStatus: ${appointment.status}`);
-   };
+        setSelectedDateDetails({
+          ...selectedDateDetails,
+          appointments: updatedAppointments,
+          workingHours: updatedWorkingHours
+        });
+      }
 
-  const renderCalendar = () => {
+      // Feedback visual de sucesso (opcional)
+      console.log(`Agendamento ${appointmentId} ${action === 'confirmar' ? 'confirmado' : 'cancelado'} com sucesso`);
+      
+    } catch (error) {
+      console.error(`Erro ao ${action} agendamento:`, error);
+      throw error; // Re-throw para o componente filho tratar
+    }
+  }, [refetch, selectedDateDetails, appointments, workingHours]);
+
+  // Renderizar calendário memoizado
+  const renderCalendar = useMemo(() => {
     const daysInMonth = getDaysInMonth(currentDate);
     const firstDay = getFirstDayOfMonth(currentDate);
     const days = [];
 
+    // Dias vazios no início
     for (let i = 0; i < firstDay; i++) {
-      days.push(<div key={`empty-${i}`} className="p-2"></div>);
+      days.push(<div key={`empty-${i}`} className="p-2 bg-gray-50 rounded-lg border border-gray-100" aria-hidden="true"></div>);
     }
 
+    // Dias do mês
     for (let day = 1; day <= daysInMonth; day++) {
-      const dayStatus = getDayStatus(day);
-      
-                                         // Verificar se há agendamentos para este dia
-        const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
-        const dateString = formatDate(date);
-        const dayAppointments = appointments.filter(apt => apt.date === dateString);
-        const hasAppointments = dayAppointments.length > 0;
-      
+      const dayStatus = getDayStatus(day, currentDate, formatDate);
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
+      const dateString = formatDate(date);
+      const dayAppointments = appointments.filter(apt => {
+        const aptDate = apt.date || apt.appointment_date || apt.scheduled_date;
+        return aptDate === dateString;
+      });
+      const hasAppointments = dayAppointments.length > 0;
+
       days.push(
-        <div
+        <button
           key={day}
           onClick={() => handleDayClick(day)}
-          className={`p-2 text-center cursor-pointer hover:bg-gray-100 rounded transition-colors ${dayStatus.color} relative`}
+          className={`p-2 text-center cursor-pointer rounded-lg transition-all duration-200 ease-in-out ${DAY_STATUS_COLORS[dayStatus.status]} relative focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:scale-105 hover:shadow-md`}
+          aria-label={`${day} de ${currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}${hasAppointments ? ', com agendamentos' : ''}`}
+          aria-pressed={selectedDate === day}
         >
           <div className="relative">
             {day}
             {hasAppointments && (
-              <div className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2 h-2 bg-yellow-400 rounded-full"></div>
+              <div 
+                className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2.5 h-2.5 bg-amber-500 rounded-full shadow-sm border border-amber-600"
+                aria-label="Indicador de agendamento"
+              ></div>
             )}
           </div>
-        </div>
+        </button>
       );
     }
 
     return days;
-  };
+  }, [currentDate, appointments, workingHours, getDayStatus, formatDate, handleDayClick, selectedDate]);
 
+  // Gerar slots de horário para o modal memoizado
+  const generateTimeSlots = useMemo(() => {
+    if (!selectedDateDetails) return [];
+
+    const allTimeSlots: TimeSlot[] = [];
+    
+    selectedDateDetails.workingHours.forEach(wh => {
+      const startHour = parseInt(wh.start_time.split(':')[0]);
+      const endHour = parseInt(wh.end_time.split(':')[0]);
+      
+      for (let hour = startHour; hour < endHour; hour++) {
+        const timeSlot = `${hour.toString().padStart(2, '0')}:00`;
+        const appointmentsForSlot = selectedDateDetails.appointments.filter(apt => {
+          const aptStartHour = parseInt(apt.start_time.split(':')[0]);
+          return aptStartHour === hour;
+        });
+        
+        allTimeSlots.push({
+          time: timeSlot,
+          appointments: appointmentsForSlot,
+          hasAppointments: appointmentsForSlot.length > 0
+        });
+      }
+    });
+    
+    return allTimeSlots.sort((a, b) => a.time.localeCompare(b.time));
+  }, [selectedDateDetails]);
+
+  // Loading state otimizado
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        <span className="ml-2">Carregando calendário...</span>
+      <div className="w-full max-w-6xl mx-auto p-6">
+        <div className="bg-white shadow-lg rounded-lg overflow-hidden">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-6 border-b border-blue-200">
+            <div className="flex justify-between items-center">
+              <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <Calendar size={28} className="text-blue-600" />
+                </div>
+                Calendário de Agendamentos
+              </h1>
+            </div>
+          </div>
+          <div className="flex justify-center items-center h-64" role="status" aria-live="polite">
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" aria-hidden="true"></div>
+              <span className="text-lg text-gray-600 font-medium">Carregando calendário...</span>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
-  const dayDetails = selectedDate ? getDayDetails(selectedDate) : null;
+  // Error state
+  if (error) {
+    return (
+      <div className="w-full max-w-6xl mx-auto p-6">
+        <div className="bg-white shadow-lg rounded-lg overflow-hidden">
+          <div className="bg-red-50 px-6 py-4 border-b border-red-200">
+            <h2 className="text-xl font-semibold text-red-800 flex items-center gap-2">
+              <Calendar size={24} />
+              Erro no Calendário
+            </h2>
+          </div>
+          <div className="p-6 text-center">
+            <div className="text-red-600 mb-4">
+              <p className="text-lg font-medium">Erro ao carregar dados da API:</p>
+              <p className="text-sm">{error}</p>
+            </div>
+            <button
+              onClick={refetch}
+              className="bg-red-600 hover:bg-red-700 text-white px-6 py-2 rounded-md transition-colors"
+            >
+              Tentar Novamente
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-6xl mx-auto p-6">
       <div className="bg-white shadow-lg rounded-lg overflow-hidden">
         {/* Header */}
-        <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
+        <header className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-6 border-b border-blue-200">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
-              <Calendar size={24} />
+            <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Calendar size={28} className="text-blue-600" />
+              </div>
               Calendário de Agendamentos
-            </h2>
+            </h1>
             <button
-              onClick={fetchData}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors"
+              onClick={refetch}
+              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-lg transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:shadow-lg hover:scale-105 font-medium"
+              aria-label="Atualizar dados do calendário"
             >
-              Atualizar
+              <div className="flex items-center gap-2">
+                <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
+                Atualizar
+              </div>
             </button>
           </div>
-          {error && (
-            <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">
-              Erro ao carregar dados da API: {error}
-            </div>
-          )}
-        </div>
+        </header>
 
-        {/* Legenda */}
-        <div className="px-6 py-4 bg-gray-50 border-b">
-          <h3 className="text-sm font-medium text-gray-700 mb-2">Legenda:</h3>
-          <div className="flex flex-wrap gap-4 text-sm">
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-green-500 rounded"></div>
-              <span>Confirmadas</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-orange-500 rounded"></div>
-              <span>Pendentes</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-blue-500 rounded"></div>
-              <span>Disponibilidade</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 bg-red-500 rounded"></div>
-              <span>Totalmente agendado</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-yellow-400 rounded-full"></div>
-              <span>Com agendamento</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Navegação do calendário */}
-        <div className="px-6 py-4 flex justify-between items-center border-b">
-          <button
-            onClick={() => navigateMonth(-1)}
-            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors"
-          >
-            <ChevronLeft size={20} />
-            Anterior
-          </button>
-
-          <h3 className="text-lg font-semibold">
-            {currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-          </h3>
-
-          <button
-            onClick={() => navigateMonth(1)}
-            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded transition-colors"
-          >
-            Próximo
-            <ChevronRight size={20} />
-          </button>
-        </div>
+        <CalendarLegend />
+        <CalendarNavigation currentDate={currentDate} onNavigate={navigateMonth} />
 
         {/* Calendário */}
-        <div className="p-6">
-          <div className="grid grid-cols-7 gap-1 mb-4">
-            {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(day => (
-              <div key={day} className="p-2 text-center font-medium text-gray-600">
-                {day}
-              </div>
-            ))}
+        <main className="p-8" role="main" aria-label="Calendário mensal">
+          <CalendarHeader />
+          <div 
+            className="grid grid-cols-7 gap-2" 
+            role="grid" 
+            aria-label="Dias do mês"
+          >
+            {renderCalendar}
           </div>
-          <div className="grid grid-cols-7 gap-1">
-            {renderCalendar()}
-          </div>
-        </div>
+        </main>
       </div>
 
-             {/* Modal de detalhes do dia - Design moderno com dados detalhados */}
-       {showModal && dayDetails && (
-         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-           <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-             {/* Header do Modal */}
-             <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-6">
-               <div className="flex justify-between items-center">
-                 <div>
-                                                                               <h3 className="text-2xl font-bold capitalize">
-                       {(() => {
-                         // Criar a data e adicionar um dia para compensar o timezone
-                         const modalDate = new Date(dayDetails.date);
-                         modalDate.setDate(modalDate.getDate() + 1);
-                         
-                         console.log('Modal - dayDetails.date:', dayDetails.date);
-                         console.log('Modal - modalDate (original):', new Date(dayDetails.date));
-                         console.log('Modal - modalDate (com +1 dia):', modalDate);
-                         
-                         const formattedDate = modalDate.toLocaleDateString('pt-BR', {
-                           weekday: 'long',
-                           year: 'numeric',
-                           month: 'long',
-                           day: 'numeric'
-                         });
-                         
-                         console.log('Modal - formattedDate:', formattedDate);
-                         return formattedDate;
-                       })()}
-                     </h3>
-                   <p className="text-blue-100 mt-1">Detalhes dos agendamentos para esta data</p>
-                 </div>
-                 <button
-                   onClick={() => setShowModal(false)}
-                   className="text-white hover:text-blue-200 transition-colors p-2 rounded-full hover:bg-white hover:bg-opacity-20"
-                 >
-                   <X size={24} />
-                 </button>
-               </div>
-             </div>
+      {/* Modal de detalhes */}
+      {showModal && selectedDateDetails && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="modal-title"
+          aria-describedby="modal-description"
+        >
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+            {/* Header do Modal */}
+            <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white p-6">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 id="modal-title" className="text-2xl font-bold capitalize">
+                    {formatDisplayDate(selectedDateDetails.date)}
+                  </h2>
+                  <p id="modal-description" className="text-blue-100 mt-1">
+                    Detalhes dos agendamentos para esta data
+                  </p>
+                </div>
+                <button
+                  onClick={closeModal}
+                  className="text-white hover:text-blue-200 transition-all duration-200 p-2 rounded-full hover:bg-white hover:bg-opacity-20 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600 hover:scale-110"
+                  aria-label="Fechar modal"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
 
-                                                       {/* Conteúdo do Modal */}
-               <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
-                 
-                 {/* Loading dos detalhes */}
-                 {loadingDetails && (
-                   <div className="flex justify-center items-center py-12">
-                     <Loader2 className="animate-spin h-8 w-8 text-blue-600 mr-3" />
-                     <span className="text-lg text-gray-600">Carregando detalhes...</span>
-                   </div>
-                 )}
-
-                                  {/* Lista de Horários com Agendamentos Integrados */}
-                 {!loadingDetails && dayDetails && (
-                   <div className="mb-6">
-                     <h4 className="text-lg font-semibold text-gray-800 mb-4">Agendamentos</h4>
-                     
-                     {(() => {
-                       // Gerar todos os horários disponíveis baseado nos working hours
-                       const allTimeSlots = [];
-                       
-                       dayDetails.workingHours.forEach(wh => {
-                         const startHour = parseInt(wh.start_time.split(':')[0]);
-                         const endHour = parseInt(wh.end_time.split(':')[0]);
-                         
-                         for (let hour = startHour; hour < endHour; hour++) {
-                           const timeSlot = `${hour.toString().padStart(2, '0')}:00`;
-                           
-                           // Verificar se há agendamentos para este horário usando os dados detalhados
-                           const appointmentsForSlot = selectedDateDetails?.appointments?.filter(apt => {
-                             const aptStartHour = parseInt(apt.start_time.split(':')[0]);
-                             return aptStartHour === hour;
-                           }) || [];
-                           
-                           allTimeSlots.push({
-                             time: timeSlot,
-                             appointments: appointmentsForSlot,
-                             hasAppointments: appointmentsForSlot.length > 0
-                           });
-                         }
-                       });
-                       
-                       // Ordenar por horário
-                       allTimeSlots.sort((a, b) => a.time.localeCompare(b.time));
-                       
-                       return (
-                         <div className="space-y-4">
-                           {allTimeSlots.map((slot, index) => (
-                             <div key={index} className="border border-gray-200 rounded-lg overflow-hidden">
-                               {/* Horário */}
-                               <div className="bg-gray-50 px-4 py-3 border-b border-gray-200">
-                                 <div className="text-lg font-semibold text-gray-800">
-                                   {slot.time}
-                                 </div>
-                               </div>
-                               
-                               {/* Conteúdo do Horário */}
-                               <div className="p-4">
-                                 {slot.hasAppointments ? (
-                                   // Mostrar pacientes agendados com dados detalhados
-                                   <div className="space-y-3">
-                                     {slot.appointments.map((apt, aptIndex) => (
-                                       <div
-                                         key={aptIndex}
-                                         className="bg-white border border-gray-200 rounded-lg p-3 hover:bg-gray-50 transition-colors"
-                                       >
-                                         <div className="flex items-start justify-between">
-                                           <div className="flex-1">
-                                             {/* Nome do paciente com bolinha de status */}
-                                             <div className="flex items-center gap-3 mb-3">
-                                               <div className={`w-3 h-3 rounded-full ${
-                                                 apt.status === 'pending' ? 'bg-yellow-500' :
-                                                 apt.status === 'confirmed' ? 'bg-green-500' :
-                                                 apt.status === 'cancelled' ? 'bg-red-500' :
-                                                 apt.status === 'completed' ? 'bg-blue-500' :
-                                                 'bg-gray-500'
-                                               }`}></div>
-                                               <h5 className="text-lg font-semibold text-gray-900">
-                                                 {getPatientName(apt.patient_id)}
-                                               </h5>
-                                             </div>
-                                             
-                                             {/* Grid com informações detalhadas - Layout moderno */}
-                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                                               <div className="space-y-3">
-                                                 <div className="flex items-center gap-3">
-                                                   <User className="w-5 h-5 text-blue-600" />
-                                                   <div>
-                                                     <span className="text-xs text-gray-500 uppercase tracking-wide">Psicólogo Responsável</span>
-                                                     <p className="font-medium text-gray-900">{getPsychologistName(apt.psychologist_id)}</p>
-                                                   </div>
-                                                 </div>
-                                                 <div className="flex items-center gap-3">
-                                                   <MapPin className="w-5 h-5 text-purple-600" />
-                                                   <div>
-                                                     <span className="text-xs text-gray-500 uppercase tracking-wide">Sala</span>
-                                                     <p className="font-medium text-gray-900">Sala {apt.room_id || 'N/A'}</p>
-                                                   </div>
-                                                 </div>
-                                               </div>
-                                               <div className="space-y-3">
-                                                 <div className="flex items-center gap-3">
-                                                   <Clock className="w-5 h-5 text-green-600" />
-                                                   <div>
-                                                     <span className="text-xs text-gray-500 uppercase tracking-wide">Início</span>
-                                                     <p className="font-medium text-gray-900">
-                                                       {apt.start_time ? apt.start_time : 'N/A'}
-                                                     </p>
-                                                   </div>
-                                                 </div>
-                                                 <div className="flex items-center gap-3">
-                                                   <Clock className="w-5 h-5 text-red-600" />
-                                                   <div>
-                                                     <span className="text-xs text-gray-500 uppercase tracking-wide">Término</span>
-                                                     <p className="font-medium text-gray-900">
-                                                       {apt.end_time ? apt.end_time : 'N/A'}
-                                                     </p>
-                                                   </div>
-                                                 </div>
-                                               </div>
-                                             </div>
-                                             
-                                             {/* Status e Valor - Layout moderno */}
-                                             <div className="mt-4 pt-4 border-t border-gray-200">
-                                               <div className="flex items-center justify-between">
-                                                 <div className="flex items-center gap-3">
-                                                   <div className={`w-3 h-3 rounded-full ${
-                                                     apt.status === 'pending' ? 'bg-yellow-500' :
-                                                     apt.status === 'confirmed' ? 'bg-green-500' :
-                                                     apt.status === 'cancelled' ? 'bg-red-500' :
-                                                     apt.status === 'completed' ? 'bg-blue-500' :
-                                                     'bg-gray-500'
-                                                   }`}></div>
-                                                   <span className={`px-3 py-1 rounded-full text-xs font-medium ${
-                                                     apt.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                                                     apt.status === 'confirmed' ? 'bg-green-100 text-green-800' :
-                                                     apt.status === 'cancelled' ? 'bg-red-100 text-red-800' :
-                                                     apt.status === 'completed' ? 'bg-blue-100 text-blue-800' :
-                                                     'bg-gray-100 text-gray-800'
-                                                   }`}>
-                                                     {apt.status === 'pending' ? 'Pendente' :
-                                                      apt.status === 'confirmed' ? 'Confirmado' :
-                                                      apt.status === 'cancelled' ? 'Cancelado' :
-                                                      apt.status === 'completed' ? 'Concluído' :
-                                                      apt.status}
-                                                   </span>
-                                                 </div>
-                                                 <div className="text-right">
-                                                   <span className="text-xs text-gray-500 uppercase tracking-wide">Valor</span>
-                                                   <p className="text-lg font-bold text-green-600">R$ {parseFloat(apt.value || 0).toFixed(2)}</p>
-                                                 </div>
-                                               </div>
-                                             </div>
-                                           </div>
-                                         </div>
-                                       </div>
-                                     ))}
-                                   </div>
-                                 ) : (
-                                   // Mostrar "Livre"
-                                   <div className="flex items-center gap-3">
-                                     <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-                                     <div className="text-lg font-medium text-green-700">
-                                       Livre
-                                     </div>
-                                   </div>
-                                 )}
-                               </div>
-                             </div>
-                           ))}
-                         </div>
-                       );
-                     })()}
-                   </div>
-                 )}
-
-                 {/* Mensagem quando não há horários disponíveis */}
-                 {!loadingDetails && dayDetails.workingHours.length === 0 && (
-                   <div className="text-center text-gray-500 py-12">
-                     <Calendar size={64} className="mx-auto mb-4 opacity-50" />
-                     <p className="text-lg font-medium">Nenhum psicólogo disponível nesta data</p>
-                     <p className="text-sm text-gray-400">Selecione outra data para ver os horários disponíveis</p>
-                   </div>
-                 )}
-               </div>
-           </div>
-         </div>
-       )}
+            {/* Conteúdo do Modal */}
+            <div className="p-6 overflow-y-auto max-h-[calc(90vh-120px)]">
+              {loadingDetails ? (
+                <div className="flex justify-center items-center py-12" role="status" aria-live="polite">
+                  <div className="text-center">
+                    <Loader2 className="animate-spin h-10 w-10 text-blue-600 mx-auto mb-4" aria-hidden="true" />
+                    <span className="text-lg text-gray-600 font-medium">Carregando detalhes...</span>
+                  </div>
+                </div>
+              ) : selectedDateDetails.workingHours.length > 0 ? (
+                <section className="mb-6" aria-labelledby="appointments-title">
+                  <h3 id="appointments-title" className="text-lg font-semibold text-gray-800 mb-4">
+                    Agendamentos
+                  </h3>
+                  <div className="space-y-4">
+                    {generateTimeSlots.map((slot, index) => (
+                      <TimeSlot 
+                        key={`${slot.time}-${index}`}
+                        slot={slot} 
+                        getPatientName={getPatientName} 
+                        getPsychologistName={getPsychologistName} 
+                        userRole={user?.role}
+                        onStatusChange={handleStatusChange}
+                        availablePsychologists={availablePsychologists}
+                      />
+                    ))}
+                  </div>
+                </section>
+              ) : (
+                <div className="text-center text-gray-500 py-12">
+                  <div className="mx-auto mb-6 p-4 bg-gray-100 rounded-full w-20 h-20 flex items-center justify-center">
+                    <Calendar size={32} className="text-gray-400" aria-hidden="true" />
+                  </div>
+                  <p className="text-xl font-semibold text-gray-700 mb-2">Nenhum psicólogo disponível nesta data</p>
+                  <p className="text-sm text-gray-500">Selecione outra data para ver os horários disponíveis</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
