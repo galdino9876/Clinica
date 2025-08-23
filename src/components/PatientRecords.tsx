@@ -22,6 +22,7 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [psychologists, setPsychologists] = useState<{ [key: number]: string }>({}); // Mapeamento ID -> Nome
+  const [usersCache, setUsersCache] = useState<any[]>([]); // Cache da lista de usuários
 
   const { user } = useAuth();
 
@@ -35,18 +36,48 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
       }
 
       console.log("Buscando psicólogo com ID:", psychologistId);
-      const response = await fetch(
-        `https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/users/${psychologistId}`
-      );
       
-      if (!response.ok) {
-        console.error("Erro na resposta da API:", response.status, response.statusText);
-        throw new Error("Erro ao buscar psicólogo");
+      let users: any[] = [];
+      
+      // Se já temos o cache de usuários, usar ele
+      if (usersCache.length > 0) {
+        users = usersCache;
+        console.log("Usando cache de usuários");
+      } else {
+        // Buscar todos os usuários de uma vez
+        const response = await fetch(
+          "https://webhook.essenciasaudeintegrada.com.br/webhook/users"
+        );
+        
+        if (!response.ok) {
+          console.error("Erro na resposta da API:", response.status, response.statusText);
+          throw new Error("Erro ao buscar usuários");
+        }
+        
+        const usersData = await response.json();
+        users = Array.isArray(usersData) ? usersData : usersData.users || usersData.data || [];
+        
+        // Salvar no cache
+        setUsersCache(users);
+        console.log("Lista de usuários carregada e cacheada:", users.length);
       }
       
-      const data = await response.json();
-      console.log("Resposta da API para psicólogo:", data);
-      return data.name || "Desconhecido";
+      // Encontrar o usuário específico por ID
+      const user = users.find((u: any) => {
+        // Converter ambos para string para comparação mais robusta
+        const userId = String(u.id);
+        const targetId = String(psychologistId);
+        return userId === targetId;
+      });
+      
+      if (user) {
+        console.log("Usuário encontrado:", user);
+        return user.name || user.nome || "Desconhecido";
+      } else {
+        console.warn("Usuário não encontrado com ID:", psychologistId);
+        console.log("Usuários disponíveis:", users.map(u => ({ id: u.id, name: u.name || u.nome })));
+        return "Desconhecido";
+      }
     } catch (error) {
       console.error("Erro ao buscar psicólogo:", error);
       return "Desconhecido";
@@ -59,18 +90,22 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
     const names: { [key: number]: string } = {};
     
     console.log("IDs únicos de psicólogos encontrados:", uniqueIds);
+    console.log("Registros recebidos:", records);
     
     for (const id of uniqueIds) {
       // Valida se o ID é válido antes de fazer a requisição
-      if (id && Number.isInteger(id) && !psychologists[id]) {
+      if (id && Number.isInteger(id)) {
         console.log("Carregando nome para psicólogo ID:", id);
-        names[id] = await fetchPsychologistName(id);
+        const name = await fetchPsychologistName(id);
+        names[id] = name;
+        console.log(`Nome carregado para ID ${id}:`, name);
       } else if (!id || !Number.isInteger(id)) {
         console.warn("ID inválido encontrado:", id);
         names[id] = "ID Inválido";
       }
     }
     
+    console.log("Nomes carregados:", names);
     setPsychologists((prev) => ({ ...prev, ...names }));
   };
 
@@ -84,8 +119,20 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
       if (!response.ok) throw new Error("Erro ao carregar prontuários");
       const data = await response.json();
       const recordsData = Array.isArray(data) ? data : data.records || [];
-      setRecords(recordsData.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-      await loadPsychologistNames(recordsData);
+      
+      // Normalizar os dados dos prontuários
+      const normalizedRecords = recordsData.map((record: any) => ({
+        id: Number(record.id) || 0,
+        patient_id: record.patient_id || record.patientId || patientId,
+        appointment_id: record.appointment_id || record.appointmentId || null,
+        date: record.date || new Date().toISOString().split('T')[0],
+        notes: record.notes || '',
+        created_by: Number(record.created_by || record.createdBy) || 0
+      }));
+      
+      console.log("Prontuários normalizados:", normalizedRecords);
+      setRecords(normalizedRecords.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+      await loadPsychologistNames(normalizedRecords);
     } catch (err: any) {
       setError("Erro ao carregar prontuários.");
       setRecords([]);
@@ -112,6 +159,11 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
       setLoading(false);
     }
   }, [patient, user]);
+
+  // Monitorar mudanças no estado dos psicólogos para debug
+  useEffect(() => {
+    console.log("Estado dos psicólogos atualizado:", psychologists);
+  }, [psychologists]);
 
   const handleSaveRecord = async () => {
     if (!notes.trim()) {
@@ -152,7 +204,7 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
       }
       const savedRecord = await response.json();
       const normalizedRecord: PatientRecord = {
-        id: savedRecord.id || "",
+        id: Number(savedRecord.id) || 0,
         patient_id: savedRecord.patient_id || savedRecord.patientId || patient.id,
         appointment_id: savedRecord.appointment_id || savedRecord.appointmentId || null,
         date: savedRecord.date || newRecord.date,
@@ -170,15 +222,25 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
     }
   };
 
-  const handleDeleteRecord = async (recordId: string) => {
+  const handleDeleteRecord = async (recordId: number) => {
     if (!window.confirm("Tem certeza que deseja excluir este prontuário?")) return;
+    
     try {
       setLoading(true);
       const response = await fetch(
-        `https://webhook.essenciasaudeintegrada.com.br/webhook/patient-records/${recordId}`,
-        { method: "DELETE" }
+        "https://webhook.essenciasaudeintegrada.com.br/webhook/patient-records",
+        { 
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ id: recordId })
+        }
       );
+      
       if (!response.ok) throw new Error("Falha ao excluir prontuário");
+      
+      // Remove o registro da lista local
       setRecords(records.filter((r) => r.id !== recordId));
     } catch (err: any) {
       setError("Erro ao excluir prontuário.");
@@ -267,16 +329,23 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
                     </p>
                     <p className="text-xs text-gray-500">
                       Criado por: {psychologists[record.created_by] || "Carregando..."} 
+                      {!psychologists[record.created_by] && (
+                        <span className="text-red-500 ml-1">
+                          (ID: {record.created_by})
+                        </span>
+                      )}
                     </p>
                   </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleDeleteRecord(record.id)}
-                    className="text-red-500 hover:bg-red-50 hover:text-red-600"
-                  >
-                    <Trash className="h-4 w-4" />
-                  </Button>
+                  {user?.role !== 'psychologist' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleDeleteRecord(record.id)}
+                      className="text-red-500 hover:bg-red-50 hover:text-red-600"
+                    >
+                      <Trash className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
                 <p className="text-sm text-gray-600 whitespace-pre-wrap">{record.notes}</p>
               </CardContent>
