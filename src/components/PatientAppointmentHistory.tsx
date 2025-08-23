@@ -1,6 +1,6 @@
 
 import { useAppointments } from "@/context/AppointmentContext";
-import { Patient } from "@/types/appointment";
+import { Patient, AppointmentWithDetails } from "@/types/appointment";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -19,7 +19,7 @@ const PatientAppointmentHistory = ({ patient }: PatientAppointmentHistoryProps) 
     const dateComparison = new Date(b.date).getTime() - new Date(a.date).getTime();
     if (dateComparison !== 0) return dateComparison;
     return b.startTime.localeCompare(a.startTime);
-  });
+  }) as AppointmentWithDetails[];
 
   if (confirmedAppointments.length === 0) {
     return (

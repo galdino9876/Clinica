@@ -6,22 +6,27 @@ import PatientAppointmentHistory from "./PatientAppointmentHistory";
 import PatientRecords from "./PatientRecords";
 import ReferralDialog from "./patient/ReferralDialog";
 import { useAuth } from "@/context/AuthContext";
+
 const PatientsTable = () => {
   const { user } = useAuth(); // Adicionado para obter o usuário autenticado
   const [patients, setPatients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [isAdmin] = useState(false);
-  const [canManagePatients] = useState(true);
-  const [canViewRecords] = useState(false);
-  const [isPsychologist] = useState(false);
+  
+  // User roles and permissions - baseado no papel real do usuário
+  const isAdmin = user?.role === "admin";
+  const isReceptionist = user?.role === "receptionist";
+  const isPsychologist = user?.role === "psychologist";
+  const canManagePatients = isAdmin || isReceptionist; // Apenas admin e recepcionistas podem gerenciar
+  const canViewRecords = isAdmin || isPsychologist; // Apenas admin e psicólogos podem ver prontuários
+  
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPatient, setSelectedPatient] = useState(null);
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isRecordsOpen, setIsRecordsOpen] = useState(false);
   const [isReferralOpen, setIsReferralOpen] = useState(false);
-const isReceptionist = user?.role === "receptionist";
+
   const fetchPatients = async () => {
     try {
       setLoading(true);
@@ -89,7 +94,7 @@ const isReceptionist = user?.role === "receptionist";
         setSelectedPatient(patient);
         setIsRecordsOpen(true);
       },
-      visible: !isReceptionist, // Se for recepcionista, visible = false; se não, visible = true
+      visible: canViewRecords, // Se for recepcionista, visible = false; se não, visible = true
     },
     {
       id: "referral",
@@ -115,6 +120,7 @@ const isReceptionist = user?.role === "receptionist";
       icon: Activity,
       color: "text-green-600 hover:text-green-800",
       onClick: (patient) => alert(`Reativar paciente: ${patient.name || patient.nome}`),
+      visible: canManagePatients, // Apenas admin e recepcionistas podem reativar
     },
     {
       id: "edit",
@@ -122,6 +128,7 @@ const isReceptionist = user?.role === "receptionist";
       icon: Edit,
       color: "text-blue-600 hover:text-blue-800",
       onClick: (patient) => alert(`Editar paciente: ${patient.name || patient.nome}`),
+      visible: canManagePatients, // Apenas admin e recepcionistas podem editar
     },
     {
       id: "delete",

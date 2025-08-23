@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useAppointments } from "@/context/AppointmentContext";
 import { Button } from "@/components/ui/button";
-import { PendingPatientsData } from "@/types/appointment";
+import { PendingPatientsData, AppointmentWithDetails } from "@/types/appointment";
 import { format, parseISO } from "date-fns";
 
 const PendingConfirmations = () => {
@@ -10,7 +10,7 @@ const PendingConfirmations = () => {
   const [pendingAppointmentsByDate, setPendingAppointmentsByDate] = useState<PendingPatientsData[]>([]);
 
   useEffect(() => {
-    const pendingAppts = appointments.filter(a => a.status === "pending");
+    const pendingAppts = appointments.filter(a => a.status === "pending") as AppointmentWithDetails[];
 
     // Group appointments by date
     const groupedByDate = pendingAppts.reduce((acc, appointment) => {

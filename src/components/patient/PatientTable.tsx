@@ -171,7 +171,7 @@ const PatientTable = ({
                           </>
                         )}
 
-                        {/* Gerenciamento de pacientes - apenas para quem pode gerenciar */}
+                        {/* Gerenciamento de pacientes - apenas para quem pode gerenciar (admin e recepcionistas) */}
                         {canManagePatients && patient.active && (
                           <>
                             <Button
@@ -192,6 +192,7 @@ const PatientTable = ({
                             </Button>
                           </>
                         )}
+                        {/* Reativar paciente - apenas para admin */}
                         {isAdmin && !patient.active && (
                           <Button
                             variant="ghost"
