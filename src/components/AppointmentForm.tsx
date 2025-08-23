@@ -19,6 +19,7 @@ import { InputDynamic } from "./inputDin";
 interface AppointmentFormProps {
   selectedDate: Date;
   onClose: () => void;
+  onAppointmentCreated?: () => void; // Nova prop para notificar criação
 }
 
 interface WorkingHour {
@@ -27,7 +28,7 @@ interface WorkingHour {
   end_time: string;
 }
 
-const AppointmentForm = ({ selectedDate: initialDate, onClose }: AppointmentFormProps) => {
+const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCreated }: AppointmentFormProps) => {
   const { toast } = useToast();
   const [isPatientFormOpen, setIsPatientFormOpen] = React.useState(false);
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -252,7 +253,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose }: AppointmentForm
           const data = await patientsResponse.json();
           console.log("Resposta API pacientes (detalhada):", JSON.stringify(data, null, 2)); // Log mais detalhado
           const fetchedPatients: Patient[] = data.map((patient: any) => ({
-            id: patient.id,
+            id: String(patient.id),
             name: patient.name,
             cpf: patient.cpf,
             phone: patient.phone,
@@ -282,7 +283,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose }: AppointmentForm
           const data = await roomsResponse.json();
           console.log("Resposta API consultórios (detalhada):", JSON.stringify(data, null, 2));
           const fetchedRooms: ConsultingRoom[] = data.map((room: any) => ({
-            id: room.id,
+            id: String(room.id),
             name: room.name,
             description: room.description || null,
             createdAt: room.created_at ? new Date(room.created_at) : new Date(),
@@ -304,7 +305,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose }: AppointmentForm
           console.log("Resposta API usuários (detalhada):", JSON.stringify(data, null, 2));
           const fetchedPsychologists = data
             .filter((user: any) => user.role === "psychologist")
-            .map((user: any) => ({ id: user.id.toString(), name: user.name }));
+            .map((user: any) => ({ id: String(user.id), name: user.name }));
           setPsychologists(fetchedPsychologists);
           console.log("Psicólogos carregados:", fetchedPsychologists);
         } else {
@@ -346,6 +347,17 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose }: AppointmentForm
       });
       if (response.ok) {
         toast({ title: "Sucesso", description: "Consulta agendada." });
+        
+        // Disparar evento customizado para notificar o calendário
+        const event = new CustomEvent('appointmentCreated', {
+          detail: { success: true, timestamp: Date.now() }
+        });
+        window.dispatchEvent(event);
+        
+        // Notificar que um novo agendamento foi criado
+        if (onAppointmentCreated) {
+          onAppointmentCreated();
+        }
         onClose();
       } else {
         throw new Error("Falha ao criar agendamento");
