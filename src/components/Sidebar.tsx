@@ -1,11 +1,15 @@
 import { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
-import { Calendar, Users, BarChart3, LogOut, User, Key } from "lucide-react";
+import { Calendar, Users, BarChart3, LogOut, User, Key, X } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import ChangePasswordModal from "./ChangePasswordModal";
 
-const Sidebar = () => {
+interface SidebarProps {
+  onClose?: () => void;
+}
+
+const Sidebar = ({ onClose }: SidebarProps) => {
   const { user, logout } = useAuth();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
@@ -13,6 +17,13 @@ const Sidebar = () => {
   useEffect(() => {
     console.log("User no Sidebar:", user);
   }, [user]);
+
+  const handleNavClick = () => {
+    // Fechar sidebar no mobile quando um item for clicado
+    if (onClose) {
+      onClose();
+    }
+  };
 
   const getNavItems = () => {
     const baseItems = [
@@ -47,12 +58,22 @@ const Sidebar = () => {
   };
 
   return (
-    <div className="hidden md:flex min-h-screen w-64 flex-col bg-white border-r border-gray-200">
+    <div className="min-h-screen w-64 flex-col bg-white border-r border-gray-200 shadow-lg md:shadow-none">
       <div className="flex flex-col justify-between h-full">
         <div>
-          <div className="p-4 border-b border-gray-200">
+          {/* Header com botão de fechar para mobile */}
+          <div className="p-4 border-b border-gray-200 flex justify-between items-center">
             <h1 className="text-xl font-bold text-clinic-700">Clínica Psicológica</h1>
+            {/* Botão de fechar apenas para mobile */}
+            <button
+              onClick={onClose}
+              className="md:hidden p-1 hover:bg-gray-100 rounded-md transition-colors"
+              aria-label="Fechar menu"
+            >
+              <X className="h-5 w-5 text-gray-600" />
+            </button>
           </div>
+          
           <div className="p-4">
             <div className="mb-2">
               <p className="text-sm text-gray-500">Logado como</p>
@@ -72,6 +93,7 @@ const Sidebar = () => {
                 <li key={item.to}>
                   <NavLink
                     to={item.to}
+                    onClick={handleNavClick}
                     className={({ isActive }) =>
                       cn(
                         "flex items-center px-3 py-2 text-sm rounded-md",
