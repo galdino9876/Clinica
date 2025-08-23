@@ -1,5 +1,5 @@
 
-import React, { createContext, useState, useContext, ReactNode } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useCallback } from 'react';
 import {
   Appointment,
   ConsultingRoom,
@@ -116,6 +116,9 @@ interface AppointmentContextType {
   findNextAvailableSlot: (psychologistId: string) => { date: Date, startTime: string, endTime: string } | null;
   rescheduleAppointment: (appointmentId: string, newDate: string, newStartTime: string, newEndTime: string) => void;
   getPendingAppointmentsByDate: () => PendingPatientsData[];
+  // Sistema de eventos para notificar mudanças
+  subscribeToChanges: (callback: () => void) => () => void;
+  notifyChange: () => void;
 }
 
 const AppointmentContext = createContext<AppointmentContextType | undefined>(undefined);
@@ -125,8 +128,24 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [rooms, setRooms] = useState<ConsultingRoom[]>(initialRooms);
   const [patients, setPatients] = useState<Patient[]>(initialPatients);
   const [patientRecords, setPatientRecords] = useState<PatientRecord[]>(initialPatientRecords);
+  const [changeSubscribers, setChangeSubscribers] = useState<(() => void)[]>([]);
   const { toast } = useToast();
   const { users } = useAuth();
+
+  // Função para notificar todos os subscribers sobre mudanças
+  const notifyChange = useCallback(() => {
+    changeSubscribers.forEach(callback => callback());
+  }, [changeSubscribers]);
+
+  // Função para se inscrever em mudanças
+  const subscribeToChanges = useCallback((callback: () => void) => {
+    setChangeSubscribers(prev => [...prev, callback]);
+    
+    // Retorna função para cancelar inscrição
+    return () => {
+      setChangeSubscribers(prev => prev.filter(cb => cb !== callback));
+    };
+  }, []);
 
   const addAppointment = (appointmentData: Omit<Appointment, 'id'>) => {
     const newAppointment: Appointment = {
@@ -135,6 +154,7 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
       status: appointmentData.status || "pending", // Default to pending if not provided
     };
     setAppointments(prev => [...prev, newAppointment]);
+    notifyChange(); // Notificar mudança
     toast({
       title: "Consulta agendada",
       description: `Agendamento para ${appointmentData.patient.name} foi criado.`
@@ -556,7 +576,9 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
         updateAppointmentStatus,
         findNextAvailableSlot,
         rescheduleAppointment,
-        getPendingAppointmentsByDate
+        getPendingAppointmentsByDate,
+        subscribeToChanges,
+        notifyChange
       }}
     >
       {children}

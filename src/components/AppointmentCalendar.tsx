@@ -1,6 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Clock, User, MapPin, X, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Clock, User, MapPin, X, Loader2, Plus } from 'lucide-react';
 import { useAuth } from "../context/AuthContext";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import AppointmentForm from "./AppointmentForm";
 
 // Tipos para melhorar a tipagem
 interface Appointment {
@@ -333,31 +336,28 @@ const useDayStatus = (appointments: Appointment[], workingHours: WorkingHour[]) 
 
 // Componente para a legenda do calendário
 const CalendarLegend = () => (
-  <div className="px-6 py-3 bg-gradient-to-r from-gray-50 to-gray-100 border-b">
-    <div className="flex flex-wrap items-center gap-6 text-sm">
-      {[
-        { 
-          color: 'bg-emerald-100 border-emerald-300', 
-          label: 'Confirmados'
-        },
-        { 
-          color: 'bg-sky-100 border-sky-300', 
-          label: 'Disponibilidade'
-        },
-        { 
-          color: 'bg-rose-100 border-rose-300', 
-          label: 'Totalmente agendado'
-        },
-        { 
-          color: 'w-2.5 h-2.5 bg-amber-500 rounded-full border-amber-600', 
-          label: 'Indicador de agendamento'
-        }
-      ].map((item, index) => (
-        <div key={index} className="flex items-center gap-2">
-          <div className={`w-4 h-4 ${item.color.includes('w-2') ? item.color : item.color + ' border-2 rounded'}`}></div>
-          <span className="font-medium text-gray-700">{item.label}</span>
-        </div>
-      ))}
+  <div className="px-6 py-3 border-b border-gray-200 bg-gray-50">
+    <div className="flex flex-wrap items-center gap-4 text-sm">
+      <div className="flex items-center gap-2">
+        <div className="w-3 h-3 rounded-full bg-sky-500 border border-sky-600"></div>
+        <span className="text-gray-700">Horário Livre</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="w-3 h-3 rounded-full bg-emerald-600 border border-emerald-700"></div>
+        <span className="text-gray-700">Confirmado</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="w-3 h-3 rounded-full bg-amber-500 border border-amber-600"></div>
+        <span className="text-gray-700">Pendente</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="w-3 h-3 rounded-full bg-rose-600 border border-rose-700"></div>
+        <span className="text-gray-700">Cancelado</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="w-3 h-3 rounded-full bg-amber-500 border border-amber-600"></div>
+        <span className="text-gray-700">Indicador de Agendamento</span>
+      </div>
     </div>
   </div>
 );
@@ -370,37 +370,40 @@ const CalendarNavigation = ({
   currentDate: Date; 
   onNavigate: (direction: number) => void; 
 }) => (
-  <div className="px-6 py-6 flex justify-between items-center border-b bg-gradient-to-r from-gray-50 to-gray-100">
+  <div className="px-6 py-4 flex justify-between items-center border-b bg-gradient-to-r from-gray-50 to-gray-100">
     <button
       onClick={() => onNavigate(-1)}
-      className="flex items-center gap-2 px-4 py-3 text-gray-700 hover:text-gray-900 hover:bg-white rounded-lg transition-all duration-200 ease-in-out border border-gray-200 hover:border-gray-300 hover:shadow-md font-medium"
+      className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:text-gray-900 hover:bg-white rounded-lg transition-all duration-200 ease-in-out border border-gray-200 hover:border-gray-300 hover:shadow-md font-medium text-sm"
     >
-      <ChevronLeft size={20} />
+      <ChevronLeft size={18} />
       Mês Anterior
     </button>
 
     <div className="text-center">
-      <h3 className="text-2xl font-bold text-gray-800 capitalize">
+      <h3 className="text-xl font-bold text-gray-800 capitalize">
         {currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
       </h3>
-      <p className="text-sm text-gray-500 mt-1">Navegue pelos meses para visualizar os agendamentos</p>
+      <p className="text-xs text-gray-500 mt-1">Navegue pelos meses para visualizar os agendamentos</p>
     </div>
 
     <button
       onClick={() => onNavigate(1)}
-      className="flex items-center gap-2 px-4 py-3 text-gray-700 hover:text-gray-900 hover:bg-white rounded-lg transition-all duration-200 ease-in-out border border-gray-200 hover:border-gray-300 hover:shadow-md font-medium"
+      className="flex items-center gap-2 px-3 py-2 text-gray-700 hover:text-gray-900 hover:bg-white rounded-lg transition-all duration-200 ease-in-out border border-gray-200 hover:border-gray-300 hover:shadow-md font-medium text-sm"
     >
       Próximo Mês
-      <ChevronRight size={20} />
+      <ChevronRight size={18} />
     </button>
   </div>
 );
 
 // Componente para o cabeçalho dos dias da semana
 const CalendarHeader = () => (
-  <div className="grid grid-cols-7 gap-1 mb-4">
-    {DAYS_OF_WEEK.map(day => (
-      <div key={day} className="p-3 text-center font-semibold text-gray-700 bg-gradient-to-b from-gray-50 to-gray-100 rounded-lg border border-gray-200">
+  <div className="grid grid-cols-7 gap-1 mb-2">
+    {DAYS_OF_WEEK.map((day) => (
+      <div
+        key={day}
+        className="p-2 text-center text-sm font-semibold text-gray-600 bg-gray-50 rounded-lg"
+      >
         {day}
       </div>
     ))}
@@ -414,6 +417,7 @@ const TimeSlot = ({
   getPsychologistName,
   userRole,
   onStatusChange,
+  onAttendanceCompleted,
   availablePsychologists
 }: { 
   slot: TimeSlot; 
@@ -421,6 +425,7 @@ const TimeSlot = ({
   getPsychologistName: (id: string) => string;
   userRole?: string;
   onStatusChange: (appointmentId: string, action: 'confirmar' | 'cancelar') => Promise<void>;
+  onAttendanceCompleted: (appointment: Appointment) => void;
   availablePsychologists: Array<{id: string, name: string, workingHours: WorkingHour[]}>;
 }) => (
   <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
@@ -442,6 +447,7 @@ const TimeSlot = ({
               getPsychologistName={getPsychologistName}
               userRole={userRole}
               onStatusChange={onStatusChange}
+              onAttendanceCompleted={onAttendanceCompleted}
             />
           ))}
         </div>
@@ -509,13 +515,15 @@ const AppointmentCard = React.memo(({
   getPatientName, 
   getPsychologistName,
   userRole,
-  onStatusChange
+  onStatusChange,
+  onAttendanceCompleted
 }: { 
   appointment: Appointment; 
   getPatientName: (id: string) => string; 
   getPsychologistName: (id: string) => string;
   userRole?: string;
   onStatusChange: (appointmentId: string, action: 'confirmar' | 'cancelar') => Promise<void>;
+  onAttendanceCompleted: (appointment: Appointment) => void;
 }) => {
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -568,7 +576,10 @@ const AppointmentCard = React.memo(({
     }
   };
 
+
+
   const showActionButtons = userRole && userRole !== 'psychologist';
+  const showPsychologistButton = userRole === 'psychologist' && appointment.status === 'confirmed';
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-all duration-200 shadow-sm hover:shadow-md">
@@ -683,9 +694,37 @@ const AppointmentCard = React.memo(({
               </p>
             </div>
           )}
+
+          {/* Botão para psicólogos */}
+          {showPsychologistButton && (
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => onAttendanceCompleted(appointment)}
+                  disabled={isUpdating}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
+                  aria-label={`Marcar atendimento realizado para ${getPatientName(appointment.patient_id)}`}
+                >
+                  {isUpdating ? (
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                      Processando...
+                    </div>
+                  ) : (
+                    'Atendimento Realizado'
+                  )}
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-2 text-center opacity-75">
+                Marque quando o atendimento for concluído
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
+
+
   );
 });
 
@@ -700,10 +739,71 @@ const AppointmentCalendar = () => {
   const [selectedDateDetails, setSelectedDateDetails] = useState<DayDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [availablePsychologists, setAvailablePsychologists] = useState<Array<{id: string, name: string, workingHours: WorkingHour[]}>>([]);
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [showObservationModal, setShowObservationModal] = useState(false);
+  const [observationNotes, setObservationNotes] = useState('');
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   const { appointments, workingHours, patients, users, loading, error, refetch } = useAppointmentData(user);
   const { formatDate, getDaysInMonth, getFirstDayOfMonth, formatDisplayDate } = useDateUtils();
   const { getDayStatus } = useDayStatus(appointments, workingHours);
+
+  // Atualizar automaticamente o calendário quando novos agendamentos forem criados
+  useEffect(() => {
+    // Se há um modal aberto e os dados mudaram, atualizar o modal
+    if (showModal && selectedDateDetails) {
+      const updatedDateString = formatDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), selectedDate!));
+      
+      // Buscar agendamentos atualizados para a data selecionada
+      const updatedDayAppointments = appointments.filter(apt => {
+        const aptDate = apt.date || apt.appointment_date || apt.scheduled_date;
+        return aptDate === updatedDateString;
+      }).map(apt => ({
+        ...apt,
+        end_time: apt.end_time || apt.endTime || '00:00',
+        status: apt.status || 'pending',
+        start_time: apt.start_time || apt.startTime || apt.time || '00:00',
+        value: Math.max(0, parseFloat(String(apt.value || apt.price || 0)) || 0)
+      }));
+
+      // Atualizar apenas se houver mudanças
+      if (JSON.stringify(updatedDayAppointments) !== JSON.stringify(selectedDateDetails.appointments)) {
+        setSelectedDateDetails(prev => prev ? {
+          ...prev,
+          appointments: updatedDayAppointments
+        } : null);
+      }
+    }
+  }, [appointments, showModal, selectedDateDetails, currentDate, selectedDate, formatDate]);
+
+  // Usar o sistema de eventos do contexto para atualizações automáticas
+  useEffect(() => {
+    // Se o contexto tiver o sistema de eventos, usar ele
+    if (typeof refetch === 'function') {
+      // Atualizar dados quando houver mudanças
+      const unsubscribe = refetch;
+      
+      return () => {
+        if (typeof unsubscribe === 'function') {
+          unsubscribe();
+        }
+      };
+    }
+  }, [refetch]);
+
+  // Listener para evento customizado de agendamento criado
+  useEffect(() => {
+    const handleAppointmentCreated = () => {
+      // Atualizar dados do calendário quando um novo agendamento for criado
+      refetch();
+    };
+
+    window.addEventListener('appointmentCreated', handleAppointmentCreated);
+    
+    return () => {
+      window.removeEventListener('appointmentCreated', handleAppointmentCreated);
+    };
+  }, [refetch]);
 
   // Funções auxiliares memoizadas
   const getPatientName = useCallback((patientId: string): string => {
@@ -728,11 +828,6 @@ const AppointmentCalendar = () => {
     const clickedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
     const dateString = formatDate(clickedDate);
     
-    console.log('handleDayClick - day clicked:', day);
-    console.log('handleDayClick - currentDate:', currentDate);
-    console.log('handleDayClick - clickedDate:', clickedDate);
-    console.log('handleDayClick - dateString (formatDate):', dateString);
-    
     setSelectedDate(day);
     setShowModal(true);
     
@@ -743,7 +838,6 @@ const AppointmentCalendar = () => {
       // Filtrar agendamentos para a data específica
       const dayAppointments = appointments.filter(apt => {
         const aptDate = apt.date || apt.appointment_date || apt.scheduled_date;
-        console.log('handleDayClick - comparing aptDate:', aptDate, 'with dateString:', dateString);
         return aptDate === dateString;
       }).map(apt => ({
         ...apt,
@@ -756,10 +850,6 @@ const AppointmentCalendar = () => {
       }));
       
       const dayWorkingHours = workingHours.filter(wh => wh.day_of_week === clickedDate.getDay());
-      
-      console.log('handleDayClick - dayAppointments found:', dayAppointments.length);
-      console.log('handleDayClick - dayWorkingHours found:', dayWorkingHours.length);
-      console.log('handleDayClick - setting selectedDateDetails with date:', dateString);
       
       setSelectedDateDetails({
         date: dateString,
@@ -807,7 +897,6 @@ const AppointmentCalendar = () => {
           // Filtrar psicólogos que realmente têm horários para este dia
           const availablePsychs = psychsWithWorkingHours.filter(psych => psych !== null);
           setAvailablePsychologists(availablePsychs);
-          console.log('Psicólogos disponíveis para', clickedDate.toDateString(), ':', availablePsychs);
         }
       } catch (err) {
         console.error('Erro ao buscar psicólogos:', err);
@@ -829,12 +918,7 @@ const AppointmentCalendar = () => {
   // Função para alterar status do agendamento
   const handleStatusChange = useCallback(async (appointmentId: string, action: 'confirmar' | 'cancelar') => {
     try {
-      // Log para debug - verificar ID recebido
-      console.log('Alterando status do agendamento:', { appointmentId, action });
-      
       const webhookUrl = `https://webhook.essenciasaudeintegrada.com.br/webhook/appoiments?id=${appointmentId}&action=${action}`;
-      
-      console.log('URL do webhook:', webhookUrl);
       
       const response = await fetch(webhookUrl, {
         method: 'GET',
@@ -847,44 +931,87 @@ const AppointmentCalendar = () => {
         throw new Error(`Erro na API: ${response.status} ${response.statusText}`);
       }
 
-      console.log('Resposta do webhook:', response.status, response.statusText);
-
       // Atualizar os dados locais após sucesso
       await refetch();
       
-      // Re-buscar detalhes da data selecionada para refletir a mudança
+      // Atualizar os dados do modal em tempo real (sem fechar/reabrir)
       if (selectedDateDetails) {
-        const updatedAppointments = appointments.filter(apt => {
-          const aptDate = apt.date || apt.appointment_date || apt.scheduled_date;
-          return aptDate === selectedDateDetails.date;
-        }).map(apt => ({
-          ...apt,
-          // Atualizar status se for o agendamento modificado
-          status: apt.id === appointmentId 
-            ? (action === 'confirmar' ? 'confirmed' : 'canceled')
-            : apt.status || 'pending',
-          start_time: apt.start_time || apt.startTime || apt.time || '00:00',
-          end_time: apt.end_time || apt.endTime || '00:00',
-          value: Math.max(0, parseFloat(String(apt.value || apt.price || 0)) || 0)
-        }));
-        
-        const updatedWorkingHours = workingHours.filter(wh => wh.day_of_week === new Date(selectedDateDetails.date).getDay());
+        // Atualizar apenas o agendamento específico que foi modificado
+        const updatedAppointments = selectedDateDetails.appointments.map(apt => {
+          if (apt.id === appointmentId) {
+            return {
+              ...apt,
+              // Atualizar status baseado na ação
+              status: (action === 'confirmar' ? 'confirmed' : 'canceled') as 'pending' | 'confirmed' | 'canceled'
+            };
+          }
+          return apt;
+        });
 
+        // Atualizar o estado local do modal com os dados atualizados
         setSelectedDateDetails({
           ...selectedDateDetails,
-          appointments: updatedAppointments,
-          workingHours: updatedWorkingHours
+          appointments: updatedAppointments
         });
       }
-
-      // Feedback visual de sucesso (opcional)
-      console.log(`Agendamento ${appointmentId} ${action === 'confirmar' ? 'confirmado' : 'cancelado'} com sucesso`);
       
     } catch (error) {
       console.error(`Erro ao ${action} agendamento:`, error);
       throw error; // Re-throw para o componente filho tratar
     }
-  }, [refetch, selectedDateDetails, appointments, workingHours]);
+  }, [refetch, selectedDateDetails]);
+
+  const handleAttendanceCompleted = useCallback((appointment: Appointment) => {
+    // Abrir modal de observações
+    setSelectedAppointment(appointment);
+    setShowObservationModal(true);
+  }, []);
+
+  const handleSaveObservations = useCallback(async () => {
+    if (!selectedAppointment || !observationNotes.trim()) {
+      alert('Por favor, descreva o que aconteceu no atendimento.');
+      return;
+    }
+
+    try {
+      // Fazer fetch para o webhook com as observações
+      const response = await fetch(
+        'https://webhook.essenciasaudeintegrada.com.br/webhook/create-patients-records',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            patient_id: selectedAppointment.patient_id,
+            appointment_id: selectedAppointment.id,
+            date: selectedAppointment.date || new Date().toISOString().split('T')[0],
+            notes: observationNotes,
+            created_by: selectedAppointment.psychologist_id,
+            update_status: 'completed'
+          }),
+        }
+      );
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Falha ao salvar observações do atendimento');
+      }
+
+      // Fechar modal e limpar observações
+      setShowObservationModal(false);
+      setObservationNotes('');
+      setSelectedAppointment(null);
+      
+      // Atualizar status do agendamento para "completed" ou similar
+      await handleStatusChange(selectedAppointment.id, 'confirmar');
+      
+      // Feedback de sucesso
+      alert('Atendimento marcado como realizado com sucesso!');
+      
+    } catch (error) {
+      console.error('Erro ao salvar observações:', error);
+      alert('Erro ao salvar observações. Tente novamente.');
+    }
+  }, [selectedAppointment, observationNotes, handleStatusChange]);
 
   // Renderizar calendário memoizado
   const renderCalendar = useMemo(() => {
@@ -912,12 +1039,12 @@ const AppointmentCalendar = () => {
         <button
           key={day}
           onClick={() => handleDayClick(day)}
-          className={`p-2 text-center cursor-pointer rounded-lg transition-all duration-200 ease-in-out ${DAY_STATUS_COLORS[dayStatus.status]} relative focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:scale-105 hover:shadow-md`}
+          className={`p-3 text-center cursor-pointer rounded-lg transition-all duration-200 ease-in-out ${DAY_STATUS_COLORS[dayStatus.status]} relative focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:scale-105 hover:shadow-md min-h-[80px] flex flex-col items-center justify-center`}
           aria-label={`${day} de ${currentDate.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}${hasAppointments ? ', com agendamentos' : ''}`}
           aria-pressed={selectedDate === day}
         >
           <div className="relative">
-            {day}
+            <span className="text-lg font-medium">{day}</span>
             {hasAppointments && (
               <div 
                 className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2.5 h-2.5 bg-amber-500 rounded-full shadow-sm border border-amber-600"
@@ -963,13 +1090,13 @@ const AppointmentCalendar = () => {
   // Loading state otimizado
   if (loading) {
     return (
-      <div className="w-full max-w-6xl mx-auto p-6">
+      <div className="w-full mx-auto">
         <div className="bg-white shadow-lg rounded-lg overflow-hidden">
-          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-6 border-b border-blue-200">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-blue-200">
             <div className="flex justify-between items-center">
-              <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+              <h1 className="text-xl font-bold text-gray-800 flex items-center gap-3">
                 <div className="p-2 bg-blue-100 rounded-lg">
-                  <Calendar size={28} className="text-blue-600" />
+                  <Calendar size={24} className="text-blue-600" />
                 </div>
                 Calendário de Agendamentos
               </h1>
@@ -989,7 +1116,7 @@ const AppointmentCalendar = () => {
   // Error state
   if (error) {
     return (
-      <div className="w-full max-w-6xl mx-auto p-6">
+      <div className="w-full mx-auto">
         <div className="bg-white shadow-lg rounded-lg overflow-hidden">
           <div className="bg-red-50 px-6 py-4 border-b border-red-200">
             <h2 className="text-xl font-semibold text-red-800 flex items-center gap-2">
@@ -1015,27 +1142,26 @@ const AppointmentCalendar = () => {
   }
 
   return (
-    <div className="w-full max-w-6xl mx-auto p-6">
+    <div className="w-full mx-auto">
       <div className="bg-white shadow-lg rounded-lg overflow-hidden">
         {/* Header */}
-        <header className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-6 border-b border-blue-200">
+        <header className="bg-gradient-to-r from-blue-50 to-indigo-50 px-6 py-4 border-b border-blue-200">
           <div className="flex justify-between items-center">
-            <h1 className="text-2xl font-bold text-gray-800 flex items-center gap-3">
+            <h1 className="text-xl font-bold text-gray-800 flex items-center gap-3">
               <div className="p-2 bg-blue-100 rounded-lg">
-                <Calendar size={28} className="text-blue-600" />
+                <Calendar size={24} className="text-blue-600" />
               </div>
               Calendário de Agendamentos
             </h1>
-            <button
-              onClick={refetch}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white px-6 py-3 rounded-lg transition-all duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 hover:shadow-lg hover:scale-105 font-medium"
-              aria-label="Atualizar dados do calendário"
-            >
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 bg-white rounded-full animate-pulse"></div>
-                Atualizar
-              </div>
-            </button>
+            {(user?.role === "admin" || user?.role === "receptionist") && (
+              <Button
+                onClick={() => setIsCreateModalOpen(true)}
+                className="bg-clinic-600 hover:bg-clinic-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center gap-2"
+              >
+                <Plus size={18} />
+                Novo Agendamento
+              </Button>
+            )}
           </div>
         </header>
 
@@ -1043,10 +1169,10 @@ const AppointmentCalendar = () => {
         <CalendarNavigation currentDate={currentDate} onNavigate={navigateMonth} />
 
         {/* Calendário */}
-        <main className="p-8" role="main" aria-label="Calendário mensal">
+        <main className="px-4 py-2" role="main" aria-label="Calendário mensal">
           <CalendarHeader />
           <div 
-            className="grid grid-cols-7 gap-2" 
+            className="grid grid-cols-7 gap-1" 
             role="grid" 
             aria-label="Dias do mês"
           >
@@ -1054,6 +1180,23 @@ const AppointmentCalendar = () => {
           </div>
         </main>
       </div>
+
+      {/* Modal para criar novo agendamento */}
+      <Dialog open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
+        <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Novo Agendamento</DialogTitle>
+            <DialogDescription>
+              Preencha os dados para criar um novo agendamento.
+              {" Selecione um psicólogo para que o sistema sugira automaticamente o próximo horário disponível."}
+            </DialogDescription>
+          </DialogHeader>
+          <AppointmentForm
+            selectedDate={new Date()}
+            onClose={() => setIsCreateModalOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de detalhes */}
       {showModal && selectedDateDetails && (
@@ -1063,8 +1206,12 @@ const AppointmentCalendar = () => {
           aria-modal="true"
           aria-labelledby="modal-title"
           aria-describedby="modal-description"
+          onClick={closeModal} // Fechar ao clicar no backdrop
         >
-          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
+          <div 
+            className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()} // Prevenir fechamento ao clicar no conteúdo
+          >
             {/* Header do Modal */}
             <div className="bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 text-white p-6">
               <div className="flex justify-between items-center">
@@ -1109,6 +1256,7 @@ const AppointmentCalendar = () => {
                         getPsychologistName={getPsychologistName} 
                         userRole={user?.role}
                         onStatusChange={handleStatusChange}
+                        onAttendanceCompleted={handleAttendanceCompleted}
                         availablePsychologists={availablePsychologists}
                       />
                     ))}
@@ -1123,6 +1271,86 @@ const AppointmentCalendar = () => {
                   <p className="text-sm text-gray-500">Selecione outra data para ver os horários disponíveis</p>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Observações do Atendimento */}
+      {showObservationModal && selectedAppointment && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => {
+            setShowObservationModal(false);
+            setObservationNotes('');
+            setSelectedAppointment(null);
+          }} // Fechar ao clicar no backdrop
+        >
+          <div 
+            className="bg-white rounded-xl shadow-2xl max-w-2xl w-full"
+            onClick={(e) => e.stopPropagation()} // Prevenir fechamento ao clicar no conteúdo
+          >
+            {/* Header do Modal */}
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-t-xl">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold">
+                  Observações do Atendimento
+                </h3>
+                <button
+                  onClick={() => {
+                    setShowObservationModal(false);
+                    setObservationNotes('');
+                    setSelectedAppointment(null);
+                  }}
+                  className="text-white hover:text-blue-200 transition-all duration-200 p-2 rounded-full hover:bg-white hover:bg-opacity-20 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600 hover:scale-110"
+                  aria-label="Fechar modal"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <p className="text-blue-100 mt-2">
+                Descreva o que aconteceu no atendimento com {getPatientName(selectedAppointment.patient_id)}
+              </p>
+            </div>
+
+            {/* Conteúdo do Modal */}
+            <div className="p-6">
+              <div className="mb-6">
+                <label htmlFor="observation-notes" className="block text-sm font-medium text-gray-700 mb-2">
+                  Observações do Atendimento *
+                </label>
+                <textarea
+                  id="observation-notes"
+                  value={observationNotes}
+                  onChange={(e) => setObservationNotes(e.target.value)}
+                  placeholder="Descreva detalhadamente o que foi discutido, observado e as orientações dadas durante o atendimento..."
+                  className="w-full h-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  * Campo obrigatório para registrar o atendimento
+                </p>
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => {
+                    setShowObservationModal(false);
+                    setObservationNotes('');
+                    setSelectedAppointment(null);
+                  }}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveObservations}
+                  disabled={!observationNotes.trim()}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 font-medium"
+                >
+                  Salvar e Marcar como Realizado
+                </button>
+              </div>
             </div>
           </div>
         </div>
