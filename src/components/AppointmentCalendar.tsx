@@ -113,7 +113,8 @@ const useAppointmentData = (user: any) => {
     appointments: [] as Appointment[],
     workingHours: [] as WorkingHour[],
     patients: [] as Patient[],
-    users: [] as User[]
+    users: [] as User[],
+    rooms: [] as any[]
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -143,32 +144,35 @@ const useAppointmentData = (user: any) => {
           ? `${baseUrl}/d52c9494-5de9-4444-877e-9e8d01662962/working_hours/${psychologistId}`
           : `${baseUrl}/working_hours`,
         patients: `${baseUrl}/patients`,
-        users: `${baseUrl}/users`
+        users: `${baseUrl}/users`,
+        rooms: `${baseUrl}/consulting_rooms`
       };
 
       // Fetch paralelo para melhor performance com timeout
       const timeoutId = setTimeout(() => abortControllerRef.current?.abort(), 30000); // 30s timeout
       
-      const [appointmentsRes, workingHoursRes, patientsRes, usersRes] = await Promise.all([
+      const [appointmentsRes, workingHoursRes, patientsRes, usersRes, roomsRes] = await Promise.all([
         fetch(urls.appointments, { signal: abortControllerRef.current.signal }),
         fetch(urls.workingHours, { signal: abortControllerRef.current.signal }),
         fetch(urls.patients, { signal: abortControllerRef.current.signal }),
-        fetch(urls.users, { signal: abortControllerRef.current.signal })
+        fetch(urls.users, { signal: abortControllerRef.current.signal }),
+        fetch(urls.rooms, { signal: abortControllerRef.current.signal })
       ]);
 
       clearTimeout(timeoutId);
 
       // Verificar se as respostas são válidas
-      if (!appointmentsRes.ok || !workingHoursRes.ok || !patientsRes.ok || !usersRes.ok) {
-        throw new Error(`Erro na API: ${appointmentsRes.status} ${workingHoursRes.status} ${patientsRes.status} ${usersRes.status}`);
+      if (!appointmentsRes.ok || !workingHoursRes.ok || !patientsRes.ok || !usersRes.ok || !roomsRes.ok) {
+        throw new Error(`Erro na API: ${appointmentsRes.status} ${workingHoursRes.status} ${patientsRes.status} ${usersRes.status} ${roomsRes.status}`);
       }
 
       // Processar respostas
-      const [appointmentsData, workingHoursData, patientsData, usersData] = await Promise.all([
+      const [appointmentsData, workingHoursData, patientsData, usersData, roomsData] = await Promise.all([
         appointmentsRes.json(),
         workingHoursRes.json(),
         patientsRes.json(),
-        usersRes.json()
+        usersRes.json(),
+        roomsRes.json()
       ]);
 
       // Validar e normalizar os dados dos agendamentos
@@ -225,7 +229,8 @@ const useAppointmentData = (user: any) => {
         appointments: normalizedAppointments,
         workingHours: Array.isArray(workingHoursData) ? workingHoursData : workingHoursData.data || [],
         patients: Array.isArray(patientsData) ? patientsData : patientsData.data || [],
-        users: Array.isArray(usersData) ? usersData : usersData.data || []
+        users: Array.isArray(usersData) ? usersData : usersData.data || [],
+        rooms: Array.isArray(roomsData) ? roomsData : roomsData.data || []
       });
     } catch (err) {
       if (err instanceof Error && err.name === 'AbortError') {
@@ -451,6 +456,7 @@ const TimeSlot = ({
   slot, 
   getPatientName, 
   getPsychologistName,
+  getRoomName,
   userRole,
   onStatusChange,
   onAttendanceCompleted,
@@ -459,6 +465,7 @@ const TimeSlot = ({
   slot: TimeSlot; 
   getPatientName: (id: string) => string; 
   getPsychologistName: (id: string) => string;
+  getRoomName: (roomId: string | null | undefined) => string;
   userRole?: string;
   onStatusChange: (appointmentId: string, action: 'confirmar' | 'cancelar') => Promise<void>;
   onAttendanceCompleted: (appointment: Appointment) => void;
@@ -481,6 +488,7 @@ const TimeSlot = ({
               appointment={apt} 
               getPatientName={getPatientName} 
               getPsychologistName={getPsychologistName}
+              getRoomName={getRoomName}
               userRole={userRole}
               onStatusChange={onStatusChange}
               onAttendanceCompleted={onAttendanceCompleted}
@@ -550,6 +558,7 @@ const AppointmentCard = React.memo(({
   appointment, 
   getPatientName, 
   getPsychologistName,
+  getRoomName,
   userRole,
   onStatusChange,
   onAttendanceCompleted
@@ -557,6 +566,7 @@ const AppointmentCard = React.memo(({
   appointment: Appointment; 
   getPatientName: (id: string) => string; 
   getPsychologistName: (id: string) => string;
+  getRoomName: (roomId: string | null | undefined) => string;
   userRole?: string;
   onStatusChange: (appointmentId: string, action: 'confirmar' | 'cancelar') => Promise<void>;
   onAttendanceCompleted: (appointment: Appointment) => void;
@@ -667,7 +677,7 @@ const AppointmentCard = React.memo(({
                 </div>
                 <div>
                   <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Sala</span>
-                  <p className="font-semibold text-gray-900">Sala {appointment.room_id || 'N/A'}</p>
+                  <p className="font-semibold text-gray-900">{getRoomName(appointment.room_id)}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -806,7 +816,7 @@ const AppointmentCalendar = () => {
   const [observationNotes, setObservationNotes] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
-  const { appointments, workingHours, patients, users, loading, error, refetch } = useAppointmentData(user);
+  const { appointments, workingHours, patients, users, rooms, loading, error, refetch } = useAppointmentData(user);
   const { formatDate, getDaysInMonth, getFirstDayOfMonth, formatDisplayDate } = useDateUtils();
   const { getDayStatus } = useDayStatus(appointments, workingHours);
 
@@ -877,6 +887,12 @@ const AppointmentCalendar = () => {
     const psychologist = users.find(u => u.id === psychologistId);
     return psychologist ? (psychologist.nome || psychologist.name || `Psicólogo ${psychologistId}`) : `Psicólogo ${psychologistId}`;
   }, [users]);
+
+  const getRoomName = useCallback((roomId: string | null | undefined): string => {
+    if (!roomId) return 'Online';
+    const room = rooms.find(r => r.id === roomId);
+    return room ? room.name : `Sala ${roomId}`;
+  }, [rooms]);
 
   const navigateMonth = useCallback((direction: number) => {
     setCurrentDate(prev => {
@@ -1379,7 +1395,8 @@ const AppointmentCalendar = () => {
                         key={`${slot.time}-${index}`}
                         slot={slot} 
                         getPatientName={getPatientName} 
-                        getPsychologistName={getPsychologistName} 
+                        getPsychologistName={getPsychologistName}
+                        getRoomName={getRoomName}
                         userRole={user?.role}
                         onStatusChange={handleStatusChange}
                         onAttendanceCompleted={handleAttendanceCompleted}
