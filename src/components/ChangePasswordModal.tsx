@@ -18,25 +18,17 @@ interface ChangePasswordModalProps {
 }
 
 const ChangePasswordModal = ({ isOpen, onClose }: ChangePasswordModalProps) => {
-  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const { user, changePassword, users } = useAuth();
+  const { user, changePassword } = useAuth();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
     if (!user) {
       setError("Usuário não autenticado");
-      return;
-    }
-
-    // Verificar senha atual
-    const currentUser = users.find(u => u.id === user.id);
-    if (!currentUser || currentUser.password !== currentPassword) {
-      setError("Senha atual incorreta");
       return;
     }
 
@@ -50,13 +42,16 @@ const ChangePasswordModal = ({ isOpen, onClose }: ChangePasswordModalProps) => {
       return;
     }
 
-    const success = changePassword(user.id, newPassword);
-    if (success) {
-      // Limpar campos e fechar modal
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      onClose();
+    try {
+      const success = await changePassword(user.id, newPassword);
+      if (success) {
+        // Limpar campos e fechar modal
+        setNewPassword("");
+        setConfirmPassword("");
+        onClose();
+      }
+    } catch (error) {
+      setError("Erro ao alterar senha. Tente novamente.");
     }
   };
 
@@ -68,16 +63,6 @@ const ChangePasswordModal = ({ isOpen, onClose }: ChangePasswordModalProps) => {
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {error && <p className="text-sm text-red-500">{error}</p>}
-          <div className="space-y-2">
-            <Label htmlFor="current-password">Senha Atual</Label>
-            <Input
-              id="current-password"
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              required
-            />
-          </div>
           <div className="space-y-2">
             <Label htmlFor="new-password">Nova Senha</Label>
             <Input
