@@ -182,6 +182,31 @@ const useAppointmentData = (user: any) => {
           };
         });
 
+      // Verificar se há duplicação por ID
+      const appointmentIds = normalizedAppointments.map(apt => apt.id);
+      const uniqueIds = new Set(appointmentIds);
+      
+      if (appointmentIds.length !== uniqueIds.size) {
+        console.warn('⚠️ DUPLICAÇÃO DETECTADA nos agendamentos!');
+        console.warn('Total de agendamentos:', appointmentIds.length);
+        console.warn('IDs únicos:', uniqueIds.size);
+        console.warn('IDs duplicados:', appointmentIds.filter((id, index) => appointmentIds.indexOf(id) !== index));
+        
+        // Remover duplicatas mantendo apenas o primeiro de cada ID
+        const seenIds = new Set();
+        const deduplicatedAppointments = normalizedAppointments.filter(apt => {
+          if (seenIds.has(apt.id)) {
+            return false;
+          }
+          seenIds.add(apt.id);
+          return true;
+        });
+        
+        console.log('Agendamentos após remoção de duplicatas:', deduplicatedAppointments);
+        normalizedAppointments.length = 0;
+        normalizedAppointments.push(...deduplicatedAppointments);
+      }
+
       console.log('Agendamentos normalizados:', normalizedAppointments);
       console.log('IDs dos agendamentos:', normalizedAppointments.map(apt => apt.id));
 
@@ -849,6 +874,12 @@ const AppointmentCalendar = () => {
         value: Math.max(0, parseFloat(String(apt.value || apt.price || 0)) || 0)
       }));
       
+      // Debug: verificar se há duplicação nos dados
+      console.log('Agendamentos filtrados para a data:', dateString);
+      console.log('Total de agendamentos:', dayAppointments.length);
+      console.log('IDs dos agendamentos:', dayAppointments.map(apt => apt.id));
+      console.log('Horários dos agendamentos:', dayAppointments.map(apt => apt.start_time));
+      
       const dayWorkingHours = workingHours.filter(wh => wh.day_of_week === clickedDate.getDay());
       
       setSelectedDateDetails({
@@ -1064,23 +1095,49 @@ const AppointmentCalendar = () => {
     if (!selectedDateDetails) return [];
 
     const allTimeSlots: TimeSlot[] = [];
+    const processedAppointments = new Set<string>(); // Para evitar duplicação
     
+    // Primeiro, criar slots baseados nos agendamentos existentes
+    selectedDateDetails.appointments.forEach(apt => {
+      const aptStartHour = parseInt(apt.start_time.split(':')[0]);
+      const timeSlot = `${aptStartHour.toString().padStart(2, '0')}:00`;
+      
+      // Verificar se já existe um slot para este horário
+      let existingSlot = allTimeSlots.find(slot => slot.time === timeSlot);
+      
+      if (!existingSlot) {
+        existingSlot = {
+          time: timeSlot,
+          appointments: [],
+          hasAppointments: false
+        };
+        allTimeSlots.push(existingSlot);
+      }
+      
+      // Adicionar o agendamento apenas se não foi processado antes
+      if (!processedAppointments.has(apt.id)) {
+        existingSlot.appointments.push(apt);
+        existingSlot.hasAppointments = true;
+        processedAppointments.add(apt.id);
+      }
+    });
+    
+    // Adicionar slots vazios para horários de trabalho que não têm agendamentos
     selectedDateDetails.workingHours.forEach(wh => {
       const startHour = parseInt(wh.start_time.split(':')[0]);
       const endHour = parseInt(wh.end_time.split(':')[0]);
       
       for (let hour = startHour; hour < endHour; hour++) {
         const timeSlot = `${hour.toString().padStart(2, '0')}:00`;
-        const appointmentsForSlot = selectedDateDetails.appointments.filter(apt => {
-          const aptStartHour = parseInt(apt.start_time.split(':')[0]);
-          return aptStartHour === hour;
-        });
         
-        allTimeSlots.push({
-          time: timeSlot,
-          appointments: appointmentsForSlot,
-          hasAppointments: appointmentsForSlot.length > 0
-        });
+        // Só adicionar se não existir um slot para este horário
+        if (!allTimeSlots.some(slot => slot.time === timeSlot)) {
+          allTimeSlots.push({
+            time: timeSlot,
+            appointments: [],
+            hasAppointments: false
+          });
+        }
       }
     });
     
