@@ -8,7 +8,8 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
     user_id: userId || 0,
     day_of_week: 0, // Definido como 0 (Domingo) como valor inicial válido
     start_time: "",
-    end_time: ""
+    end_time: "",
+    appointment_type: "presential" // Novo campo: tipo de atendimento
   });
   const [workingHours, setWorkingHours] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -69,6 +70,10 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
       setError("O horário de início deve ser menor que o horário de término");
       return false;
     }
+    if (!formData.appointment_type) {
+      setError("Selecione o tipo de atendimento");
+      return false;
+    }
     return true;
   };
 
@@ -117,7 +122,8 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
         user_id: userId || 0,
         day_of_week: 0,
         start_time: "",
-        end_time: ""
+        end_time: "",
+        appointment_type: "presential"
       });
       await fetchWorkingHours();
     } catch (err) {
@@ -138,7 +144,8 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
       user_id: userId || 0,
       day_of_week: 0,
       start_time: "",
-      end_time: ""
+      end_time: "",
+      appointment_type: "presential"
     });
     setError("");
     if (onCancel) {
@@ -215,6 +222,23 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
           </select>
         </div>
 
+        <div className="space-y-2">
+          <label htmlFor="appointment_type" className="block text-sm font-medium text-gray-700">
+            Tipo de Atendimento *
+          </label>
+          <select
+            id="appointment_type"
+            name="appointment_type"
+            value={formData.appointment_type}
+            onChange={handleInputChange}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            required
+          >
+            <option value="presential">Presencial</option>
+            <option value="online">Online</option>
+          </select>
+        </div>
+
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-2">
             <label htmlFor="start_time" className="block text-sm font-medium text-gray-700">
@@ -261,6 +285,9 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
                   "Horários não definidos"
                 }
               </p>
+              <p>
+                Tipo: {formData.appointment_type === "presential" ? "Presencial" : "Online"}
+              </p>
             </div>
           </div>
         </div>
@@ -296,6 +323,9 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
                     <span className="font-medium">{daysOfWeek.find(d => d.value === hour.day_of_week)?.label}</span>
                     <span className="text-gray-600 ml-2">
                       {hour.start_time?.substring(0, 5)} às {hour.end_time?.substring(0, 5)}
+                    </span>
+                    <span className="text-gray-500 ml-2">
+                      ({hour.appointment_type === "presential" ? "Presencial" : "Online"})
                     </span>
                   </div>
                   <button

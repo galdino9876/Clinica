@@ -329,9 +329,9 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
 
   const onSubmit = async (data: AppointmentFormData) => {
     const appointmentData: Omit<Appointment, "id"> = {
-      patient_id: data.patientId,
-      psychologist_id: data.psychologistId,
-      room_id: data.appointmentType === "online" ? null : (data.roomId && data.roomId.trim() !== "") ? data.roomId : null,
+      patient_id: parseInt(data.patientId),
+      psychologist_id: parseInt(data.psychologistId),
+      room_id: data.appointmentType === "online" ? null : (data.roomId && data.roomId.trim() !== "") ? parseInt(data.roomId) : null,
       date: format(selectedDate, "yyyy-MM-dd"), // Usa o estado local da data
       start_time: data.startTime,
       end_time: data.endTime,

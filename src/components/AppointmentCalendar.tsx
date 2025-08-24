@@ -30,6 +30,7 @@ interface WorkingHour {
   day_of_week: number;
   start_time: string;
   end_time: string;
+  appointment_type?: "presential" | "online";
 }
 
 interface Patient {
@@ -516,7 +517,7 @@ const TimeSlot = ({
                           <span className="text-gray-700 font-medium">{psych.name}</span>
                           {relevantWorkingHour && (
                             <span className="text-xs text-gray-500 ml-2">
-                              ({relevantWorkingHour.start_time} - {relevantWorkingHour.end_time})
+                              ({relevantWorkingHour.start_time} - {relevantWorkingHour.end_time}) - {relevantWorkingHour.appointment_type === "presential" ? "presencial" : relevantWorkingHour.appointment_type === "online" ? "online" : "presencial"}
                             </span>
                           )}
                         </div>
@@ -888,51 +889,58 @@ const AppointmentCalendar = () => {
         workingHours: dayWorkingHours
       });
 
-      // Buscar psicólogos disponíveis para esta data e seus horários de trabalho
-      try {
-        const psychologistsResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/users');
-        if (psychologistsResponse.ok) {
-          const psychologistsData = await psychologistsResponse.json();
-          const psychologists = psychologistsData.filter((user: any) => user.role === 'psychologist');
-          
-          // Para cada psicólogo, buscar seus horários de trabalho
-          const psychsWithWorkingHours = await Promise.all(
-            psychologists.map(async (psych: any) => {
-              try {
-                const workingHoursResponse = await fetch(
-                  `https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/working_hours/${psych.id}`
-                );
-                
-                if (workingHoursResponse.ok) {
-                  const workingHoursData = await workingHoursResponse.json();
-                  const workingHours = Array.isArray(workingHoursData) ? workingHoursData : workingHoursData.data || [];
-                  
-                  // Filtrar apenas horários para o dia da semana selecionado
-                  const dayWorkingHours = workingHours.filter((wh: any) => wh.day_of_week === clickedDate.getDay());
-                  
-                  if (dayWorkingHours.length > 0) {
-                    return {
-                      id: psych.id,
-                      name: psych.nome || psych.name || `Psicólogo ${psych.id}`,
-                      workingHours: dayWorkingHours
-                    };
-                  }
-                }
-              } catch (error) {
-                console.error(`Erro ao buscar horários do psicólogo ${psych.id}:`, error);
+                // Buscar psicólogos disponíveis para esta data e seus horários de trabalho
+          try {
+            const psychologistsResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/users');
+            if (psychologistsResponse.ok) {
+              const psychologistsData = await psychologistsResponse.json();
+              let psychologists = psychologistsData.filter((user: any) => user.role === 'psychologist');
+              
+              // Se o usuário logado for psychologist, mostrar apenas ele mesmo
+              if (user?.role === 'psychologist') {
+                psychologists = psychologists.filter((psych: any) => psych.id === user.id);
               }
-              return null;
-            })
-          );
-          
-          // Filtrar psicólogos que realmente têm horários para este dia
-          const availablePsychs = psychsWithWorkingHours.filter(psych => psych !== null);
-          setAvailablePsychologists(availablePsychs);
-        }
-      } catch (err) {
-        console.error('Erro ao buscar psicólogos:', err);
-        setAvailablePsychologists([]);
-      }
+              // Se for admin ou receptionist, mostrar todos os psicólogos
+              // (não precisa fazer nada, já está mostrando todos)
+              
+              // Para cada psicólogo, buscar seus horários de trabalho
+              const psychsWithWorkingHours = await Promise.all(
+                psychologists.map(async (psych: any) => {
+                  try {
+                    const workingHoursResponse = await fetch(
+                      `https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/working_hours/${psych.id}`
+                    );
+                    
+                    if (workingHoursResponse.ok) {
+                      const workingHoursData = await workingHoursResponse.json();
+                      const workingHours = Array.isArray(workingHoursData) ? workingHoursData : workingHoursData.data || [];
+                      
+                      // Filtrar apenas horários para o dia da semana selecionado
+                      const dayWorkingHours = workingHours.filter((wh: any) => wh.day_of_week === clickedDate.getDay());
+                      
+                      if (dayWorkingHours.length > 0) {
+                        return {
+                          id: psych.id,
+                          name: psych.nome || psych.name || `Psicólogo ${psych.id}`,
+                          workingHours: dayWorkingHours
+                        };
+                      }
+                    }
+                  } catch (error) {
+                    console.error(`Erro ao buscar horários do psicólogo ${psych.id}:`, error);
+                  }
+                  return null;
+                })
+              );
+              
+              // Filtrar psicólogos que realmente têm horários para este dia
+              const availablePsychs = psychsWithWorkingHours.filter(psych => psych !== null);
+              setAvailablePsychologists(availablePsychs);
+            }
+          } catch (err) {
+            console.error('Erro ao buscar psicólogos:', err);
+            setAvailablePsychologists([]);
+          }
     } catch (err) {
       console.error('Erro ao buscar detalhes da data:', err);
     } finally {
@@ -947,9 +955,31 @@ const AppointmentCalendar = () => {
   }, []);
 
   // Função para alterar status do agendamento
-  const handleStatusChange = useCallback(async (appointmentId: string, action: 'confirmar' | 'cancelar') => {
+  const handleStatusChange = useCallback(async (appointmentId: string, action: 'confirmar' | 'cancelar' | 'completed') => {
     try {
-      const webhookUrl = `https://webhook.essenciasaudeintegrada.com.br/webhook/appoiments?id=${appointmentId}&action=${action}`;
+      // Mapear ações para valores do webhook
+      let webhookAction: string;
+      let statusUpdate: 'pending' | 'confirmed' | 'canceled' | 'completed';
+      
+      switch (action) {
+        case 'confirmar':
+          webhookAction = 'confirmed';
+          statusUpdate = 'confirmed';
+          break;
+        case 'cancelar':
+          webhookAction = 'canceled';
+          statusUpdate = 'canceled';
+          break;
+        case 'completed':
+          webhookAction = 'completed'; // Para atendimento realizado, enviar "completed"
+          statusUpdate = 'completed';
+          break;
+        default:
+          webhookAction = 'confirmed';
+          statusUpdate = 'confirmed';
+      }
+      
+      const webhookUrl = `https://webhook.essenciasaudeintegrada.com.br/webhook/appoiments?id=${appointmentId}&action=${webhookAction}`;
       
       const response = await fetch(webhookUrl, {
         method: 'GET',
@@ -965,6 +995,9 @@ const AppointmentCalendar = () => {
       // Atualizar os dados locais após sucesso
       await refetch();
       
+      // Atualizar os dados locais após sucesso
+      await refetch();
+      
       // Atualizar os dados do modal em tempo real (sem fechar/reabrir)
       if (selectedDateDetails) {
         // Atualizar apenas o agendamento específico que foi modificado
@@ -973,7 +1006,7 @@ const AppointmentCalendar = () => {
             return {
               ...apt,
               // Atualizar status baseado na ação
-              status: (action === 'confirmar' ? 'confirmed' : 'canceled') as 'pending' | 'confirmed' | 'canceled'
+              status: statusUpdate as any // Cast temporário para evitar erro de tipo
             };
           }
           return apt;
@@ -1032,8 +1065,8 @@ const AppointmentCalendar = () => {
       setObservationNotes('');
       setSelectedAppointment(null);
       
-      // Atualizar status do agendamento para "completed" ou similar
-      await handleStatusChange(selectedAppointment.id, 'confirmar');
+      // Atualizar status do agendamento para "completed"
+      await handleStatusChange(selectedAppointment.id, 'completed');
       
       // Feedback de sucesso
       alert('Atendimento marcado como realizado com sucesso!');
