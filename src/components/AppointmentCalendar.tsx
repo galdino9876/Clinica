@@ -3,6 +3,16 @@ import { ChevronLeft, ChevronRight, Calendar, Clock, User, MapPin, X, Loader2, P
 import { useAuth } from "../context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import AppointmentForm from "./AppointmentForm";
 
 // Tipos para melhorar a tipagem
@@ -552,6 +562,7 @@ const AppointmentCard = React.memo(({
   onAttendanceCompleted: (appointment: Appointment) => void;
 }) => {
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   // Log para debug - verificar status recebido
   console.log('AppointmentCard - appointment status:', appointment.status);
@@ -591,6 +602,10 @@ const AppointmentCard = React.memo(({
   };
 
   const handleCancel = async () => {
+    setShowCancelDialog(true);
+  };
+
+  const handleConfirmCancel = async () => {
     if (isUpdating) return;
     setIsUpdating(true);
     try {
@@ -599,6 +614,7 @@ const AppointmentCard = React.memo(({
       console.error('Erro ao cancelar agendamento:', error);
     } finally {
       setIsUpdating(false);
+      setShowCancelDialog(false);
     }
   };
 
@@ -746,11 +762,31 @@ const AppointmentCard = React.memo(({
               </p>
             </div>
           )}
+
+          {/* Dialog de confirmação para cancelar agendamento */}
+          <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Deseja realmente cancelar este agendamento?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isUpdating}>Não</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleConfirmCancel}
+                  disabled={isUpdating}
+                  className="bg-rose-600 hover:bg-rose-700 focus:ring-rose-600"
+                >
+                  {isUpdating ? "Cancelando..." : "Sim"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
     </div>
-
-
   );
 });
 
