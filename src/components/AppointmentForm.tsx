@@ -66,6 +66,13 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
   const appointmentType = watch("appointmentType");
   const selectedPsychologistId = watch("psychologistId");
 
+  // Limpar consultório quando mudar para online
+  useEffect(() => {
+    if (appointmentType === "online") {
+      setValue("roomId", "");
+    }
+  }, [appointmentType, setValue]);
+
   // Função para buscar horários de trabalho do psicólogo
   const fetchPsychologistWorkingHours = async (psychologistId: string) => {
     if (!psychologistId) {
@@ -322,9 +329,9 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
 
   const onSubmit = async (data: AppointmentFormData) => {
     const appointmentData: Omit<Appointment, "id"> = {
-      patient_id: parseInt(data.patientId),
-      psychologist_id: parseInt(data.psychologistId),
-      room_id: data.appointmentType === "online" ? null : data.roomId ? parseInt(data.roomId) : null,
+      patient_id: data.patientId,
+      psychologist_id: data.psychologistId,
+      room_id: data.appointmentType === "online" ? null : (data.roomId && data.roomId.trim() !== "") ? data.roomId : null,
       date: format(selectedDate, "yyyy-MM-dd"), // Usa o estado local da data
       start_time: data.startTime,
       end_time: data.endTime,
@@ -512,7 +519,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
             <SelectDynamic
               name="roomId"
               control={control}
-              label="Consultório"
+              label="Consultório *"
               options={rooms.map((room) => ({
                 id: room.id.toString(),
                 label: room.name,
@@ -523,6 +530,9 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
               disabled={isLoading}
               onClear={() => formMethods.setValue("roomId", "")}
             />
+            {errors.roomId && (
+              <p className="text-sm text-red-500">{errors.roomId.message}</p>
+            )}
           </div>
         )}
 
