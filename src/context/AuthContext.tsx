@@ -12,6 +12,7 @@ interface AuthContextType {
   deleteUser: (id: string) => Promise<void>;
   getUserByEmail: (email: string) => Promise<User | undefined>;
   getPsychologists: () => User[];
+  changePassword: (userId: number, newPassword: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -158,6 +159,45 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return users.filter(user => user.role === "psychologist");
   };
 
+  const changePassword = async (userId: number, newPassword: string): Promise<boolean> => {
+    try {
+      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/update_password", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          id: userId,
+          password: newPassword,
+        }),
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Senha alterada",
+          description: "Sua senha foi alterada com sucesso.",
+        });
+        return true;
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        toast({
+          title: "Erro ao alterar senha",
+          description: errorData.message || "Falha ao alterar senha. Tente novamente.",
+          variant: "destructive",
+        });
+        return false;
+      }
+    } catch (error) {
+      console.error("Erro ao alterar senha:", error);
+      toast({
+        title: "Erro",
+        description: "Falha na conexão com o servidor. Tente novamente.",
+        variant: "destructive",
+      });
+      return false;
+    }
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -170,6 +210,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         deleteUser,
         getUserByEmail,
         getPsychologists,
+        changePassword,
       }}
     >
       {children}
