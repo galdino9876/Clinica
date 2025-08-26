@@ -11,6 +11,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 interface PsychologistAvailabilityDatePickerProps {
   date: Date;
   onDateChange: (date: Date) => void;
+  selectedDates: Date[];
+  onDatesChange: (dates: Date[]) => void;
   psychologistId?: string;
   disabled?: boolean;
 }
@@ -24,6 +26,8 @@ interface WorkingHour {
 const PsychologistAvailabilityDatePicker = ({
   date,
   onDateChange,
+  selectedDates,
+  onDatesChange,
   psychologistId,
   disabled = false
 }: PsychologistAvailabilityDatePickerProps) => {
@@ -42,12 +46,12 @@ const PsychologistAvailabilityDatePicker = ({
       setIsLoadingHours(false);
       setCurrentPsychologistId(psychologistId);
       
-      // Se há um psicólogo selecionado, limpar a data também
-      if (psychologistId) {
-        onDateChange(new Date()); // Reset para data atual
-      }
+      // Não definir data automaticamente - deixar o usuário escolher
+      // if (psychologistId) {
+      //   onDateChange(new Date()); // Reset para data atual
+      // }
     }
-  }, [psychologistId, currentPsychologistId, onDateChange]);
+  }, [psychologistId, currentPsychologistId]);
 
   // Função para buscar horários de trabalho do psicólogo
   const fetchWorkingHours = async () => {
@@ -67,24 +71,24 @@ const PsychologistAvailabilityDatePicker = ({
         setWorkingHours(fetchedWorkingHours);
         setHasLoadedHours(true);
         
-        // Se não há data selecionada, encontrar a próxima data disponível
-        if (!date) {
-          const today = new Date();
-          for (let i = 0; i < 30; i++) {
-            const checkDate = new Date(today);
-            checkDate.setDate(today.getDate() + i);
-            
-            const dayOfWeek = checkDate.getDay();
-            const isWorkingDay = fetchedWorkingHours.some(
-              (wh) => wh.day_of_week === dayOfWeek
-            );
-            
-            if (isWorkingDay) {
-              onDateChange(checkDate);
-              break;
-            }
-          }
-        }
+        // Não definir data automaticamente - deixar o usuário escolher
+        // if (!date) {
+        //   const today = new Date();
+        //   for (let i = 0; i < 30; i++) {
+        //     const checkDate = new Date(today);
+        //     checkDate.setDate(today.getDate() + i);
+        //     
+        //     const dayOfWeek = checkDate.getDay();
+        //     const isWorkingDay = fetchedWorkingHours.some(
+        //       (wh) => wh.day_of_week === dayOfWeek
+        //     );
+        //     
+        //     if (isWorkingDay) {
+        //       onDateChange(checkDate);
+        //       break;
+        //     }
+        //   }
+        // }
       } else {
         console.error('Erro ao buscar horários de trabalho:', response.status);
         setWorkingHours([]);
@@ -126,8 +130,37 @@ const PsychologistAvailabilityDatePicker = ({
   // Função para selecionar data
   const handleDateSelect = (selectedDate: Date | undefined) => {
     if (selectedDate) {
-      onDateChange(selectedDate);
-      setOpen(false); // Fecha o calendário após seleção
+      // Verificar se a data já está selecionada
+      const isAlreadySelected = selectedDates.some(
+        date => date.toDateString() === selectedDate.toDateString()
+      );
+      
+      if (isAlreadySelected) {
+        // Se já está selecionada, remover
+        const newDates = selectedDates.filter(
+          date => date.toDateString() !== selectedDate.toDateString()
+        );
+        onDatesChange(newDates);
+        
+        // Se era a data principal, limpar
+        if (date && date.toDateString() === selectedDate.toDateString()) {
+          onDateChange(new Date());
+        }
+      } else {
+        // Se não está selecionada, adicionar
+        const newDates = [...selectedDates, selectedDate].sort(
+          (a, b) => a.getTime() - b.getTime()
+        );
+        onDatesChange(newDates);
+        
+        // Definir como data principal se for a primeira
+        if (selectedDates.length === 0) {
+          onDateChange(selectedDate);
+        }
+      }
+      
+      // Não fechar o calendário automaticamente para permitir seleção múltipla
+      // setOpen(false);
     }
   };
 
@@ -157,8 +190,8 @@ const PsychologistAvailabilityDatePicker = ({
             <span>Clique para ver datas disponíveis</span>
           ) : workingHours.length === 0 ? (
             <span>Psicólogo sem horários configurados</span>
-          ) : date ? (
-            format(date, "PPP", { locale: ptBR })
+          ) : selectedDates.length > 0 ? (
+            <span>{selectedDates.length} data(s) selecionada(s)</span>
           ) : (
             <span>Selecione a data</span>
           )}
@@ -179,14 +212,41 @@ const PsychologistAvailabilityDatePicker = ({
               </div>
             </div>
             <Calendar
-              mode="single"
-              selected={date}
-              onSelect={handleDateSelect}
+              mode="multiple"
+              selected={selectedDates}
+              onSelect={(dates) => {
+                if (dates) {
+                  onDatesChange(dates);
+                }
+              }}
               disabled={disabledDays}
               initialFocus
               locale={ptBR}
               className="pointer-events-auto psychologist-mini-calendar"
             />
+            
+            {/* Mostrar datas selecionadas */}
+            {selectedDates.length > 0 && (
+              <div className="p-3 border-t">
+                <div className="text-sm font-medium text-gray-700 mb-2">
+                  Datas selecionadas: {selectedDates.length}
+                </div>
+                <div className="space-y-1">
+                  {selectedDates.map((selectedDate, index) => (
+                    <div key={index} className="text-xs text-gray-600">
+                      {format(selectedDate, "dd/MM/yyyy (EEEE)", { locale: ptBR })}
+                    </div>
+                  ))}
+                </div>
+                <Button 
+                  onClick={() => setOpen(false)} 
+                  className="w-full mt-3"
+                  size="sm"
+                >
+                  Confirmar seleção
+                </Button>
+              </div>
+            )}
           </>
         ) : hasLoadedHours && workingHours.length === 0 ? (
           <div className="p-6 text-center">
