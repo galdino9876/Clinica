@@ -494,6 +494,67 @@ const TimeSlot = ({
               onAttendanceCompleted={onAttendanceCompleted}
             />
           ))}
+          
+          {/* Mostrar psicólogos ainda disponíveis para este horário mesmo com agendamentos existentes */}
+          {(() => {
+            const currentHour = parseInt(slot.time.split(':')[0]);
+            
+            // Filtrar psicólogos que têm horário disponível para este slot específico
+            // MAS que NÃO têm agendamentos neste horário
+            const availablePsychsForThisSlot = availablePsychologists.filter(psych => {
+              // Verificar se o psicólogo tem horário disponível para este slot
+              const hasWorkingHours = psych.workingHours.some(wh => {
+                const startHour = parseInt(wh.start_time.split(':')[0]);
+                const endHour = parseInt(wh.end_time.split(':')[0]);
+                return currentHour >= startHour && currentHour < endHour;
+              });
+              
+              if (!hasWorkingHours) return false;
+              
+              // Verificar se o psicólogo já tem agendamento neste horário
+              const hasAppointment = slot.appointments.some(apt => apt.psychologist_id === psych.id);
+              
+              // Retornar true se tem horário disponível E não tem agendamento
+              return !hasAppointment;
+            });
+
+            if (availablePsychsForThisSlot.length > 0) {
+              return (
+                <div className="mt-4 pt-3 border-t border-gray-200">
+                  <div className="flex items-center gap-3">
+                    <div className="w-3 h-3 rounded-full bg-sky-500 border border-sky-600"></div>
+                    <div className="text-sm font-medium text-sky-700">Outros psicólogos disponíveis:</div>
+                  </div>
+                  
+                  <div className="pl-6 mt-2">
+                    <div className="space-y-1">
+                      {availablePsychsForThisSlot.map((psych) => {
+                        // Encontrar o horário específico deste psicólogo para este slot
+                        const relevantWorkingHour = psych.workingHours.find(wh => {
+                          const startHour = parseInt(wh.start_time.split(':')[0]);
+                          const endHour = parseInt(wh.end_time.split(':')[0]);
+                          return currentHour >= startHour && currentHour < endHour;
+                        });
+                        
+                        return (
+                          <div key={psych.id} className="flex items-center gap-2 text-sm">
+                            <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                            <span className="text-gray-700 font-medium">{psych.name}</span>
+                            {relevantWorkingHour && (
+                              <span className="text-xs text-gray-500 ml-2">
+                                ({relevantWorkingHour.start_time} - {relevantWorkingHour.end_time}) - {relevantWorkingHour.appointment_type === "presential" ? "presencial" : relevantWorkingHour.appointment_type === "online" ? "online" : "presencial"}
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       ) : (
         <div className="space-y-3">
