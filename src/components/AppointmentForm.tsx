@@ -90,68 +90,156 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
         const fetchedWorkingHours = Array.isArray(data) ? data : data.data || [];
         setPsychologistWorkingHours(fetchedWorkingHours);
         
-        // Gerar slots de horário disponíveis baseado nos horários de trabalho para o dia específico
-        const timeSlots: string[] = [];
-        const selectedDayOfWeek = selectedDate.getDay(); // 0 = Domingo, 1 = Segunda, etc.
+        // Verificar se a data atual é um dia disponível para o psicólogo
+        const currentDayOfWeek = selectedDate.getDay();
+        const isCurrentDayAvailable = fetchedWorkingHours.some(wh => wh.day_of_week === currentDayOfWeek);
         
-        // Filtrar horários apenas para o dia da semana da data selecionada
-        const dayWorkingHours = fetchedWorkingHours.filter(wh => wh.day_of_week === selectedDayOfWeek);
+        console.log('Verificando disponibilidade da data:', selectedDate);
+        console.log('Dia da semana da data:', currentDayOfWeek);
+        console.log('Horários disponíveis para este dia:', fetchedWorkingHours.filter(wh => wh.day_of_week === currentDayOfWeek));
+        console.log('Data atual é disponível?', isCurrentDayAvailable);
         
-        console.log('Data selecionada:', selectedDate);
-        console.log('Dia da semana:', selectedDayOfWeek);
-        console.log('Horários de trabalho para este dia:', dayWorkingHours);
-        
-        dayWorkingHours.forEach(wh => {
-          const startHour = parseInt(wh.start_time.split(':')[0]);
-          const endHour = parseInt(wh.end_time.split(':')[0]);
+        // Se a data atual não for disponível, encontrar a próxima data disponível
+        if (!isCurrentDayAvailable) {
+          console.log('Data atual não é disponível, procurando próxima data disponível...');
+          const today = new Date();
+          let nextAvailableDate = new Date(today);
           
-          // Gerar horários de 30 em 30 minutos dentro do período de trabalho
-          for (let hour = startHour; hour <= endHour; hour++) {
-            // Horário cheio (ex: 10:00)
-            const timeSlotFull = `${hour.toString().padStart(2, '0')}:00`;
-            if (!timeSlots.includes(timeSlotFull)) {
-              timeSlots.push(timeSlotFull);
-            }
+          // Procurar pelos próximos 30 dias, começando pela data atual
+          for (let i = 0; i < 30; i++) {
+            const checkDate = new Date(today);
+            checkDate.setDate(today.getDate() + i);
             
-            // Horário de meia hora (ex: 10:30) - exceto para o último horário
-            if (hour < endHour) {
-              const timeSlotHalf = `${hour.toString().padStart(2, '0')}:30`;
-              if (!timeSlots.includes(timeSlotHalf)) {
-                timeSlots.push(timeSlotHalf);
-              }
+            const dayOfWeek = checkDate.getDay();
+            const isWorkingDay = fetchedWorkingHours.some(wh => wh.day_of_week === dayOfWeek);
+            
+            if (isWorkingDay) {
+              nextAvailableDate = checkDate;
+              console.log(`Encontrada data disponível no dia ${i + 1}:`, checkDate);
+              break;
             }
           }
-        });
-        
-        // Ordenar horários
-        timeSlots.sort((a, b) => a.localeCompare(b));
-        setAvailableTimeSlots(timeSlots);
-        
-        // Preencher automaticamente os campos de horário com o primeiro e segundo horário disponível
-        if (timeSlots.length >= 2) {
-          setValue("startTime", timeSlots[0]);
-          // Para o horário de término, usar o segundo horário disponível (30 min depois)
-          setValue("endTime", timeSlots[1]);
-        } else if (timeSlots.length === 1) {
-          setValue("startTime", timeSlots[0]);
-          // Para o horário de término, adicionar 30 minutos ao horário de início
-          const startHour = parseInt(timeSlots[0].split(':')[0]);
-          const startMinute = timeSlots[0].includes(':30') ? 30 : 0;
           
-          if (startMinute === 0) {
-            // Se início é 20:00, término será 20:30
-            const endTime = `${startHour.toString().padStart(2, '0')}:30`;
-            setValue("endTime", endTime);
-          } else {
-            // Se início é 20:30, término será 21:00
-            const endHour = startHour + 1;
-            const endTime = `${endHour.toString().padStart(2, '0')}:00`;
-            setValue("endTime", endTime);
+          // Atualizar a data selecionada para o próximo dia disponível
+          setSelectedDate(nextAvailableDate);
+          
+          // Usar a nova data para gerar os horários
+          const newDayOfWeek = nextAvailableDate.getDay();
+          const dayWorkingHours = fetchedWorkingHours.filter(wh => wh.day_of_week === newDayOfWeek);
+          
+          console.log('Data ajustada para próximo dia disponível:', nextAvailableDate);
+          console.log('Novo dia da semana:', newDayOfWeek);
+          console.log('Horários de trabalho para este dia:', dayWorkingHours);
+          
+          // Gerar slots de horário disponíveis
+          const timeSlots: string[] = [];
+          dayWorkingHours.forEach(wh => {
+            const startHour = parseInt(wh.start_time.split(':')[0]);
+            const endHour = parseInt(wh.end_time.split(':')[0]);
+            
+            // Gerar horários de 30 em 30 minutos dentro do período de trabalho
+            for (let hour = startHour; hour <= endHour; hour++) {
+              // Horário cheio (ex: 10:00)
+              const timeSlotFull = `${hour.toString().padStart(2, '0')}:00`;
+              if (!timeSlots.includes(timeSlotFull)) {
+                timeSlots.push(timeSlotFull);
+              }
+              
+              // Horário de meia hora (ex: 10:30) - exceto para o último horário
+              if (hour < endHour) {
+                const timeSlotHalf = `${hour.toString().padStart(2, '0')}:30`;
+                if (!timeSlots.includes(timeSlotHalf)) {
+                  timeSlots.push(timeSlotHalf);
+                }
+              }
+            }
+          });
+          
+          // Ordenar horários
+          timeSlots.sort((a, b) => a.localeCompare(b));
+          setAvailableTimeSlots(timeSlots);
+          
+          // Preencher automaticamente os campos de horário
+          if (timeSlots.length >= 2) {
+            setValue("startTime", timeSlots[0]);
+            setValue("endTime", timeSlots[1]);
+          } else if (timeSlots.length === 1) {
+            setValue("startTime", timeSlots[0]);
+            const startHour = parseInt(timeSlots[0].split(':')[0]);
+            const startMinute = timeSlots[0].includes(':30') ? 30 : 0;
+            
+            if (startMinute === 0) {
+              const endTime = `${startHour.toString().padStart(2, '0')}:30`;
+              setValue("endTime", endTime);
+            } else {
+              const endHour = startHour + 1;
+              const endTime = `${endHour.toString().padStart(2, '0')}:00`;
+              setValue("endTime", endTime);
+            }
+          }
+        } else {
+          // A data atual é disponível, usar ela normalmente
+          const selectedDayOfWeek = selectedDate.getDay();
+          const dayWorkingHours = fetchedWorkingHours.filter(wh => wh.day_of_week === selectedDayOfWeek);
+          
+          console.log('Data selecionada:', selectedDate);
+          console.log('Dia da semana:', selectedDayOfWeek);
+          console.log('Horários de trabalho para este dia:', dayWorkingHours);
+          
+          // Gerar slots de horário disponíveis baseado nos horários de trabalho para o dia específico
+          const timeSlots: string[] = [];
+          dayWorkingHours.forEach(wh => {
+            const startHour = parseInt(wh.start_time.split(':')[0]);
+            const endHour = parseInt(wh.end_time.split(':')[0]);
+            
+            // Gerar horários de 30 em 30 minutos dentro do período de trabalho
+            for (let hour = startHour; hour <= endHour; hour++) {
+              // Horário cheio (ex: 10:00)
+              const timeSlotFull = `${hour.toString().padStart(2, '0')}:00`;
+              if (!timeSlots.includes(timeSlotFull)) {
+                timeSlots.push(timeSlotFull);
+              }
+              
+              // Horário de meia hora (ex: 10:30) - exceto para o último horário
+              if (hour < endHour) {
+                const timeSlotHalf = `${hour.toString().padStart(2, '0')}:30`;
+                if (!timeSlots.includes(timeSlotHalf)) {
+                  timeSlots.push(timeSlotHalf);
+                }
+              }
+            }
+          });
+          
+          // Ordenar horários
+          timeSlots.sort((a, b) => a.localeCompare(b));
+          setAvailableTimeSlots(timeSlots);
+          
+          // Preencher automaticamente os campos de horário com o primeiro e segundo horário disponível
+          if (timeSlots.length >= 2) {
+            setValue("startTime", timeSlots[0]);
+            // Para o horário de término, usar o segundo horário disponível (30 min depois)
+            setValue("endTime", timeSlots[1]);
+          } else if (timeSlots.length === 1) {
+            setValue("startTime", timeSlots[0]);
+            // Para o horário de término, adicionar 30 minutos ao horário de início
+            const startHour = parseInt(timeSlots[0].split(':')[0]);
+            const startMinute = timeSlots[0].includes(':30') ? 30 : 0;
+            
+            if (startMinute === 0) {
+              // Se início é 20:00, término será 20:30
+              const endTime = `${startHour.toString().padStart(2, '0')}:30`;
+              setValue("endTime", endTime);
+            } else {
+              // Se início é 20:30, término será 21:00
+              const endHour = startHour + 1;
+              const endTime = `${endHour.toString().padStart(2, '0')}:00`;
+              setValue("endTime", endTime);
+            }
           }
         }
         
         console.log('Horários do psicólogo carregados:', fetchedWorkingHours);
-        console.log('Slots de horário disponíveis:', timeSlots);
+        console.log('Slots de horário disponíveis:', availableTimeSlots);
       } else {
         console.error('Erro ao buscar horários do psicólogo:', response.status);
         setPsychologistWorkingHours([]);
@@ -180,70 +268,200 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
     }
   }, [selectedPsychologistId, setValue]);
 
+  // Efeito para ajustar a data inicial se necessário quando o psicólogo for selecionado
+  useEffect(() => {
+    if (selectedPsychologistId && psychologistWorkingHours.length > 0) {
+      // Verificar se a data atual é um dia disponível para o psicólogo
+      const currentDayOfWeek = selectedDate.getDay();
+      const isCurrentDayAvailable = psychologistWorkingHours.some(wh => wh.day_of_week === currentDayOfWeek);
+      
+      console.log('Verificando disponibilidade da data inicial:', selectedDate);
+      console.log('Dia da semana da data inicial:', currentDayOfWeek);
+      console.log('Horários disponíveis para este dia:', psychologistWorkingHours.filter(wh => wh.day_of_week === currentDayOfWeek));
+      console.log('Data inicial é disponível?', isCurrentDayAvailable);
+      
+      // Se a data atual não for disponível, encontrar a próxima data disponível
+      if (!isCurrentDayAvailable) {
+        console.log('Data inicial não é disponível, procurando próxima data disponível...');
+        const today = new Date();
+        let nextAvailableDate = new Date(today);
+        
+        // Procurar pelos próximos 30 dias, começando pela data atual
+        for (let i = 0; i < 30; i++) {
+          const checkDate = new Date(today);
+          checkDate.setDate(today.getDate() + i);
+          
+          const dayOfWeek = checkDate.getDay();
+          const isWorkingDay = psychologistWorkingHours.some(wh => wh.day_of_week === dayOfWeek);
+          
+          if (isWorkingDay) {
+            nextAvailableDate = checkDate;
+            console.log(`Encontrada data disponível no dia ${i + 1}:`, checkDate);
+            break;
+          }
+        }
+        
+        // Atualizar a data selecionada para o próximo dia disponível
+        setSelectedDate(nextAvailableDate);
+        
+        console.log('Data inicial ajustada para próximo dia disponível:', nextAvailableDate);
+      }
+    }
+  }, [selectedPsychologistId, psychologistWorkingHours, selectedDate]);
+
   // Monitorar mudanças na data selecionada para atualizar os horários
   useEffect(() => {
     if (selectedPsychologistId && psychologistWorkingHours.length > 0) {
-      // Regenerar horários quando a data mudar
-      const timeSlots: string[] = [];
+      // Verificar se a nova data selecionada é um dia disponível para o psicólogo
       const selectedDayOfWeek = selectedDate.getDay();
+      const isSelectedDayAvailable = psychologistWorkingHours.some(wh => wh.day_of_week === selectedDayOfWeek);
       
-      // Filtrar horários apenas para o dia da semana da data selecionada
-      const dayWorkingHours = psychologistWorkingHours.filter(wh => wh.day_of_week === selectedDayOfWeek);
+      console.log('Verificando disponibilidade da nova data:', selectedDate);
+      console.log('Dia da semana da nova data:', selectedDayOfWeek);
+      console.log('Horários disponíveis para este dia:', psychologistWorkingHours.filter(wh => wh.day_of_week === selectedDayOfWeek));
+      console.log('Nova data é disponível?', isSelectedDayAvailable);
       
-      console.log('Data mudou para:', selectedDate);
-      console.log('Novo dia da semana:', selectedDayOfWeek);
-      console.log('Horários de trabalho para este dia:', dayWorkingHours);
-      
-      dayWorkingHours.forEach(wh => {
-        const startHour = parseInt(wh.start_time.split(':')[0]);
-        const endHour = parseInt(wh.end_time.split(':')[0]);
+      if (!isSelectedDayAvailable) {
+        // Se a data selecionada não for disponível, encontrar a próxima data disponível
+        console.log('Nova data não é disponível, procurando próxima data disponível...');
+        const today = new Date();
+        let nextAvailableDate = new Date(today);
         
-        // Gerar horários de 30 em 30 minutos dentro do período de trabalho
-        for (let hour = startHour; hour <= endHour; hour++) {
-          // Horário cheio (ex: 10:00)
-          const timeSlotFull = `${hour.toString().padStart(2, '0')}:00`;
-          if (!timeSlots.includes(timeSlotFull)) {
-            timeSlots.push(timeSlotFull);
-          }
+        // Procurar pelos próximos 30 dias, começando pela data atual
+        for (let i = 0; i < 30; i++) {
+          const checkDate = new Date(today);
+          checkDate.setDate(today.getDate() + i);
           
-          // Horário de meia hora (ex: 10:30) - exceto para o último horário
-          if (hour < endHour) {
-            const timeSlotHalf = `${hour.toString().padStart(2, '0')}:30`;
-            if (!timeSlots.includes(timeSlotHalf)) {
-              timeSlots.push(timeSlotHalf);
+          const dayOfWeek = checkDate.getDay();
+          const isWorkingDay = psychologistWorkingHours.some(wh => wh.day_of_week === dayOfWeek);
+          
+          if (isWorkingDay) {
+            nextAvailableDate = checkDate;
+            console.log(`Encontrada data disponível no dia ${i + 1}:`, checkDate);
+            break;
+          }
+        }
+        
+        // Atualizar a data selecionada para o próximo dia disponível
+        setSelectedDate(nextAvailableDate);
+        
+        // Usar a nova data para gerar os horários
+        const newDayOfWeek = nextAvailableDate.getDay();
+        const dayWorkingHours = psychologistWorkingHours.filter(wh => wh.day_of_week === newDayOfWeek);
+        
+        console.log('Data ajustada para próximo dia disponível:', nextAvailableDate);
+        console.log('Novo dia da semana:', newDayOfWeek);
+        console.log('Horários de trabalho para este dia:', dayWorkingHours);
+        
+        // Gerar slots de horário disponíveis
+        const timeSlots: string[] = [];
+        dayWorkingHours.forEach(wh => {
+          const startHour = parseInt(wh.start_time.split(':')[0]);
+          const endHour = parseInt(wh.end_time.split(':')[0]);
+          
+          // Gerar horários de 30 em 30 minutos dentro do período de trabalho
+          for (let hour = startHour; hour <= endHour; hour++) {
+            // Horário cheio (ex: 10:00)
+            const timeSlotFull = `${hour.toString().padStart(2, '0')}:00`;
+            if (!timeSlots.includes(timeSlotFull)) {
+              timeSlots.push(timeSlotFull);
+            }
+            
+            // Horário de meia hora (ex: 10:30) - exceto para o último horário
+            if (hour < endHour) {
+              const timeSlotHalf = `${hour.toString().padStart(2, '0')}:30`;
+              if (!timeSlots.includes(timeSlotHalf)) {
+                timeSlots.push(timeSlotHalf);
+              }
             }
           }
-        }
-      });
-      
-      // Ordenar horários
-      timeSlots.sort((a, b) => a.localeCompare(b));
-      setAvailableTimeSlots(timeSlots);
-      
-      // Resetar horários selecionados quando a data mudar
-      if (timeSlots.length >= 2) {
-        setValue("startTime", timeSlots[0]);
-        setValue("endTime", timeSlots[1]);
-      } else if (timeSlots.length === 1) {
-        setValue("startTime", timeSlots[0]);
-        const startHour = parseInt(timeSlots[0].split(':')[0]);
-        const startMinute = timeSlots[0].includes(':30') ? 30 : 0;
+        });
         
-        if (startMinute === 0) {
-          const endTime = `${startHour.toString().padStart(2, '0')}:30`;
-          setValue("endTime", endTime);
-        } else {
-          const endHour = startHour + 1;
-          const endTime = `${endHour.toString().padStart(2, '0')}:00`;
-          setValue("endTime", endTime);
+        // Ordenar horários
+        timeSlots.sort((a, b) => a.localeCompare(b));
+        setAvailableTimeSlots(timeSlots);
+        
+        // Resetar horários selecionados
+        if (timeSlots.length >= 2) {
+          setValue("startTime", timeSlots[0]);
+          setValue("endTime", timeSlots[1]);
+        } else if (timeSlots.length === 1) {
+          setValue("startTime", timeSlots[0]);
+          const startHour = parseInt(timeSlots[0].split(':')[0]);
+          const startMinute = timeSlots[0].includes(':30') ? 30 : 0;
+          
+          if (startMinute === 0) {
+            const endTime = `${startHour.toString().padStart(2, '0')}:30`;
+            setValue("endTime", endTime);
+          } else {
+            const endHour = startHour + 1;
+            const endTime = `${endHour.toString().padStart(2, '0')}:00`;
+            setValue("endTime", endTime);
+          }
         }
+        
+        console.log('Horários atualizados para a nova data disponível:', timeSlots);
       } else {
-        // Se não há horários disponíveis para este dia
-        setValue("startTime", "09:00");
-        setValue("endTime", "10:00");
+        // A data selecionada é disponível, usar ela normalmente
+        const dayWorkingHours = psychologistWorkingHours.filter(wh => wh.day_of_week === selectedDayOfWeek);
+        
+        console.log('Data mudou para:', selectedDate);
+        console.log('Novo dia da semana:', selectedDayOfWeek);
+        console.log('Horários de trabalho para este dia:', dayWorkingHours);
+        
+        // Regenerar horários quando a data mudar
+        const timeSlots: string[] = [];
+        dayWorkingHours.forEach(wh => {
+          const startHour = parseInt(wh.start_time.split(':')[0]);
+          const endHour = parseInt(wh.end_time.split(':')[0]);
+          
+          // Gerar horários de 30 em 30 minutos dentro do período de trabalho
+          for (let hour = startHour; hour <= endHour; hour++) {
+            // Horário cheio (ex: 10:00)
+            const timeSlotFull = `${hour.toString().padStart(2, '0')}:00`;
+            if (!timeSlots.includes(timeSlotFull)) {
+              timeSlots.push(timeSlotFull);
+            }
+            
+            // Horário de meia hora (ex: 10:30) - exceto para o último horário
+            if (hour < endHour) {
+              const timeSlotHalf = `${hour.toString().padStart(2, '0')}:30`;
+              if (!timeSlots.includes(timeSlotHalf)) {
+                timeSlots.push(timeSlotHalf);
+              }
+            }
+          }
+        });
+        
+        // Ordenar horários
+        timeSlots.sort((a, b) => a.localeCompare(b));
+        setAvailableTimeSlots(timeSlots);
+        
+        // Resetar horários selecionados quando a data mudar
+        if (timeSlots.length >= 2) {
+          setValue("startTime", timeSlots[0]);
+          setValue("endTime", timeSlots[1]);
+        } else if (timeSlots.length === 1) {
+          setValue("startTime", timeSlots[0]);
+          const startHour = parseInt(timeSlots[0].split(':')[0]);
+          const startMinute = timeSlots[0].includes(':30') ? 30 : 0;
+          
+          if (startMinute === 0) {
+            const endTime = `${startHour.toString().padStart(2, '0')}:30`;
+            setValue("endTime", endTime);
+          } else {
+            const endHour = startHour + 1;
+            const endTime = `${endHour.toString().padStart(2, '0')}:00`;
+            setValue("endTime", endTime);
+          }
+        } else {
+          // Se não há horários disponíveis para este dia
+          setValue("startTime", "09:00");
+          setValue("endTime", "10:00");
+        }
+        
+        console.log('Horários atualizados para a nova data:', timeSlots);
       }
-      
-      console.log('Horários atualizados para a nova data:', timeSlots);
     }
   }, [selectedDate, psychologistWorkingHours, selectedPsychologistId, setValue]);
 
