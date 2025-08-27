@@ -12,7 +12,8 @@ import { Patient, Appointment, AppointmentStatus, PaymentMethod } from "@/types/
 import { ConsultingRoom } from "@/types/consulting_rooms";
 import PsychologistAvailabilityDatePicker from "./PsychologistAvailabilityDatePicker";
 import { format } from "date-fns";
-import { SelectDynamic } from "./Selectsn";
+
+import { ComboboxDynamic } from "./ComboboxDynamic";
 import { appointmentSchema, AppointmentFormData } from "@/zod/appointmentSchema"; // Ajuste o caminho
 import { InputDynamic } from "./inputDin";
 
@@ -608,7 +609,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
-          <SelectDynamic
+          <ComboboxDynamic
             name="patientId"
             control={control}
             label="Paciente"
@@ -620,6 +621,8 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
             required
             errors={errors}
             disabled={isLoading}
+            searchPlaceholder="Digite o nome do paciente..."
+            emptyMessage="Nenhum paciente encontrado."
             onClear={() => formMethods.setValue("patientId", "")}
           />
           <Button type="button" variant="outline" onClick={handleNewPatient} disabled={isLoading}>
@@ -628,7 +631,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
         </div>
 
         <div className="space-y-2">
-          <SelectDynamic
+          <ComboboxDynamic
             name="psychologistId"
             control={control}
             label="Psicólogo"
@@ -640,6 +643,8 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
             required
             errors={errors}
             disabled={isLoading}
+            searchPlaceholder="Digite o nome do psicólogo..."
+            emptyMessage="Nenhum psicólogo encontrado."
             onClear={() => formMethods.setValue("psychologistId", "")}
           />
           {isLoadingPsychologistHours && (
@@ -651,7 +656,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
         </div>
 
         <div className="space-y-2">
-          <SelectDynamic
+          <ComboboxDynamic
             name="appointmentType"
             control={control}
             label="Tipo de Atendimento"
@@ -663,6 +668,8 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
             required
             errors={errors}
             disabled={isLoading}
+            searchPlaceholder="Digite para buscar..."
+            emptyMessage="Nenhum tipo encontrado."
           />
         </div>
 
@@ -685,7 +692,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
 
         {appointmentType === "presential" && (
           <div className="space-y-2">
-            <SelectDynamic
+            <ComboboxDynamic
               name="roomId"
               control={control}
               label="Consultório *"
@@ -697,16 +704,15 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
               required
               errors={errors}
               disabled={isLoading}
+              searchPlaceholder="Digite o nome do consultório..."
+              emptyMessage="Nenhum consultório encontrado."
               onClear={() => formMethods.setValue("roomId", "")}
             />
-            {errors.roomId && (
-              <p className="text-sm text-red-500">{errors.roomId.message}</p>
-            )}
           </div>
         )}
 
         <div className="space-y-2">
-          <SelectDynamic
+          <ComboboxDynamic
             name="startTime"
             control={control}
             label="Horário de Início"
@@ -718,6 +724,8 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
             required
             errors={errors}
             disabled={isLoading || !selectedPsychologistId || isLoadingPsychologistHours}
+            searchPlaceholder="Digite o horário..."
+            emptyMessage="Nenhum horário encontrado."
             onClear={() => formMethods.setValue("startTime", availableTimeSlots[0] || "09:00")}
           />
           {selectedPsychologistId && availableTimeSlots.length > 0 && (
@@ -728,7 +736,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
         </div>
 
         <div className="space-y-2">
-          <SelectDynamic
+          <ComboboxDynamic
             name="endTime"
             control={control}
             label="Horário de Término"
@@ -737,6 +745,8 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
             required
             errors={errors}
             disabled={isLoading || !selectedPsychologistId || isLoadingPsychologistHours || !currentStartTime}
+            searchPlaceholder="Digite o horário..."
+            emptyMessage="Nenhum horário encontrado."
             onClear={() => {
               // Se não houver horário de início, usar o primeiro disponível
               if (currentStartTime && availableTimeSlots.length > 0) {
@@ -755,7 +765,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
         </div>
 
         <div className="space-y-2">
-          <SelectDynamic
+          <ComboboxDynamic
             name="paymentMethod"
             control={control}
             label="Método de Pagamento"
@@ -767,6 +777,8 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
             required
             errors={errors}
             disabled={isLoading || isLoadingPlans}
+            searchPlaceholder="Digite para buscar..."
+            emptyMessage="Nenhum método de pagamento encontrado."
             onClear={() => {
               formMethods.setValue("paymentMethod", "");
               formMethods.setValue("insuranceType", "");
@@ -787,9 +799,6 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
               }
             }}
           />
-          {errors.paymentMethod && (
-            <p className="text-sm text-red-500">{errors.paymentMethod.message}</p>
-          )}
         </div>
 
         {watch("paymentMethod") && (
