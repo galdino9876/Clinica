@@ -83,6 +83,11 @@ const PatientTable = ({
                 </th>
                 {isAdmin && (
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Responsável
+                  </th>
+                )}
+                {isAdmin && (
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Status
                   </th>
                 )}
@@ -94,7 +99,7 @@ const PatientTable = ({
             <tbody className="bg-white divide-y divide-gray-200">
               {patients.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 6 : 5} className="px-4 py-4 text-center text-gray-500">
+                  <td colSpan={isAdmin ? 7 : 5} className="px-4 py-4 text-center text-gray-500">
                     Nenhum paciente encontrado.
                   </td>
                 </tr>
@@ -113,6 +118,11 @@ const PatientTable = ({
                     <td className="px-4 py-4 whitespace-nowrap">
                       {patient.email}
                     </td>
+                                         {isAdmin && (
+                       <td className="px-4 py-4 whitespace-nowrap">
+                         {patient.psychologist_name || "N/A"}
+                       </td>
+                     )}
                     {isAdmin && (
                       <td className="px-4 py-4 whitespace-nowrap">
                         <span className={`px-2 py-1 text-xs rounded-full ${patient.active ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}`}>

@@ -17,6 +17,7 @@ export interface Patient {
   deactivationDate?: string;
   identityDocument?: File | string; // Added for identity document
   insuranceDocument?: File | string; // Added for insurance document
+  psychologist_name?: string; // Nome do psicólogo responsável
 }
 
 export type PaymentMethod = "private" | "insurance";

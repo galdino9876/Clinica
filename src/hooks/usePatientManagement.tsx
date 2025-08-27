@@ -55,7 +55,8 @@ export const usePatientManagement = () => {
       patient.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       patient.cpf.includes(searchTerm) ||
       patient.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      patient.phone.includes(searchTerm)
+      patient.phone.includes(searchTerm) ||
+      (isAdmin && patient.psychologist_name ? patient.psychologist_name.toLowerCase().includes(searchTerm.toLowerCase()) : false)
   );
 
   // Calculate pending appointments count for the selected patient

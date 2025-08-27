@@ -70,7 +70,8 @@ const PatientsTable = () => {
       (patient.name || patient.nome || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (patient.cpf || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (patient.phone || patient.telefone || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (patient.email || "").toLowerCase().includes(searchTerm.toLowerCase())
+      (patient.email || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (isAdmin && patient.psychologist_name ? patient.psychologist_name.toLowerCase().includes(searchTerm.toLowerCase()) : false)
   );
 
   const actions = [
@@ -169,7 +170,7 @@ const PatientsTable = () => {
   }
 
   return (
-    <div className="w-full max-w-7xl mx-auto p-6">
+    <div className="w-full p-6">
       <div className="bg-white shadow-lg rounded-lg overflow-hidden">
         <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
           <div className="flex justify-between items-center">
@@ -195,6 +196,9 @@ const PatientsTable = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">CPF</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Telefone</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                {isAdmin && (
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Responsável</th>
+                )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
               </tr>
@@ -202,7 +206,7 @@ const PatientsTable = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredPatients.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-4 text-center text-gray-500">Nenhum paciente encontrado</td>
+                  <td colSpan={isAdmin ? 7 : 6} className="px-6 py-4 text-center text-gray-500">Nenhum paciente encontrado</td>
                 </tr>
               ) : (
                 filteredPatients.map((patient, index) => (
@@ -211,6 +215,9 @@ const PatientsTable = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.cpf || "N/A"}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.phone || patient.telefone || "N/A"}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.email || "N/A"}</td>
+                                         {isAdmin && (
+                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.psychologist_name || "N/A"}</td>
+                     )}
                     <td className="px-6 py-4 whitespace-nowrap">{renderStatus(patient.status || "Ativo")}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
