@@ -43,6 +43,10 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
   const [availableTimeSlots, setAvailableTimeSlots] = useState<string[]>([]);
   const [isLoadingPsychologistHours, setIsLoadingPsychologistHours] = useState(false);
 
+  // Estados para planos de pagamento
+  const [paymentPlans, setPaymentPlans] = useState<Array<{id: number, plano: string, valor: number}>>([]);
+  const [isLoadingPlans, setIsLoadingPlans] = useState(false);
+
   const formMethods: UseFormReturn<AppointmentFormData> = useForm<AppointmentFormData>({
     resolver: zodResolver(appointmentSchema),
     defaultValues: {
@@ -53,6 +57,8 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
       startTime: "09:00",
       endTime: "10:00",
       value: 200.0,
+      paymentMethod: "",
+      insuranceType: "",
     },
   });
 
@@ -156,10 +162,48 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
     }
   };
 
+  // Função para buscar planos de pagamento
+  const fetchPaymentPlans = async () => {
+    setIsLoadingPlans(true);
+    try {
+      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/recurrence_type");
+      if (response.ok) {
+        const data = await response.json();
+        setPaymentPlans(Array.isArray(data) ? data : []);
+        console.log('Planos de pagamento carregados:', data);
+      } else {
+        console.error('Erro ao buscar planos de pagamento:', response.status);
+        setPaymentPlans([]);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar planos de pagamento:', error);
+      setPaymentPlans([]);
+    } finally {
+      setIsLoadingPlans(false);
+    }
+  };
+
+  // Função para atualizar valor quando método de pagamento mudar
+  const handlePaymentMethodChange = (paymentMethod: string, insuranceType?: string) => {
+    if (paymentMethod === "private") {
+      setValue("paymentMethod", "private");
+      setValue("value", 200.0); // Valor padrão para particular
+      setValue("insuranceType", "Particular");
+    } else if (paymentMethod === "insurance" && insuranceType) {
+      setValue("paymentMethod", "insurance");
+      const selectedPlan = paymentPlans.find(plan => plan.plano === insuranceType);
+      if (selectedPlan) {
+        setValue("value", selectedPlan.valor);
+        setValue("insuranceType", selectedPlan.plano);
+      }
+    }
+  };
+
   // Monitorar mudanças no psicólogo selecionado
   useEffect(() => {
     if (selectedPsychologistId) {
       fetchPsychologistWorkingHours(selectedPsychologistId);
+      // Removido fetchPaymentPlans() - agora só carrega quando o dropdown for clicado
     } else {
       // Limpar horários quando nenhum psicólogo estiver selecionado
       setPsychologistWorkingHours([]);
@@ -172,6 +216,8 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
       setSelectedDate(null);
     }
   }, [selectedPsychologistId, setValue]);
+
+
 
   // Efeito para ajustar a data inicial se necessário quando o psicólogo for selecionado
   useEffect(() => {
@@ -385,6 +431,9 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
         } else {
           console.error("Erro API usuários:", usersResponse.status, await usersResponse.text());
         }
+
+        // Carregar planos de pagamento
+        await fetchPaymentPlans();
       } catch (err) {
         console.error("Erro ao carregar dados:", err);
       } finally {
@@ -428,8 +477,8 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
               created_at: new Date().toISOString(),
               updated_at: null,
               value: Number(data.value),
-              payment_method: "private",
-              insurance_type: null,
+              payment_method: data.paymentMethod,
+              insurance_type: data.insuranceType,
               is_recurring: false,
             }),
           });
@@ -706,18 +755,72 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
         </div>
 
         <div className="space-y-2">
-          <InputDynamic
-            name="value"
-            label="Valor do Atendimento (R$)"
+          <SelectDynamic
+            name="paymentMethod"
             control={control}
-            type="number"
-            placeholder="200.00"
+            label="Método de Pagamento"
+            options={[
+              { id: "private", label: "Particular" },
+              ...paymentPlans.map(plan => ({ id: `insurance_${plan.plano}`, label: plan.plano }))
+            ]}
+            placeholder={watch("paymentMethod") === "private" ? "Particular" : watch("paymentMethod") === "insurance" ? watch("insuranceType") || "Plano selecionado" : "Selecione o método de pagamento"}
             required
-            disabled={isLoading}
             errors={errors}
-            onClear={() => formMethods.setValue("value", 200.0)}
+            disabled={isLoading || isLoadingPlans}
+            onClear={() => {
+              formMethods.setValue("paymentMethod", "");
+              formMethods.setValue("insuranceType", "");
+              formMethods.setValue("value", 0);
+            }}
+            onChange={(value) => {
+              if (value === "private") {
+                handlePaymentMethodChange("private");
+              } else if (value.startsWith("insurance_")) {
+                const planName = value.replace("insurance_", "");
+                handlePaymentMethodChange("insurance", planName);
+              }
+            }}
+            onFocus={() => {
+              // Carregar planos quando o dropdown for focado
+              if (paymentPlans.length === 0) {
+                fetchPaymentPlans();
+              }
+            }}
           />
+          {errors.paymentMethod && (
+            <p className="text-sm text-red-500">{errors.paymentMethod.message}</p>
+          )}
         </div>
+
+        {watch("paymentMethod") && (
+          <div className="space-y-2">
+            <InputDynamic
+              name="value"
+              label="Valor do Atendimento (R$)"
+              control={control}
+              type="number"
+              placeholder={watch("paymentMethod") === "private" ? "200.00" : watch("paymentMethod") === "insurance" ? "0.00" : watch("paymentMethod") ? "Digite o valor" : "Selecione método de pagamento"}
+              required
+              disabled={isLoading || !watch("paymentMethod")}
+              errors={errors}
+              onClear={() => {
+                if (watch("paymentMethod") === "private") {
+                  formMethods.setValue("value", 200.0);
+                } else if (watch("paymentMethod") === "insurance") {
+                  const selectedPlan = paymentPlans.find(plan => plan.plano === watch("insuranceType"));
+                  formMethods.setValue("value", selectedPlan?.valor || 0);
+                } else {
+                  formMethods.setValue("value", 0);
+                }
+              }}
+            />
+            {watch("paymentMethod") === "insurance" && watch("insuranceType") && (
+              <div className="text-xs text-green-600">
+                ✓ Plano selecionado: {watch("insuranceType")}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex justify-end gap-2">

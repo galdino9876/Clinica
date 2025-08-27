@@ -12,6 +12,8 @@ export const appointmentSchema = z.object({
   startTime: z.string().min(1, { message: "O horário de início é obrigatório!" }),
   endTime: z.string().min(1, { message: "O horário de término é obrigatório!" }),
   value: z.coerce.number().min(0.01, { message: "O valor deve ser maior que 0!" }).default(200.0),
+  paymentMethod: z.enum(["private", "insurance"]).optional().or(z.literal("")),
+  insuranceType: z.string().optional(),
 }).refine((data) => {
   // Se o tipo de atendimento for presencial, o consultório é obrigatório
   if (data.appointmentType === "presential") {
@@ -21,6 +23,12 @@ export const appointmentSchema = z.object({
 }, {
   message: "Consultório é obrigatório para atendimentos presenciais",
   path: ["roomId"]
+}).refine((data) => {
+  // O método de pagamento é obrigatório
+  return data.paymentMethod && data.paymentMethod.trim().length > 0;
+}, {
+  message: "O método de pagamento é obrigatório!",
+  path: ["paymentMethod"]
 });
 
 export type AppointmentFormData = z.infer<typeof appointmentSchema>;

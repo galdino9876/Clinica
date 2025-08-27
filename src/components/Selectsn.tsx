@@ -22,6 +22,8 @@ interface SelectDynamicProps {
   errors?: FieldErrors;
   searchable?: boolean;
   onClear?: () => void;
+  onChange?: (value: string) => void;
+  onFocus?: () => void;
 }
 
 export const SelectDynamic = forwardRef<HTMLSelectElement, SelectDynamicProps>(
@@ -37,6 +39,8 @@ export const SelectDynamic = forwardRef<HTMLSelectElement, SelectDynamicProps>(
       errors,
       searchable = false,
       onClear,
+      onChange: customOnChange,
+      onFocus: customOnFocus,
     },
     ref: ForwardedRef<HTMLSelectElement>
   ) => {
@@ -44,6 +48,19 @@ export const SelectDynamic = forwardRef<HTMLSelectElement, SelectDynamicProps>(
       field: { value, onChange, ...inputProps },
       fieldState: { error },
     } = useController({ name, control, rules: { required } });
+
+    const handleChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+      onChange(e);
+      if (customOnChange) {
+        customOnChange(e.target.value);
+      }
+    };
+
+    const handleFocus = (e: React.FocusEvent<HTMLSelectElement>) => {
+      if (customOnFocus) {
+        customOnFocus();
+      }
+    };
 
     const [searchTerm, setSearchTerm] = useState("");
     const searchInputRef = useRef<HTMLInputElement>(null);
@@ -84,7 +101,8 @@ export const SelectDynamic = forwardRef<HTMLSelectElement, SelectDynamicProps>(
             ref={ref}
             id={name}
             value={value ?? ""}
-            onChange={onChange}
+            onChange={handleChange}
+            onFocus={handleFocus}
             disabled={disabled}
             className={twMerge(
               "w-full border rounded px-3 py-2",

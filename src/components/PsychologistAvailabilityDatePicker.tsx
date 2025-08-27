@@ -204,13 +204,13 @@ const PsychologistAvailabilityDatePicker = ({
           </div>
         ) : hasLoadedHours && workingHours.length > 0 ? (
           <>
-            <div className="p-3 border-b">
+            {/* <div className="p-3 border-b">
               <div className="text-sm font-medium text-gray-700 mb-2">Legenda:</div>
               <div className="flex items-center gap-2 text-xs">
                 <div className="w-3 h-3 bg-green-100 border border-green-300 rounded"></div>
                 <span>Dias disponíveis</span>
               </div>
-            </div>
+            </div> */}
             <Calendar
               mode="multiple"
               selected={selectedDates}
@@ -226,11 +226,8 @@ const PsychologistAvailabilityDatePicker = ({
             />
             
             {/* Mostrar datas selecionadas */}
-            {selectedDates.length > 0 && (
+            {/* {selectedDates.length > 0 && (
               <div className="p-3 border-t">
-                <div className="text-sm font-medium text-gray-700 mb-2">
-                  Datas selecionadas: {selectedDates.length}
-                </div>
                 <div className="space-y-1">
                   {selectedDates.map((selectedDate, index) => (
                     <div key={index} className="text-xs text-gray-600">
@@ -246,7 +243,7 @@ const PsychologistAvailabilityDatePicker = ({
                   Confirmar seleção
                 </Button>
               </div>
-            )}
+            )} */}
           </>
         ) : hasLoadedHours && workingHours.length === 0 ? (
           <div className="p-6 text-center">

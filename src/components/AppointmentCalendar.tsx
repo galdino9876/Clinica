@@ -708,8 +708,8 @@ const AppointmentCard = React.memo(({
           </div>
           
           <div className="space-y-4">
-            {/* Primeira linha: Psicólogo - Início */}
-            <div className="grid grid-cols-2 gap-6">
+            {/* Primeira linha: Psicólogo - Início - Plano */}
+            <div className="grid grid-cols-3 gap-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-blue-100 rounded-lg">
                   <User className="w-5 h-5 text-blue-600" />
@@ -725,13 +725,24 @@ const AppointmentCard = React.memo(({
                 </div>
                 <div>
                   <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Início</span>
-                  <p className="font-semibold text-gray-900">{appointment.start_time || 'N/A'}</p>
+                  <p className="font-semibold text-gray-900">{(appointment as any).start_time || 'N/A'}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-100 rounded-lg">
+                  <div className="w-5 h-5 flex items-center justify-center">
+                    <span className="text-orange-600 font-bold text-sm">📋</span>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Plano</span>
+                  <p className="font-semibold text-gray-900">{(appointment as any).insurance_type || 'Particular'}</p>
                 </div>
               </div>
             </div>
 
             {/* Segunda linha: Sala - Término - Valor */}
-            <div className="grid grid-cols-3 gap-6">
+            <div className="grid grid-cols-3 gap-4">
               <div className="flex items-center gap-3">
                 <div className="p-2 bg-purple-100 rounded-lg">
                   <MapPin className="w-5 h-5 text-purple-600" />
@@ -747,7 +758,7 @@ const AppointmentCard = React.memo(({
                 </div>
                 <div>
                   <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Término</span>
-                  <p className="font-semibold text-gray-900">{appointment.end_time || 'N/A'}</p>
+                  <p className="font-semibold text-gray-900">{(appointment as any).end_time || 'N/A'}</p>
                 </div>
               </div>
               <div className="flex items-center gap-3">

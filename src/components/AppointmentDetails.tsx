@@ -29,9 +29,9 @@ const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) =
   const { updateAppointmentStatus, deleteAppointment, findNextAvailableSlot, rescheduleAppointment, updateAppointment } = useAppointments();
   const [isReschedulingOpen, setIsReschedulingOpen] = useState(false);
   const [newDate, setNewDate] = useState<string>(appointment.date);
-  const [newStartTime, setNewStartTime] = useState<string>(appointment.startTime);
-  const [newEndTime, setNewEndTime] = useState<string>(appointment.endTime);
-  const [insuranceToken, setInsuranceToken] = useState<string>(appointment.insuranceToken || "");
+  const [newStartTime, setNewStartTime] = useState<string>(appointment.start_time);
+  const [newEndTime, setNewEndTime] = useState<string>(appointment.end_time);
+  const [insuranceToken, setInsuranceToken] = useState<string>(appointment.insurance_token || "");
 
   const formattedDate = format(new Date(appointment.date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
   const isAdmin = user?.role === "admin";
@@ -41,7 +41,7 @@ const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) =
   const canEditToken = isAdmin || isReceptionist || isPsychologist;
   
   // Determine if we should show token input (for insurance appointments that are pending OR confirmed)
-  const shouldShowTokenInput = appointment.paymentMethod === "insurance" && 
+  const shouldShowTokenInput = appointment.payment_method === "insurance" && 
     (appointment.status === "pending" || appointment.status === "confirmed") && 
     canEditToken;
 
@@ -58,7 +58,7 @@ const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) =
 
   const handleOpenReschedule = () => {
     // Encontra o próximo horário disponível para o psicólogo
-    const nextSlot = findNextAvailableSlot(appointment.psychologistId);
+    const nextSlot = findNextAvailableSlot(appointment.psychologist_id);
     
     if (nextSlot) {
       setNewDate(format(nextSlot.date, 'yyyy-MM-dd'));
@@ -119,51 +119,131 @@ const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) =
 
   // Log for debugging
   console.log("Appointment details:", {
-    paymentMethod: appointment.paymentMethod,
+    paymentMethod: appointment.payment_method,
     status: appointment.status,
     canEditToken,
     shouldShowTokenInput
   });
 
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <p className="text-sm text-gray-500">Paciente</p>
-          <p className="font-medium">{appointment.patient.name}</p>
+    <div className="space-y-6">
+      {/* Header com Status */}
+      <div className="text-center pb-6 border-b border-gray-100">
+        <div className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-semibold ${getStatusColor(appointment.status)}`}>
+          <div className={`w-2 h-2 rounded-full mr-2 ${appointment.status === 'confirmed' ? 'bg-green-500' : appointment.status === 'pending' ? 'bg-yellow-500' : appointment.status === 'cancelled' ? 'bg-red-500' : 'bg-blue-500'}`}></div>
+          {getStatusText(appointment.status)}
         </div>
-        <div>
-          <p className="text-sm text-gray-500">Data</p>
-          <p className="font-medium">{formattedDate}</p>
+      </div>
+
+      {/* Informações Principais */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Coluna Esquerda */}
+        <div className="space-y-5">
+          {/* Paciente */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-xl border border-blue-100">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-xs text-blue-600 uppercase tracking-wide font-semibold">Paciente</p>
+                                 <p className="text-lg font-bold text-gray-900">{(appointment as any).patient?.name || 'N/A'}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Data e Horário */}
+          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 p-4 rounded-xl border border-emerald-100">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="p-2 bg-emerald-100 rounded-lg">
+                <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v16a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-xs text-emerald-600 uppercase tracking-wide font-semibold">Data</p>
+                <p className="text-lg font-bold text-gray-900">{formattedDate}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-teal-100 rounded-lg">
+                <svg className="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-xs text-teal-600 uppercase tracking-wide font-semibold">Horário</p>
+                <p className="text-lg font-bold text-gray-900">{appointment.startTime} - {appointment.endTime}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Psicólogo */}
+          <div className="bg-gradient-to-r from-purple-50 to-violet-50 p-4 rounded-xl border border-purple-100">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <svg className="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-xs text-purple-600 uppercase tracking-wide font-semibold">Psicólogo</p>
+                <p className="text-lg font-bold text-gray-900">{appointment.psychologistName}</p>
+              </div>
+            </div>
+          </div>
         </div>
-        <div>
-          <p className="text-sm text-gray-500">Horário</p>
-          <p className="font-medium">{appointment.startTime} - {appointment.endTime}</p>
-        </div>
-        <div>
-          <p className="text-sm text-gray-500">Psicólogo</p>
-          <p className="font-medium">{appointment.psychologistName}</p>
-        </div>
-        <div>
-          <p className="text-sm text-gray-500">Sala</p>
-          <p className="font-medium">{appointment.roomName}</p>
-        </div>
-        <div>
-          <p className="text-sm text-gray-500">Método de Pagamento</p>
-          <p className="font-medium">
-            {appointment.paymentMethod === "private" ? "Particular" : `Convênio (${appointment.insuranceType})`}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm text-gray-500">Valor</p>
-          <p className="font-medium">R$ {appointment.value.toFixed(2)}</p>
-        </div>
-        <div>
-          <p className="text-sm text-gray-500">Status</p>
-          <div className="flex items-center mt-1">
-            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusColor(appointment.status)}`}>
-              {getStatusText(appointment.status)}
-            </span>
+
+        {/* Coluna Direita */}
+        <div className="space-y-5">
+          {/* Sala */}
+          <div className="bg-gradient-to-r from-orange-50 to-amber-50 p-4 rounded-xl border border-orange-100">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-orange-100 rounded-lg">
+                <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-xs text-orange-600 uppercase tracking-wide font-semibold">Sala</p>
+                <p className="text-lg font-bold text-gray-900">{appointment.roomName}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Método de Pagamento */}
+          <div className="bg-gradient-to-r from-rose-50 to-pink-50 p-4 rounded-xl border border-rose-100">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-rose-100 rounded-lg">
+                <svg className="w-5 h-5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-xs text-rose-600 uppercase tracking-wide font-semibold">Método de Pagamento</p>
+                <p className="text-lg font-bold text-gray-900">
+                  {appointment.paymentMethod === "private" ? "Particular" : `Convênio (${appointment.insuranceType})`}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Valor */}
+          <div className="bg-gradient-to-r from-emerald-50 to-green-50 p-4 rounded-xl border border-emerald-100">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-emerald-100 rounded-lg">
+                <svg className="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1" />
+                </svg>
+              </div>
+              <div>
+                <p className="text-xs text-emerald-600 uppercase tracking-wide font-semibold">Valor</p>
+                <p className="text-2xl font-bold text-emerald-600">R$ {appointment.value.toFixed(2)}</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
