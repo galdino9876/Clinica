@@ -6,18 +6,11 @@ import { Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from "@/components/ui/command";
-import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import "./ComboboxDynamic.css";
 
 interface Option {
   id: string | number;
@@ -80,8 +73,6 @@ export const ComboboxDynamic = forwardRef<HTMLButtonElement, ComboboxDynamicProp
       }
     };
 
-
-
     const handleFocus = () => {
       if (customOnFocus) {
         customOnFocus();
@@ -130,39 +121,52 @@ export const ComboboxDynamic = forwardRef<HTMLButtonElement, ComboboxDynamicProp
           </PopoverTrigger>
           
           <PopoverContent className="w-full p-0" align="start">
-            <Command>
-              <CommandInput
-                placeholder={searchPlaceholder}
-                value={searchValue}
-                onValueChange={setSearchValue}
-                className="h-9"
-              />
-              <CommandList>
-                <CommandEmpty>{emptyMessage}</CommandEmpty>
-                <CommandGroup>
-                  {filteredOptions.map((option) => (
-                    <CommandItem
-                      key={option.id}
-                      value={String(option.id)}
-                      onSelect={() => handleSelect(option.id)}
-                      className="cursor-pointer"
-                    >
-                      <Check
-                        className={cn(
-                          "mr-2 h-4 w-4",
-                          value === option.id ? "opacity-100" : "opacity-0"
-                        )}
-                      />
-                      {option.label}
-                    </CommandItem>
-                  ))}
-                </CommandGroup>
-              </CommandList>
-            </Command>
+            <div className="bg-white rounded-md border shadow-lg">
+              <div className="flex items-center border-b px-3 py-2">
+                <input
+                  type="text"
+                  placeholder={searchPlaceholder}
+                  value={searchValue}
+                  onChange={(e) => setSearchValue(e.target.value)}
+                  className="flex h-9 w-full rounded-md bg-transparent py-2 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+                />
+              </div>
+              <div 
+                className="combobox-scroll-container"
+                onWheel={(e) => {
+                  e.preventDefault();
+                  const container = e.currentTarget;
+                  container.scrollTop += e.deltaY;
+                }}
+                tabIndex={0}
+              >
+                {filteredOptions.length === 0 ? (
+                  <div className="py-6 text-center text-sm text-gray-500">
+                    {emptyMessage}
+                  </div>
+                ) : (
+                  <div className="p-1">
+                    {filteredOptions.map((option) => (
+                      <div
+                        key={option.id}
+                        onClick={() => handleSelect(option.id)}
+                        className="combobox-item relative flex cursor-pointer select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none"
+                      >
+                        <Check
+                          className={cn(
+                            "mr-2 h-4 w-4",
+                            value === option.id ? "opacity-100" : "opacity-0"
+                          )}
+                        />
+                        {option.label}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </PopoverContent>
         </Popover>
-
-
 
         {/* Exibição de erros */}
         {(error || (errors && errors[name])) && (

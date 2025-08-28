@@ -1,0 +1,62 @@
+/* Estilos personalizados para o scroll do ComboboxDynamic */
+.combobox-scroll-container {
+  /* Propriedades essenciais para scroll */
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  max-height: 300px !important;
+  height: 300px !important;
+  
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: #d1d5db #f3f4f6;
+  
+  /* Webkit */
+  -webkit-overflow-scrolling: touch;
+  
+  /* Garantir que o scroll seja visível e funcional */
+  scrollbar-gutter: stable;
+  
+  /* Forçar o scroll a funcionar */
+  position: relative;
+  display: block;
+}
+
+/* Webkit (Chrome, Safari, Edge) */
+.combobox-scroll-container::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.combobox-scroll-container::-webkit-scrollbar-track {
+  background: #f3f4f6;
+  border-radius: 4px;
+}
+
+.combobox-scroll-container::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+.combobox-scroll-container::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}
+
+.combobox-scroll-container::-webkit-scrollbar-corner {
+  background: #f3f4f6;
+}
+
+/* Hover effects para os itens */
+.combobox-item {
+  transition: background-color 0.15s ease-in-out;
+  user-select: none;
+}
+
+.combobox-item:hover {
+  background-color: #f3f4f6;
+}
+
+/* Foco para acessibilidade */
+.combobox-item:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
