@@ -1,6 +1,8 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Patient } from "@/types/appointment";
+import { useToast } from "@/components/ui/use-toast";
+import { useState } from "react";
 
 interface AttendanceDialogProps {
   patient: Patient | null; // Dados do paciente passados como prop
@@ -29,7 +31,106 @@ const AttendanceDialog = ({
   getAttendanceTimeText,
   onClose,
 }: AttendanceDialogProps) => {
+  const { toast } = useToast();
+  const [isGenerating, setIsGenerating] = useState(false);
+
   if (!patient) return null;
+
+  const getPeriodTimes = () => {
+    if (attendancePeriod === "morning") {
+      return { start: "08:00", end: "12:00" };
+    } else if (attendancePeriod === "afternoon") {
+      return { start: "13:00", end: "18:00" };
+    } else {
+      return { start: attendanceStartTime, end: attendanceEndTime };
+    }
+  };
+
+  const handleGenerateCertificate = async () => {
+    // Validação básica
+    if (attendancePeriod === "specific") {
+      if (!attendanceStartTime || !attendanceEndTime) {
+        toast({
+          title: "Erro",
+          description: "Por favor, preencha os horários de início e fim.",
+          variant: "destructive",
+        });
+        return;
+      }
+      if (attendanceStartTime >= attendanceEndTime) {
+        toast({
+          title: "Erro",
+          description: "O horário de início deve ser anterior ao horário de fim.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
+    setIsGenerating(true);
+
+    // Toast de loading
+    toast({
+      title: "Gerando Atestado",
+      description: "Aguarde enquanto processamos sua solicitação...",
+    });
+
+    try {
+      const periodTimes = getPeriodTimes();
+      
+      const requestBody = {
+        nome_paciente: patient.name,
+        cpf: patient.cpf,
+        nome_psicologo: patient.psychologist_name || "Não atribuído",
+        data_atendimento: attendanceDate,
+        horario_inicio: periodTimes.start,
+        horario_fim: periodTimes.end,
+        periodo: attendancePeriod
+      };
+
+      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/atestado', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro na API: ${response.status}`);
+      }
+
+      // Download automático da imagem
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `atestado_${patient.name}_${attendanceDate}.jpg`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+
+      // Toast de sucesso
+      toast({
+        title: "Sucesso!",
+        description: "Atestado gerado e baixado automaticamente.",
+        variant: "default",
+      });
+
+      onClose();
+    } catch (error) {
+      console.error('Erro ao gerar atestado:', error);
+      toast({
+        title: "Erro",
+        description: "Falha ao gerar o atestado. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   return (
     <>
@@ -125,27 +226,25 @@ const AttendanceDialog = ({
             </div>
           </div>
         )}
-
-        <div className="p-4 bg-gray-50 rounded-lg text-sm">
-          <p>
-            Certificamos que <strong>{patient.name}</strong>, CPF: <strong>{patient.cpf}</strong>, compareceu
-            à Clínica Psicológica no dia <strong>{new Date(attendanceDate).toLocaleDateString('pt-BR')}</strong>{" "}
-            {getAttendanceTimeText()} para atendimento psicológico.
-          </p>
-        </div>
       </div>
+      
       <div className="mt-4 flex justify-end space-x-2">
-        <Button variant="outline" onClick={onClose}>
+        <Button variant="outline" onClick={onClose} disabled={isGenerating}>
           Cancelar
         </Button>
         <Button
-          onClick={() => {
-            // Aqui poderia gerar o atestado em PDF
-            alert("Atestado gerado com sucesso!");
-            onClose();
-          }}
+          onClick={handleGenerateCertificate}
+          disabled={isGenerating}
+          className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50"
         >
-          Gerar Atestado
+          {isGenerating ? (
+            <>
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+              Gerando...
+            </>
+          ) : (
+            "Gerar Atestado"
+          )}
         </Button>
       </div>
     </>

@@ -5,6 +5,7 @@ import PatientForm from "./PatientForm";
 import PatientAppointmentHistory from "./PatientAppointmentHistory";
 import PatientRecords from "./PatientRecords";
 import ReferralDialog from "./patient/ReferralDialog";
+import AttendanceDialog from "./patient/AttendanceDialog";
 import { useAuth } from "@/context/AuthContext";
 
 const PatientsTable = () => {
@@ -26,6 +27,13 @@ const PatientsTable = () => {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isRecordsOpen, setIsRecordsOpen] = useState(false);
   const [isReferralOpen, setIsReferralOpen] = useState(false);
+  const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
+
+  // Estados para o modal de atestado
+  const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
+  const [attendanceStartTime, setAttendanceStartTime] = useState("08:00");
+  const [attendanceEndTime, setAttendanceEndTime] = useState("09:00");
+  const [attendancePeriod, setAttendancePeriod] = useState("specific");
 
   const fetchPatients = async () => {
     try {
@@ -113,7 +121,14 @@ const PatientsTable = () => {
       label: "Atestado",
       icon: CircleArrowUp,
       color: "text-indigo-600 hover:text-indigo-800",
-      onClick: (patient) => alert(`Atestado para: ${patient.name || patient.nome}`),
+      onClick: (patient) => {
+        setSelectedPatient(patient);
+        setAttendanceDate(new Date().toISOString().split('T')[0]);
+        setAttendanceStartTime("08:00");
+        setAttendanceEndTime("09:00");
+        setAttendancePeriod("specific");
+        setIsAttendanceOpen(true);
+      },
     },
     {
       id: "reactivate",
@@ -159,6 +174,16 @@ const PatientsTable = () => {
       visible: canManagePatients,
     },
   ];
+
+  const getAttendanceTimeText = () => {
+    if (attendancePeriod === "specific") {
+      return `das ${attendanceStartTime} às ${attendanceEndTime}`;
+    } else if (attendancePeriod === "morning") {
+      return "durante o período da manhã (08:00 às 12:00)";
+    } else {
+      return "durante o período da tarde (13:00 às 18:00)";
+    }
+  };
 
   if (loading) {
     return (
@@ -306,6 +331,30 @@ const PatientsTable = () => {
       <Dialog open={isReferralOpen} onOpenChange={setIsReferralOpen}>
         <DialogContent>
           <ReferralDialog patient={selectedPatient} onClose={() => setIsReferralOpen(false)} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isAttendanceOpen} onOpenChange={setIsAttendanceOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Atestado de Comparecimento</DialogTitle>
+            <DialogDescription>Gere um atestado de comparecimento para o paciente</DialogDescription>
+          </DialogHeader>
+          {selectedPatient && (
+            <AttendanceDialog
+              patient={selectedPatient}
+              attendanceDate={attendanceDate}
+              setAttendanceDate={setAttendanceDate}
+              attendanceStartTime={attendanceStartTime}
+              setAttendanceStartTime={setAttendanceStartTime}
+              attendanceEndTime={attendanceEndTime}
+              setAttendanceEndTime={setAttendanceEndTime}
+              attendancePeriod={attendancePeriod}
+              setAttendancePeriod={setAttendancePeriod}
+              getAttendanceTimeText={getAttendanceTimeText}
+              onClose={() => setIsAttendanceOpen(false)}
+            />
+          )}
         </DialogContent>
       </Dialog>
     </div>
