@@ -107,7 +107,7 @@ const UsersTable = () => {
       console.error("Erro ao buscar usuários:", err);
       setError(err.message);
       setUsers([
-        { id: 1, nome: "Dr. João Silva", role: "Psicólogo", email: "joao.silva@clinica.com", phone: "(11) 99999-9999" },
+        { id: 1, nome: "Dr. João Silva", role: "Psicólogo", email: "joao.silva@clinica.com", phone: "61988888888" },
         { id: 2, nome: "Dra. Maria Santos", role: "Psicóloga", email: "maria.santos@clinica.com", phone: "(11) 88888-8888" },
         { id: 3, nome: "Ana Costa", role: "Recepcionista", email: "ana.costa@clinica.com", phone: "(11) 77777-7777" },
         { id: 4, nome: "Carlos Lima", role: "Administrador", email: "carlos.lima@clinica.com", phone: "(11) 66666-6666" },

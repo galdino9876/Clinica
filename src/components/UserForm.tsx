@@ -22,6 +22,7 @@ const userSchema = z.object({
   phone: z.string().max(20, "Telefone deve ter no máximo 20 caracteres").optional(),
   username: z.string().max(30, "Usuário deve ter no máximo 30 caracteres").optional(),
   password: z.string().max(255, "Senha deve ter no máximo 255 caracteres").optional(), // Opcional em edição
+  crp: z.string().max(20, "CRP deve ter no máximo 20 caracteres").optional(), // Opcional para psicólogos
 });
 
 type UserFormData = z.infer<typeof userSchema>;
@@ -47,6 +48,7 @@ const UserForm = ({ onSave, onCancel, open = false, user, isEdit = false }: User
       phone: user?.phone || "",
       username: user?.username || "",
       password: user?.password || "", // Opcional, pode ser deixado em branco
+      crp: user?.crp || "", // Preenche o CRP ao editar
     },
   });
 
@@ -56,6 +58,7 @@ const UserForm = ({ onSave, onCancel, open = false, user, isEdit = false }: User
     control,
     formState: { errors },
     reset,
+    watch, // Adicionado para acessar o valor do campo CRP
   } = formMethods;
 
   // Pré-preenche os dados do usuário ao entrar em modo de edição
@@ -68,6 +71,7 @@ const UserForm = ({ onSave, onCancel, open = false, user, isEdit = false }: User
         phone: user.phone || "",
         username: user.username || "",
         password: "", // Senha em branco por padrão em edição
+        crp: user.crp || "", // Preenche o CRP ao editar
       });
     } else {
       reset({
@@ -77,6 +81,7 @@ const UserForm = ({ onSave, onCancel, open = false, user, isEdit = false }: User
         phone: "",
         username: "",
         password: "",
+        crp: "",
       });
     }
   }, [user, isEdit, reset]);
@@ -88,7 +93,13 @@ const UserForm = ({ onSave, onCancel, open = false, user, isEdit = false }: User
       const url = isEdit
         ? `https://webhook.essenciasaudeintegrada.com.br/webhook/54590e1f-58e5-4d5a-896f-97ce434591d2/update-user/${user?.id}`
         : "https://webhook.essenciasaudeintegrada.com.br/webhook/create-user";
-      const method = isEdit ? "PUT" : "POST";
+      const method = isEdit ? "POST" : "POST";
+
+      // Log para debug - verificar se CRP está sendo enviado
+      console.log("Dados do formulário (data):", data);
+      console.log("Dados a serem enviados:", isEdit ? { id: user?.id, ...data } : data);
+      console.log("Campo CRP específico:", data.crp);
+      console.log("Tipo do campo CRP:", typeof data.crp);
 
       const response = await fetch(url, {
         method,
@@ -116,6 +127,7 @@ const UserForm = ({ onSave, onCancel, open = false, user, isEdit = false }: User
           phone: "",
           username: "",
           password: "",
+          crp: "",
         });
         window.location.reload();
       } else {
@@ -186,7 +198,7 @@ const UserForm = ({ onSave, onCancel, open = false, user, isEdit = false }: User
           name="phone"
           label="Telefone"
           control={control}
-          placeholder="(11) 99999-9999"
+          placeholder="61988888888"
           type="tel"
           disabled={isLoading}
           errors={errors}
@@ -215,6 +227,20 @@ const UserForm = ({ onSave, onCancel, open = false, user, isEdit = false }: User
           className="md:col-span-2"
           onClear={() => setValue("password", "")}
         />
+        
+        {/* Campo CRP - apenas para psicólogos */}
+        {watch("role") === "psychologist" && (
+          <InputDynamic
+            name="crp"
+            label="CRP"
+            control={control}
+            placeholder="Digite o CRP"
+            disabled={isLoading}
+            errors={errors}
+            maxLength={20}
+            onClear={() => setValue("crp", "")}
+          />
+        )}
       </div>
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel} disabled={isLoading}>

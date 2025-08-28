@@ -82,6 +82,7 @@ const AttendanceDialog = ({
         nome_paciente: patient.name,
         cpf: patient.cpf,
         nome_psicologo: patient.psychologist_name || "Não atribuído",
+        crp_psicologo: patient.psychologist_crp || "Não informado", // CRP do psicólogo
         data_atendimento: attendanceDate,
         horario_inicio: periodTimes.start,
         horario_fim: periodTimes.end,

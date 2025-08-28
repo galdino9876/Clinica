@@ -46,7 +46,7 @@ const PatientsTable = () => {
     } catch (err) {
       setError("Erro ao carregar pacientes. Usando dados de exemplo.");
       setPatients([
-        { id: 1, name: "João Silva", cpf: "123.456.789-00", phone: "(11) 99999-9999", email: "joao@email.com", status: "Ativo" },
+        { id: 1, name: "João Silva", cpf: "123.456.789-00", phone: "61988888888", email: "joao@email.com", status: "Ativo" },
         { id: 2, name: "Maria Santos", cpf: "987.654.321-00", phone: "(11) 88888-8888", email: "maria@email.com", status: "Inativo" },
       ]);
     } finally {

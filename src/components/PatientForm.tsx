@@ -173,7 +173,7 @@ const PatientForm = ({ onSave, onCancel, open = false }: PatientFormProps) => {
           name="phone"
           label="Telefone"
           control={control}
-          placeholder="(11) 99999-9999"
+          placeholder="61988888888"
           type="tel"
           required
           disabled={isLoading}
