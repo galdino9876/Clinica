@@ -375,7 +375,7 @@ const FinanceCharts = () => {
           };
 
           // Enviar requisição POST para a API
-          const response = await fetch('https://n8n.essenciasaudeintegrada.com.br/webhook-test/appointmens_edit', {
+          const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/appointmens_edit', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
