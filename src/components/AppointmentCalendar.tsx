@@ -89,7 +89,7 @@ const STATUS_LABELS = {
   pending: 'Pendente',
   confirmed: 'Confirmado',
   canceled: 'Cancelado',
-  completed: 'Atendimento finalizado - Aguardando pagamento'
+  completed: 'Atendimento realizado - Aguardando pagamento'
 } as const;
 
 const STATUS_BADGE_COLORS = {
@@ -128,19 +128,19 @@ const useAppointmentData = (user: any) => {
     if (abortControllerRef.current) {
       abortControllerRef.current.abort();
     }
-    
+
     abortControllerRef.current = new AbortController();
-    
+
     try {
       setLoading(true);
       setError(null);
 
       const baseUrl = 'https://webhook.essenciasaudeintegrada.com.br/webhook';
       const psychologistId = user?.role === 'psychologist' ? user.id : null;
-      
+
       // URLs baseadas no role do usuário
       const urls = {
-        appointments: psychologistId 
+        appointments: psychologistId
           ? `${baseUrl}/d52c9494-5de9-4444-877e-9e8d01662962/appointmens/${psychologistId}`
           : `${baseUrl}/appointmens`,
         workingHours: psychologistId
@@ -153,7 +153,7 @@ const useAppointmentData = (user: any) => {
 
       // Fetch paralelo para melhor performance com timeout
       const timeoutId = setTimeout(() => abortControllerRef.current?.abort(), 30000); // 30s timeout
-      
+
       const [appointmentsRes, workingHoursRes, patientsRes, usersRes, roomsRes] = await Promise.all([
         fetch(urls.appointments, { signal: abortControllerRef.current.signal }),
         fetch(urls.workingHours, { signal: abortControllerRef.current.signal }),
@@ -184,7 +184,7 @@ const useAppointmentData = (user: any) => {
         .map(apt => {
           // Log para debug - verificar estrutura dos dados
           console.log('Dados do agendamento recebidos:', apt);
-          
+
           return {
             ...apt,
             // Garantir que end_time seja sempre o campo correto para horário de término
@@ -203,13 +203,13 @@ const useAppointmentData = (user: any) => {
       // Verificar se há duplicação por ID
       const appointmentIds = normalizedAppointments.map(apt => apt.id);
       const uniqueIds = new Set(appointmentIds);
-      
+
       if (appointmentIds.length !== uniqueIds.size) {
         console.warn('⚠️ DUPLICAÇÃO DETECTADA nos agendamentos!');
         console.warn('Total de agendamentos:', appointmentIds.length);
         console.warn('IDs únicos:', uniqueIds.size);
         console.warn('IDs duplicados:', appointmentIds.filter((id, index) => appointmentIds.indexOf(id) !== index));
-        
+
         // Remover duplicatas mantendo apenas o primeiro de cada ID
         const seenIds = new Set();
         const deduplicatedAppointments = normalizedAppointments.filter(apt => {
@@ -219,7 +219,7 @@ const useAppointmentData = (user: any) => {
           seenIds.add(apt.id);
           return true;
         });
-        
+
         console.log('Agendamentos após remoção de duplicatas:', deduplicatedAppointments);
         normalizedAppointments.length = 0;
         normalizedAppointments.push(...deduplicatedAppointments);
@@ -248,7 +248,7 @@ const useAppointmentData = (user: any) => {
 
   useEffect(() => {
     fetchData();
-    
+
     // Cleanup function para cancelar requisições pendentes
     return () => {
       if (abortControllerRef.current) {
@@ -280,10 +280,10 @@ const useDateUtils = () => {
   const formatDisplayDate = useCallback((dateString: string): string => {
     try {
       console.log('formatDisplayDate - input dateString:', dateString);
-      
+
       // Tentar diferentes formatos de data
       let date: Date;
-      
+
       if (dateString.includes('T')) {
         // Formato ISO (2024-01-01T00:00:00.000Z)
         date = new Date(dateString);
@@ -294,25 +294,25 @@ const useDateUtils = () => {
         // Formato DD/MM/YYYY ou outro
         date = new Date(dateString);
       }
-      
+
       // Verificar se a data é válida
       if (isNaN(date.getTime())) {
         console.error('Data inválida:', dateString);
         return 'Data inválida';
       }
-      
+
       console.log('formatDisplayDate - parsed date:', date);
-      
+
       const formattedDate = date.toLocaleDateString('pt-BR', {
         weekday: 'long',
         year: 'numeric',
         month: 'long',
         day: 'numeric'
       });
-      
+
       console.log('formatDisplayDate - formatted result:', formattedDate);
       return formattedDate;
-      
+
     } catch (error) {
       console.error('Erro ao formatar data:', error, 'dateString:', dateString);
       return 'Erro na formatação da data';
@@ -407,12 +407,12 @@ const CalendarLegend = () => (
 );
 
 // Componente para navegação do calendário
-const CalendarNavigation = ({ 
-  currentDate, 
-  onNavigate 
-}: { 
-  currentDate: Date; 
-  onNavigate: (direction: number) => void; 
+const CalendarNavigation = ({
+  currentDate,
+  onNavigate
+}: {
+  currentDate: Date;
+  onNavigate: (direction: number) => void;
 }) => (
   <div className="px-6 py-4 flex justify-between items-center border-b bg-gradient-to-r from-gray-50 to-gray-100">
     <button
@@ -455,24 +455,26 @@ const CalendarHeader = () => (
 );
 
 // Componente para um slot de horário
-const TimeSlot = ({ 
-  slot, 
-  getPatientName, 
+const TimeSlot = ({
+  slot,
+  getPatientName,
   getPsychologistName,
   getRoomName,
   userRole,
   onStatusChange,
   onAttendanceCompleted,
-  availablePsychologists
-}: { 
-  slot: TimeSlot; 
-  getPatientName: (id: string) => string; 
+  availablePsychologists,
+  onEditAppointment
+}: {
+  slot: TimeSlot;
+  getPatientName: (id: string) => string;
   getPsychologistName: (id: string) => string;
   getRoomName: (roomId: string | null | undefined) => string;
   userRole?: string;
   onStatusChange: (appointmentId: string, action: 'confirmar' | 'cancelar') => Promise<void>;
   onAttendanceCompleted: (appointment: Appointment) => void;
-  availablePsychologists: Array<{id: string, name: string, workingHours: WorkingHour[]}>;
+  availablePsychologists: Array<{ id: string, name: string, workingHours: WorkingHour[] }>;
+  onEditAppointment: (appointment: Appointment) => void;
 }) => (
   <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
     <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 border-b border-gray-200">
@@ -481,27 +483,28 @@ const TimeSlot = ({
         {slot.time}
       </div>
     </div>
-    
+
     <div className="p-4">
       {slot.hasAppointments ? (
         <div className="space-y-3">
           {slot.appointments.map((apt: Appointment, aptIndex: number) => (
-            <AppointmentCard 
-              key={aptIndex} 
-              appointment={apt} 
-              getPatientName={getPatientName} 
+            <AppointmentCard
+              key={aptIndex}
+              appointment={apt}
+              getPatientName={getPatientName}
               getPsychologistName={getPsychologistName}
               getRoomName={getRoomName}
               userRole={userRole}
               onStatusChange={onStatusChange}
               onAttendanceCompleted={onAttendanceCompleted}
+              onEditAppointment={onEditAppointment}
             />
           ))}
-          
+
           {/* Mostrar psicólogos ainda disponíveis para este horário mesmo com agendamentos existentes */}
           {(() => {
             const currentHour = parseInt(slot.time.split(':')[0]);
-            
+
             // Filtrar psicólogos que têm horário disponível para este slot específico
             // MAS que NÃO têm agendamentos neste horário
             const availablePsychsForThisSlot = availablePsychologists.filter(psych => {
@@ -511,12 +514,12 @@ const TimeSlot = ({
                 const endHour = parseInt(wh.end_time.split(':')[0]);
                 return currentHour >= startHour && currentHour < endHour;
               });
-              
+
               if (!hasWorkingHours) return false;
-              
+
               // Verificar se o psicólogo já tem agendamento neste horário
               const hasAppointment = slot.appointments.some(apt => apt.psychologist_id === psych.id);
-              
+
               // Retornar true se tem horário disponível E não tem agendamento
               return !hasAppointment;
             });
@@ -528,7 +531,7 @@ const TimeSlot = ({
                     <div className="w-3 h-3 rounded-full bg-sky-500 border border-sky-600"></div>
                     <div className="text-sm font-medium text-sky-700">Outros psicólogos disponíveis:</div>
                   </div>
-                  
+
                   <div className="pl-6 mt-2">
                     <div className="space-y-1">
                       {availablePsychsForThisSlot.map((psych) => {
@@ -538,7 +541,7 @@ const TimeSlot = ({
                           const endHour = parseInt(wh.end_time.split(':')[0]);
                           return currentHour >= startHour && currentHour < endHour;
                         });
-                        
+
                         return (
                           <div key={psych.id} className="flex items-center gap-2 text-sm">
                             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -565,7 +568,7 @@ const TimeSlot = ({
             <div className="w-3 h-3 rounded-full bg-sky-500 border border-sky-600"></div>
             <div className="text-lg font-medium text-sky-700 font-semibold">Horário Livre</div>
           </div>
-          
+
           {/* Mostrar psicólogos disponíveis para este horário específico */}
           {(() => {
             // Filtrar psicólogos que têm horário disponível para este slot específico
@@ -592,7 +595,7 @@ const TimeSlot = ({
                         const endHour = parseInt(wh.end_time.split(':')[0]);
                         return currentHour >= startHour && currentHour < endHour;
                       });
-                      
+
                       return (
                         <div key={psych.id} className="flex items-center gap-2 text-sm">
                           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
@@ -618,22 +621,24 @@ const TimeSlot = ({
 );
 
 // Componente para um card de agendamento
-const AppointmentCard = React.memo(({ 
-  appointment, 
-  getPatientName, 
+const AppointmentCard = React.memo(({
+  appointment,
+  getPatientName,
   getPsychologistName,
   getRoomName,
   userRole,
   onStatusChange,
-  onAttendanceCompleted
-}: { 
-  appointment: Appointment; 
-  getPatientName: (id: string) => string; 
+  onAttendanceCompleted,
+  onEditAppointment
+}: {
+  appointment: Appointment;
+  getPatientName: (id: string) => string;
   getPsychologistName: (id: string) => string;
   getRoomName: (roomId: string | null | undefined) => string;
   userRole?: string;
   onStatusChange: (appointmentId: string, action: 'confirmar' | 'cancelar') => Promise<void>;
   onAttendanceCompleted: (appointment: Appointment) => void;
+  onEditAppointment: (appointment: Appointment) => void;
 }) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -692,6 +697,9 @@ const AppointmentCard = React.memo(({
     }
   };
 
+  const handleEdit = () => {
+    onEditAppointment(appointment);
+  };
 
 
   const showActionButtons = userRole && userRole !== 'psychologist';
@@ -699,179 +707,231 @@ const AppointmentCard = React.memo(({
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-all duration-200 shadow-sm hover:shadow-md">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-3 mb-3">
-            <div className={`w-3 h-3 rounded-full ${getStatusColor(appointment.status)}`}></div>
-            <h5 className="text-lg font-semibold text-gray-900">
-              {getPatientName(appointment.patient_id)} <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusBadgeColor(appointment.status)}`}>
-                  {getStatusLabel(appointment.status)}
-                </span>
-            </h5>
-          </div>
-          
-          <div className="space-y-4">
-            {/* Primeira linha: Psicólogo - Início - Plano */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <User className="w-5 h-5 text-blue-600" />
-                </div>
-                <div>
-                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Psicólogo</span>
-                  <p className="font-semibold text-gray-900">{getPsychologistName(appointment.psychologist_id)}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-100 rounded-lg">
-                  <Clock className="w-5 h-5 text-emerald-600" />
-                </div>
-                <div>
-                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Início</span>
-                  <p className="font-semibold text-gray-900">{(appointment as any).start_time || 'N/A'}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-orange-100 rounded-lg">
-                  <div className="w-5 h-5 flex items-center justify-center">
-                    <span className="text-orange-600 font-bold text-sm">📋</span>
-                  </div>
-                </div>
-                <div>
-                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Plano</span>
-                  <p className="font-semibold text-gray-900">{(appointment as any).insurance_type || 'Particular'}</p>
-                </div>
-              </div>
-            </div>
+  <div className="flex items-start justify-between">
+    
+    {/* Bloco da esquerda (paciente, status, etc) */}
+    <div className="flex-1">
+      <div className="flex items-center gap-3 mb-3">
+        <div className={`w-3 h-3 rounded-full ${getStatusColor(appointment.status)}`}></div>
+        <h5 className="text-lg font-semibold text-gray-900">
+          {getPatientName(appointment.patient_id)}{" "}
+          <span
+            className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusBadgeColor(
+              appointment.status
+            )}`}
+          >
+            {getStatusLabel(appointment.status)}
+          </span>
+        </h5>
+      </div>
 
-            {/* Segunda linha: Sala - Término - Valor */}
-            <div className="grid grid-cols-3 gap-4">
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <MapPin className="w-5 h-5 text-purple-600" />
-                </div>
-                <div>
-                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Sala</span>
-                  <p className="font-semibold text-gray-900">{getRoomName(appointment.room_id)}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-rose-100 rounded-lg">
-                  <Clock className="w-5 h-5 text-rose-600" />
-                </div>
-                <div>
-                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Término</span>
-                  <p className="font-semibold text-gray-900">{(appointment as any).end_time || 'N/A'}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="p-2 bg-emerald-100 rounded-lg">
-                  <div className="w-5 h-5 flex items-center justify-center">
-                    <span className="text-emerald-600 font-bold">R$</span>
-                  </div>
-                </div>
-                <div>
-                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">Valor</span>
-                  <p className="text-lg font-bold text-emerald-600">
-                    {appointment.value?.toFixed(2) || '0.00'}
-                  </p>
-                </div>
-              </div>
+      <div className="space-y-4">
+        {/* Primeira linha: Psicólogo - Início - Plano */}
+        <div className="grid grid-cols-3 gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <User className="w-5 h-5 text-blue-600" />
             </div>
-          </div>
-          
-          
-
-          {/* Botões de ação para usuários não-psicólogos */}
-          {showActionButtons && (
-            <div className="mt-6 pt-4 border-t border-gray-200">
-              <div className="flex gap-3">
-                <button
-                  onClick={handleConfirm}
-                  disabled={isUpdating}
-                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
-                  aria-label={`Confirmar agendamento de ${getPatientName(appointment.patient_id)}`}
-                >
-                  {isUpdating ? (
-                    <div className="flex items-center justify-center">
-                      <Loader2 className="animate-spin h-4 w-4 mr-2" />
-                      Confirmando...
-                    </div>
-                  ) : (
-                    'Confirmar'
-                  )}
-                </button>
-                <button
-                  onClick={handleCancel}
-                  disabled={isUpdating}
-                  className="flex-1 bg-rose-600 hover:bg-rose-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
-                  aria-label={`Cancelar agendamento de ${getPatientName(appointment.patient_id)}`}
-                >
-                  {isUpdating ? (
-                    <div className="flex items-center justify-center">
-                      <Loader2 className="animate-spin h-4 w-4 mr-2" />
-                      Cancelando...
-                    </div>
-                  ) : (
-                    'Cancelar'
-                  )}
-                </button>
-              </div>
-              <p className="text-xs text-gray-400 mt-2 text-center opacity-75">
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
+                Psicólogo
+              </span>
+              <p className="font-semibold text-gray-900">
+                {getPsychologistName(appointment.psychologist_id)}
               </p>
             </div>
-          )}
-
-          {/* Botão para psicólogos */}
-          {showPsychologistButton && (
-            <div className="mt-6 pt-4 border-t border-gray-200">
-              <div className="flex gap-3">
-                <button
-                  onClick={() => onAttendanceCompleted(appointment)}
-                  disabled={isUpdating}
-                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
-                  aria-label={`Marcar atendimento realizado para ${getPatientName(appointment.patient_id)}`}
-                >
-                  {isUpdating ? (
-                    <div className="flex items-center justify-center">
-                      <Loader2 className="animate-spin h-4 w-4 mr-2" />
-                      Processando...
-                    </div>
-                  ) : (
-                    'Atendimento Realizado'
-                  )}
-                </button>
-              </div>
-              <p className="text-xs text-gray-400 mt-2 text-center opacity-75">
-                Marque quando o atendimento for concluído
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-100 rounded-lg">
+              <Clock className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
+                Início
+              </span>
+              <p className="font-semibold text-gray-900">
+                {(appointment as any).start_time || "N/A"}
               </p>
             </div>
-          )}
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-orange-100 rounded-lg">
+              <div className="w-5 h-5 flex items-center justify-center">
+                <span className="text-orange-600 font-bold text-sm">📋</span>
+              </div>
+            </div>
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
+                Plano
+              </span>
+              <p className="font-semibold text-gray-900">
+                {(appointment as any).insurance_type || "Particular"}
+              </p>
+            </div>
+          </div>
+        </div>
 
-          {/* Dialog de confirmação para cancelar agendamento */}
-          <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Deseja realmente cancelar este agendamento?
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel disabled={isUpdating}>Não</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleConfirmCancel}
-                  disabled={isUpdating}
-                  className="bg-rose-600 hover:bg-rose-700 focus:ring-rose-600"
-                >
-                  {isUpdating ? "Cancelando..." : "Sim"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+        {/* Segunda linha: Sala - Término - Valor */}
+        <div className="grid grid-cols-3 gap-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-purple-100 rounded-lg">
+              <MapPin className="w-5 h-5 text-purple-600" />
+            </div>
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
+                Sala
+              </span>
+              <p className="font-semibold text-gray-900">
+                {getRoomName(appointment.room_id)}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-rose-100 rounded-lg">
+              <Clock className="w-5 h-5 text-rose-600" />
+            </div>
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
+                Término
+              </span>
+              <p className="font-semibold text-gray-900">
+                {(appointment as any).end_time || "N/A"}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-emerald-100 rounded-lg">
+              <div className="w-5 h-5 flex items-center justify-center">
+                <span className="text-emerald-600 font-bold">R$</span>
+              </div>
+            </div>
+            <div>
+              <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
+                Valor
+              </span>
+              <p className="text-lg font-bold text-emerald-600">
+                {appointment.value?.toFixed(2) || "0.00"}
+              </p>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Botões de ação para usuários não-psicólogos */}
+      {showActionButtons && (
+        <div className="mt-6 pt-4 border-t border-gray-200">
+          <div className="flex gap-3">
+            <button
+              onClick={handleConfirm}
+              disabled={isUpdating}
+              className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
+              aria-label={`Confirmar agendamento de ${getPatientName(
+                appointment.patient_id
+              )}`}
+            >
+              {isUpdating ? (
+                <div className="flex items-center justify-center">
+                  <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                  Confirmando...
+                </div>
+              ) : (
+                "Confirmar"
+              )}
+            </button>
+            <button
+              onClick={handleCancel}
+              disabled={isUpdating}
+              className="flex-1 bg-rose-600 hover:bg-rose-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
+              aria-label={`Cancelar agendamento de ${getPatientName(
+                appointment.patient_id
+              )}`}
+            >
+              {isUpdating ? (
+                <div className="flex items-center justify-center">
+                  <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                  Cancelando...
+                </div>
+              ) : (
+                "Cancelar"
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Botão para psicólogos */}
+      {showPsychologistButton && (
+        <div className="mt-6 pt-4 border-t border-gray-200">
+          <div className="flex gap-3">
+            <button
+              onClick={() => onAttendanceCompleted(appointment)}
+              disabled={isUpdating}
+              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
+              aria-label={`Marcar atendimento realizado para ${getPatientName(
+                appointment.patient_id
+              )}`}
+            >
+              {isUpdating ? (
+                <div className="flex items-center justify-center">
+                  <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                  Processando...
+                </div>
+              ) : (
+                "Atendimento Realizado"
+              )}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-2 text-center opacity-75">
+            Marque quando o atendimento for concluído
+          </p>
+        </div>
+      )}
+
+      {/* Dialog de confirmação para cancelar agendamento */}
+      <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
+            <AlertDialogDescription>
+              Deseja realmente cancelar este agendamento?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isUpdating}>Não</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmCancel}
+              disabled={isUpdating}
+              className="bg-rose-600 hover:bg-rose-700 focus:ring-rose-600"
+            >
+              {isUpdating ? "Cancelando..." : "Sim"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
+
+    {/* Botão Editar no canto superior direito */}
+    {userRole && userRole !== "psychologist" && (
+      <button
+        onClick={handleEdit}
+        disabled={isUpdating}
+        className="text-sm text-purple-600 hover:text-purple-800 disabled:text-gray-400 px-2 py-1 rounded-md transition-colors duration-200 focus:outline-none focus:ring-1 focus:ring-purple-400 disabled:cursor-not-allowed"
+        aria-label={`Editar agendamento de ${getPatientName(
+          appointment.patient_id
+        )}`}
+      >
+        {isUpdating ? (
+          <div className="flex items-center">
+            <Loader2 className="animate-spin h-3 w-3 mr-1" />
+            Editando...
+          </div>
+        ) : (
+          "Editar"
+        )}
+      </button>
+    )}
+  </div>
+</div>
   );
 });
 
@@ -885,11 +945,14 @@ const AppointmentCalendar = () => {
   const [showModal, setShowModal] = useState(false);
   const [selectedDateDetails, setSelectedDateDetails] = useState<DayDetails | null>(null);
   const [loadingDetails, setLoadingDetails] = useState(false);
-  const [availablePsychologists, setAvailablePsychologists] = useState<Array<{id: string, name: string, workingHours: WorkingHour[]}>>([]);
+  const [availablePsychologists, setAvailablePsychologists] = useState<Array<{ id: string, name: string, workingHours: WorkingHour[] }>>([]);
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showObservationModal, setShowObservationModal] = useState(false);
   const [observationNotes, setObservationNotes] = useState('');
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editPlano, setEditPlano] = useState('');
+  const [editValor, setEditValor] = useState('');
 
   const { appointments, workingHours, patients, users, rooms, loading, error, refetch } = useAppointmentData(user);
   const { formatDate, getDaysInMonth, getFirstDayOfMonth, formatDisplayDate } = useDateUtils();
@@ -900,7 +963,7 @@ const AppointmentCalendar = () => {
     // Se há um modal aberto e os dados mudaram, atualizar o modal
     if (showModal && selectedDateDetails) {
       const updatedDateString = formatDate(new Date(currentDate.getFullYear(), currentDate.getMonth(), selectedDate!));
-      
+
       // Buscar agendamentos atualizados para a data selecionada
       const updatedDayAppointments = appointments.filter(apt => {
         const aptDate = apt.date || apt.appointment_date || apt.scheduled_date;
@@ -929,7 +992,7 @@ const AppointmentCalendar = () => {
     if (typeof refetch === 'function') {
       // Atualizar dados quando houver mudanças
       const unsubscribe = refetch;
-      
+
       return () => {
         if (typeof unsubscribe === 'function') {
           unsubscribe();
@@ -946,7 +1009,7 @@ const AppointmentCalendar = () => {
     };
 
     window.addEventListener('appointmentCreated', handleAppointmentCreated);
-    
+
     return () => {
       window.removeEventListener('appointmentCreated', handleAppointmentCreated);
     };
@@ -980,14 +1043,14 @@ const AppointmentCalendar = () => {
   const handleDayClick = useCallback(async (day: number) => {
     const clickedDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), day);
     const dateString = formatDate(clickedDate);
-    
+
     setSelectedDate(day);
     setShowModal(true);
-    
+
     // Buscar detalhes da data
     try {
       setLoadingDetails(true);
-      
+
       // Filtrar agendamentos para a data específica
       const dayAppointments = appointments.filter(apt => {
         const aptDate = apt.date || apt.appointment_date || apt.scheduled_date;
@@ -1001,73 +1064,73 @@ const AppointmentCalendar = () => {
         start_time: apt.start_time || apt.startTime || apt.time || '00:00',
         value: Math.max(0, parseFloat(String(apt.value || apt.price || 0)) || 0)
       }));
-      
+
       // Debug: verificar se há duplicação nos dados
       console.log('Agendamentos filtrados para a data:', dateString);
       console.log('Total de agendamentos:', dayAppointments.length);
       console.log('IDs dos agendamentos:', dayAppointments.map(apt => apt.id));
       console.log('Horários dos agendamentos:', dayAppointments.map(apt => apt.start_time));
-      
+
       const dayWorkingHours = workingHours.filter(wh => wh.day_of_week === clickedDate.getDay());
-      
+
       setSelectedDateDetails({
         date: dateString,
         appointments: dayAppointments,
         workingHours: dayWorkingHours
       });
 
-                // Buscar psicólogos disponíveis para esta data e seus horários de trabalho
-          try {
-            const psychologistsResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/users');
-            if (psychologistsResponse.ok) {
-              const psychologistsData = await psychologistsResponse.json();
-              let psychologists = psychologistsData.filter((user: any) => user.role === 'psychologist');
-              
-              // Se o usuário logado for psychologist, mostrar apenas ele mesmo
-              if (user?.role === 'psychologist') {
-                psychologists = psychologists.filter((psych: any) => psych.id === user.id);
-              }
-              // Se for admin ou receptionist, mostrar todos os psicólogos
-              // (não precisa fazer nada, já está mostrando todos)
-              
-              // Para cada psicólogo, buscar seus horários de trabalho
-              const psychsWithWorkingHours = await Promise.all(
-                psychologists.map(async (psych: any) => {
-                  try {
-                    const workingHoursResponse = await fetch(
-                      `https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/working_hours/${psych.id}`
-                    );
-                    
-                    if (workingHoursResponse.ok) {
-                      const workingHoursData = await workingHoursResponse.json();
-                      const workingHours = Array.isArray(workingHoursData) ? workingHoursData : workingHoursData.data || [];
-                      
-                      // Filtrar apenas horários para o dia da semana selecionado
-                      const dayWorkingHours = workingHours.filter((wh: any) => wh.day_of_week === clickedDate.getDay());
-                      
-                      if (dayWorkingHours.length > 0) {
-                        return {
-                          id: psych.id,
-                          name: psych.nome || psych.name || `Psicólogo ${psych.id}`,
-                          workingHours: dayWorkingHours
-                        };
-                      }
-                    }
-                  } catch (error) {
-                    console.error(`Erro ao buscar horários do psicólogo ${psych.id}:`, error);
-                  }
-                  return null;
-                })
-              );
-              
-              // Filtrar psicólogos que realmente têm horários para este dia
-              const availablePsychs = psychsWithWorkingHours.filter(psych => psych !== null);
-              setAvailablePsychologists(availablePsychs);
-            }
-          } catch (err) {
-            console.error('Erro ao buscar psicólogos:', err);
-            setAvailablePsychologists([]);
+      // Buscar psicólogos disponíveis para esta data e seus horários de trabalho
+      try {
+        const psychologistsResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/users');
+        if (psychologistsResponse.ok) {
+          const psychologistsData = await psychologistsResponse.json();
+          let psychologists = psychologistsData.filter((user: any) => user.role === 'psychologist');
+
+          // Se o usuário logado for psychologist, mostrar apenas ele mesmo
+          if (user?.role === 'psychologist') {
+            psychologists = psychologists.filter((psych: any) => psych.id === user.id);
           }
+          // Se for admin ou receptionist, mostrar todos os psicólogos
+          // (não precisa fazer nada, já está mostrando todos)
+
+          // Para cada psicólogo, buscar seus horários de trabalho
+          const psychsWithWorkingHours = await Promise.all(
+            psychologists.map(async (psych: any) => {
+              try {
+                const workingHoursResponse = await fetch(
+                  `https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/working_hours/${psych.id}`
+                );
+
+                if (workingHoursResponse.ok) {
+                  const workingHoursData = await workingHoursResponse.json();
+                  const workingHours = Array.isArray(workingHoursData) ? workingHoursData : workingHoursData.data || [];
+
+                  // Filtrar apenas horários para o dia da semana selecionado
+                  const dayWorkingHours = workingHours.filter((wh: any) => wh.day_of_week === clickedDate.getDay());
+
+                  if (dayWorkingHours.length > 0) {
+                    return {
+                      id: psych.id,
+                      name: psych.nome || psych.name || `Psicólogo ${psych.id}`,
+                      workingHours: dayWorkingHours
+                    };
+                  }
+                }
+              } catch (error) {
+                console.error(`Erro ao buscar horários do psicólogo ${psych.id}:`, error);
+              }
+              return null;
+            })
+          );
+
+          // Filtrar psicólogos que realmente têm horários para este dia
+          const availablePsychs = psychsWithWorkingHours.filter(psych => psych !== null);
+          setAvailablePsychologists(availablePsychs);
+        }
+      } catch (err) {
+        console.error('Erro ao buscar psicólogos:', err);
+        setAvailablePsychologists([]);
+      }
     } catch (err) {
       console.error('Erro ao buscar detalhes da data:', err);
     } finally {
@@ -1087,7 +1150,7 @@ const AppointmentCalendar = () => {
       // Mapear ações para valores do webhook
       let webhookAction: string;
       let statusUpdate: 'pending' | 'confirmed' | 'canceled' | 'completed';
-      
+
       switch (action) {
         case 'confirmar':
           webhookAction = 'confirmed';
@@ -1105,9 +1168,9 @@ const AppointmentCalendar = () => {
           webhookAction = 'confirmed';
           statusUpdate = 'confirmed';
       }
-      
+
       const webhookUrl = `https://webhook.essenciasaudeintegrada.com.br/webhook/appoiments?id=${appointmentId}&action=${webhookAction}`;
-      
+
       const response = await fetch(webhookUrl, {
         method: 'GET',
         headers: {
@@ -1121,10 +1184,10 @@ const AppointmentCalendar = () => {
 
       // Atualizar os dados locais após sucesso
       await refetch();
-      
+
       // Atualizar os dados locais após sucesso
       await refetch();
-      
+
       // Atualizar os dados do modal em tempo real (sem fechar/reabrir)
       if (selectedDateDetails) {
         // Atualizar apenas o agendamento específico que foi modificado
@@ -1145,7 +1208,7 @@ const AppointmentCalendar = () => {
           appointments: updatedAppointments
         });
       }
-      
+
     } catch (error) {
       console.error(`Erro ao ${action} agendamento:`, error);
       throw error; // Re-throw para o componente filho tratar
@@ -1191,18 +1254,83 @@ const AppointmentCalendar = () => {
       setShowObservationModal(false);
       setObservationNotes('');
       setSelectedAppointment(null);
-      
+
       // Atualizar status do agendamento para "completed"
       await handleStatusChange(selectedAppointment.id, 'completed');
-      
+
       // Feedback de sucesso
       alert('Atendimento marcado como realizado com sucesso!');
-      
+
     } catch (error) {
       console.error('Erro ao salvar observações:', error);
       alert('Erro ao salvar observações. Tente novamente.');
     }
   }, [selectedAppointment, observationNotes, handleStatusChange]);
+
+  const handleEditSubmit = async () => {
+    if (!selectedAppointment) return;
+
+    try {
+      // Enviar dados para o webhook
+      const response = await fetch('https://n8n.essenciasaudeintegrada.com.br/webhook-test/appointmens_edit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          appointmentId: selectedAppointment.id,
+          plano: editPlano,
+          valor: parseFloat(editValor),
+          patientName: getPatientName(selectedAppointment.patient_id),
+          psychologistName: getPsychologistName(selectedAppointment.psychologist_id),
+          date: selectedAppointment.date,
+          startTime: selectedAppointment.start_time,
+          endTime: selectedAppointment.end_time
+        }),
+      });
+
+      if (response.ok) {
+        // Atualizar os dados locais para refletir as mudanças imediatamente
+        const updatedAppointment = {
+          ...selectedAppointment,
+          insurance_type: editPlano,
+          value: parseFloat(editValor)
+        };
+
+        // Atualizar o agendamento na lista principal
+        const updatedAppointments = appointments.map(apt =>
+          apt.id === selectedAppointment.id ? updatedAppointment : apt
+        );
+
+        // Atualizar o agendamento no modal de detalhes se estiver aberto
+        if (selectedDateDetails) {
+          const updatedDateDetails = {
+            ...selectedDateDetails,
+            appointments: selectedDateDetails.appointments.map(apt =>
+              apt.id === selectedAppointment.id ? updatedAppointment : apt
+            )
+          };
+          setSelectedDateDetails(updatedDateDetails);
+        }
+
+        // Fechar modal e mostrar toast de sucesso
+        setIsEditModalOpen(false);
+        alert('Dados atualizados com sucesso!');
+      } else {
+        throw new Error('Erro ao enviar dados para o webhook');
+      }
+    } catch (error) {
+      console.error('Erro ao salvar edição:', error);
+      alert('Erro ao salvar edição. Tente novamente.');
+    }
+  };
+
+  const handleEditAppointment = useCallback((appointment: Appointment) => {
+    setSelectedAppointment(appointment);
+    setEditPlano((appointment as any).insurance_type || 'Particular');
+    setEditValor(appointment.value?.toString() || '0');
+    setIsEditModalOpen(true);
+  }, []);
 
   // Renderizar calendário memoizado
   const renderCalendar = useMemo(() => {
@@ -1237,7 +1365,7 @@ const AppointmentCalendar = () => {
           <div className="relative">
             <span className="text-lg font-medium">{day}</span>
             {hasAppointments && (
-              <div 
+              <div
                 className="absolute -bottom-1 left-1/2 transform -translate-x-1/2 w-2.5 h-2.5 bg-amber-500 rounded-full shadow-sm border border-amber-600"
                 aria-label="Indicador de agendamento"
               ></div>
@@ -1256,15 +1384,15 @@ const AppointmentCalendar = () => {
 
     const allTimeSlots: TimeSlot[] = [];
     const processedAppointments = new Set<string>(); // Para evitar duplicação
-    
+
     // Primeiro, criar slots baseados nos agendamentos existentes
     selectedDateDetails.appointments.forEach(apt => {
       const aptStartHour = parseInt(apt.start_time.split(':')[0]);
       const timeSlot = `${aptStartHour.toString().padStart(2, '0')}:00`;
-      
+
       // Verificar se já existe um slot para este horário
       let existingSlot = allTimeSlots.find(slot => slot.time === timeSlot);
-      
+
       if (!existingSlot) {
         existingSlot = {
           time: timeSlot,
@@ -1273,7 +1401,7 @@ const AppointmentCalendar = () => {
         };
         allTimeSlots.push(existingSlot);
       }
-      
+
       // Adicionar o agendamento apenas se não foi processado antes
       if (!processedAppointments.has(apt.id)) {
         existingSlot.appointments.push(apt);
@@ -1281,15 +1409,15 @@ const AppointmentCalendar = () => {
         processedAppointments.add(apt.id);
       }
     });
-    
+
     // Adicionar slots vazios para horários de trabalho que não têm agendamentos
     selectedDateDetails.workingHours.forEach(wh => {
       const startHour = parseInt(wh.start_time.split(':')[0]);
       const endHour = parseInt(wh.end_time.split(':')[0]);
-      
+
       for (let hour = startHour; hour < endHour; hour++) {
         const timeSlot = `${hour.toString().padStart(2, '0')}:00`;
-        
+
         // Só adicionar se não existir um slot para este horário
         if (!allTimeSlots.some(slot => slot.time === timeSlot)) {
           allTimeSlots.push({
@@ -1300,7 +1428,7 @@ const AppointmentCalendar = () => {
         }
       }
     });
-    
+
     return allTimeSlots.sort((a, b) => a.time.localeCompare(b.time));
   }, [selectedDateDetails]);
 
@@ -1388,9 +1516,9 @@ const AppointmentCalendar = () => {
         {/* Calendário */}
         <main className="px-4 py-2" role="main" aria-label="Calendário mensal">
           <CalendarHeader />
-          <div 
-            className="grid grid-cols-7 gap-1" 
-            role="grid" 
+          <div
+            className="grid grid-cols-7 gap-1"
+            role="grid"
             aria-label="Dias do mês"
           >
             {renderCalendar}
@@ -1417,7 +1545,7 @@ const AppointmentCalendar = () => {
 
       {/* Modal de detalhes */}
       {showModal && selectedDateDetails && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           role="dialog"
           aria-modal="true"
@@ -1425,7 +1553,7 @@ const AppointmentCalendar = () => {
           aria-describedby="modal-description"
           onClick={closeModal} // Fechar ao clicar no backdrop
         >
-          <div 
+          <div
             className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden"
             onClick={(e) => e.stopPropagation()} // Prevenir fechamento ao clicar no conteúdo
           >
@@ -1466,16 +1594,17 @@ const AppointmentCalendar = () => {
                   </h3>
                   <div className="space-y-4">
                     {generateTimeSlots.map((slot, index) => (
-                      <TimeSlot 
+                      <TimeSlot
                         key={`${slot.time}-${index}`}
-                        slot={slot} 
-                        getPatientName={getPatientName} 
+                        slot={slot}
+                        getPatientName={getPatientName}
                         getPsychologistName={getPsychologistName}
                         getRoomName={getRoomName}
                         userRole={user?.role}
                         onStatusChange={handleStatusChange}
                         onAttendanceCompleted={handleAttendanceCompleted}
                         availablePsychologists={availablePsychologists}
+                        onEditAppointment={handleEditAppointment}
                       />
                     ))}
                   </div>
@@ -1496,7 +1625,7 @@ const AppointmentCalendar = () => {
 
       {/* Modal de Observações do Atendimento */}
       {showObservationModal && selectedAppointment && (
-        <div 
+        <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           onClick={() => {
             setShowObservationModal(false);
@@ -1504,7 +1633,7 @@ const AppointmentCalendar = () => {
             setSelectedAppointment(null);
           }} // Fechar ao clicar no backdrop
         >
-          <div 
+          <div
             className="bg-white rounded-xl shadow-2xl max-w-2xl w-full"
             onClick={(e) => e.stopPropagation()} // Prevenir fechamento ao clicar no conteúdo
           >
@@ -1567,6 +1696,91 @@ const AppointmentCalendar = () => {
                   className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 font-medium"
                 >
                   Salvar e Marcar como Realizado
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Edição de Agendamento */}
+      {isEditModalOpen && selectedAppointment && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setIsEditModalOpen(false)} // Fechar ao clicar no backdrop
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-md w-full max-h-[90vh] overflow-hidden"
+            onClick={(e) => e.stopPropagation()} // Evitar fechamento ao clicar no modal
+          >
+            {/* Header do Modal */}
+            <div className="bg-blue-600 text-white p-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-xl font-bold">
+                  Editar Agendamento
+                </h3>
+                <button
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="text-white hover:text-blue-200 transition-all duration-200 p-2 rounded-full hover:bg-white hover:bg-opacity-20 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600 hover:scale-110"
+                  aria-label="Fechar modal"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <p className="text-blue-100 mt-2">
+                Edite as informações do agendamento para {getPatientName(selectedAppointment.patient_id)}
+              </p>
+            </div>
+
+            {/* Conteúdo do Modal */}
+            <div className="p-6">
+              <div className="mb-6">
+                <label htmlFor="edit-plano" className="block text-sm font-medium text-gray-700 mb-2">
+                  Plano *
+                </label>
+                <input
+                  id="edit-plano"
+                  type="text"
+                  value={editPlano}
+                  onChange={(e) => setEditPlano(e.target.value)}
+                  placeholder="Ex: Particular, Convênio, Outro"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  * Campo obrigatório para registrar o plano
+                </p>
+              </div>
+              <div className="mb-6">
+                <label htmlFor="edit-valor" className="block text-sm font-medium text-gray-700 mb-2">
+                  Valor *
+                </label>
+                <input
+                  id="edit-valor"
+                  type="number"
+                  value={editValor}
+                  onChange={(e) => setEditValor(e.target.value)}
+                  placeholder="Ex: 150.00"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  * Campo obrigatório para registrar o valor
+                </p>
+              </div>
+
+              {/* Botões de Ação */}
+              <div className="flex gap-3 justify-end">
+                <button
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 font-medium"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleEditSubmit}
+                  disabled={!editPlano.trim() || !editValor.trim()}
+                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 font-medium"
+                >
+                  Salvar Edição
                 </button>
               </div>
             </div>

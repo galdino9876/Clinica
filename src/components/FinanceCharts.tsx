@@ -87,6 +87,7 @@ const FinanceCharts = () => {
   const [showReportTable, setShowReportTable] = useState(false);
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
   const [editTransactionValue, setEditTransactionValue] = useState<number>(0);
+  const [editTransactionInsuranceType, setEditTransactionInsuranceType] = useState<string>("");
   const [isEditModalOpen, setIsEditModalOpen] = useState<boolean>(false);
   const [transactions, setTransactions] = useState<FinanceTransaction[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -94,6 +95,7 @@ const FinanceCharts = () => {
   const [psychologists, setPsychologists] = useState<Psychologist[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isEditingLoading, setIsEditingLoading] = useState<boolean>(false);
 
   const isAdmin = user?.role === "admin";
   const isPsychologist = user?.role === "psychologist";
@@ -333,24 +335,77 @@ const FinanceCharts = () => {
     }
   };
 
-  const handleEditTransaction = (transactionId: string, currentValue: number) => {
+  const handleEditTransaction = (transactionId: string, currentValue: number, currentInsuranceType: string) => {
     setEditingTransactionId(transactionId);
     setEditTransactionValue(currentValue);
+    setEditTransactionInsuranceType(currentInsuranceType);
     setIsEditModalOpen(true);
   };
 
   const handleSaveTransactionValue = async () => {
     if (editingTransactionId) {
+      setIsEditingLoading(true);
       try {
-        setAppointments((prev) =>
-          prev.map((appointment) =>
-            String(appointment.id) === editingTransactionId
-              ? { ...appointment, value: editTransactionValue }
-              : appointment
-          )
+        // Encontrar o agendamento que está sendo editado
+        const appointmentToEdit = appointments.find(
+          (appointment) => String(appointment.id) === editingTransactionId
         );
+
+        if (appointmentToEdit) {
+          // Preparar os dados para enviar para a API
+          const appointmentData = {
+            id: appointmentToEdit.id,
+            patient_id: appointmentToEdit.patient_id,
+            psychologist_id: appointmentToEdit.psychologist_id,
+            room_id: appointmentToEdit.room_id,
+            date: appointmentToEdit.date,
+            start_time: appointmentToEdit.start_time,
+            end_time: appointmentToEdit.end_time,
+            status: appointmentToEdit.status,
+            payment_method: appointmentToEdit.payment_method, // Mantém o payment_method original
+            insurance_type: editTransactionInsuranceType, // Novo tipo de convênio digitado
+            insurance_token: appointmentToEdit.insurance_token,
+            value: editTransactionValue, // Novo valor
+            appointment_type: appointmentToEdit.appointment_type,
+            is_recurring: appointmentToEdit.is_recurring,
+            recurrence_type: appointmentToEdit.recurrence_type,
+            recurrence_group_id: appointmentToEdit.recurrence_group_id,
+            created_at: appointmentToEdit.created_at,
+            updated_at: new Date().toISOString()
+          };
+
+          // Enviar requisição POST para a API
+          const response = await fetch('https://n8n.essenciasaudeintegrada.com.br/webhook-test/appointmens_edit', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(appointmentData)
+          });
+
+          if (response.ok) {
+            console.log('Valor e tipo de convênio da consulta atualizados com sucesso na API');
+            
+            // Atualizar o estado local após sucesso na API
+            setAppointments((prev) =>
+              prev.map((appointment) =>
+                String(appointment.id) === editingTransactionId
+                  ? { ...appointment, value: editTransactionValue, insurance_type: editTransactionInsuranceType as "Unimed" | "SulAmérica" | "Fusex" | "Other" }
+                  : appointment
+              )
+            );
+          } else {
+            console.error('Erro na API:', response.status, response.statusText);
+            const errorText = await response.text();
+            console.error('Detalhes do erro:', errorText);
+            throw new Error(`Erro na API: ${response.status} - ${errorText}`);
+          }
+        }
       } catch (error) {
-        console.error("Erro ao atualizar valor da consulta:", error);
+        console.error("Erro ao atualizar valor e tipo de convênio da consulta:", error);
+        // Aqui você pode adicionar um toast ou notificação de erro para o usuário
+      } finally {
+        setIsEditingLoading(false);
       }
     }
     setIsEditModalOpen(false);
@@ -702,7 +757,7 @@ const FinanceCharts = () => {
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                onClick={() => handleEditTransaction(String(appointment.id), appointment.value)}
+                                onClick={() => handleEditTransaction(String(appointment.id), appointment.value, appointment.insurance_type || "")}
                               >
                                 <Edit className="h-4 w-4" />
                               </Button>
@@ -783,13 +838,21 @@ const FinanceCharts = () => {
                 onChange={(e) => setEditTransactionValue(Number(e.target.value))}
               />
             </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Novo Tipo de Convênio:</label>
+              <Input
+                type="text"
+                value={editTransactionInsuranceType}
+                onChange={(e) => setEditTransactionInsuranceType(e.target.value)}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => setIsEditModalOpen(false)}>
               Cancelar
             </Button>
-            <Button onClick={handleSaveTransactionValue} className="flex items-center gap-1">
-              <Save className="h-4 w-4" /> Salvar
+            <Button onClick={handleSaveTransactionValue} className="flex items-center gap-1" disabled={isEditingLoading}>
+              {isEditingLoading ? <Loader className="h-4 w-4" /> : <Save className="h-4 w-4" />} Salvar
             </Button>
           </DialogFooter>
         </DialogContent>
