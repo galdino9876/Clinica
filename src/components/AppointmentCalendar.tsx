@@ -81,19 +81,22 @@ interface TimeSlot {
 const STATUS_COLORS = {
   pending: 'bg-amber-500',
   confirmed: 'bg-emerald-600',
-  canceled: 'bg-rose-600'
+  canceled: 'bg-rose-600',
+  completed: 'bg-purple-600'
 } as const;
 
 const STATUS_LABELS = {
   pending: 'Pendente',
   confirmed: 'Confirmado',
-  canceled: 'Cancelado'
+  canceled: 'Cancelado',
+  completed: 'Atendimento finalizado - Aguardando pagamento'
 } as const;
 
 const STATUS_BADGE_COLORS = {
   pending: 'bg-amber-100 text-amber-800 border-amber-200',
   confirmed: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-  canceled: 'bg-rose-100 text-rose-800 border-rose-200'
+  canceled: 'bg-rose-100 text-rose-800 border-rose-200',
+  completed: 'bg-purple-100 text-purple-800 border-purple-200'
 } as const;
 
 // Cores para os dias do calendário
