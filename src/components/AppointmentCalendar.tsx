@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import AppointmentForm from "./AppointmentForm";
+import { useToast } from "@/components/ui/use-toast";
 
 // Tipos para melhorar a tipagem
 interface Appointment {
@@ -105,7 +106,7 @@ const DAY_STATUS_COLORS = {
   available: 'bg-sky-100 text-sky-800 border border-sky-200 hover:bg-sky-200',
   confirmed: 'bg-emerald-100 text-emerald-800 border border-emerald-200 hover:bg-emerald-200',
   pending: '',
-  full: 'bg-rose-100 text-rose-800 border border-rose-200 hover:bg-rose-200'
+  full: 'bg-green-100 text-green-800 border border-green-200 hover:bg-green-200'
 } as const;
 
 const DAYS_OF_WEEK = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'] as const;
@@ -707,231 +708,231 @@ const AppointmentCard = React.memo(({
 
   return (
     <div className="bg-white border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-all duration-200 shadow-sm hover:shadow-md">
-  <div className="flex items-start justify-between">
-    
-    {/* Bloco da esquerda (paciente, status, etc) */}
-    <div className="flex-1">
-      <div className="flex items-center gap-3 mb-3">
-        <div className={`w-3 h-3 rounded-full ${getStatusColor(appointment.status)}`}></div>
-        <h5 className="text-lg font-semibold text-gray-900">
-          {getPatientName(appointment.patient_id)}{" "}
-          <span
-            className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusBadgeColor(
-              appointment.status
+      <div className="flex items-start justify-between">
+
+        {/* Bloco da esquerda (paciente, status, etc) */}
+        <div className="flex-1">
+          <div className="flex items-center gap-3 mb-3">
+            <div className={`w-3 h-3 rounded-full ${getStatusColor(appointment.status)}`}></div>
+            <h5 className="text-lg font-semibold text-gray-900">
+              {getPatientName(appointment.patient_id)}{" "}
+              <span
+                className={`px-3 py-1 rounded-full text-xs font-medium border ${getStatusBadgeColor(
+                  appointment.status
+                )}`}
+              >
+                {getStatusLabel(appointment.status)}
+              </span>
+            </h5>
+          </div>
+
+          <div className="space-y-4">
+            {/* Primeira linha: Psicólogo - Início - Plano */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-blue-100 rounded-lg">
+                  <User className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
+                    Psicólogo
+                  </span>
+                  <p className="font-semibold text-gray-900">
+                    {getPsychologistName(appointment.psychologist_id)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-lg">
+                  <Clock className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
+                    Início
+                  </span>
+                  <p className="font-semibold text-gray-900">
+                    {(appointment as any).start_time || "N/A"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-orange-100 rounded-lg">
+                  <div className="w-5 h-5 flex items-center justify-center">
+                    <span className="text-orange-600 font-bold text-sm">📋</span>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
+                    Plano
+                  </span>
+                  <p className="font-semibold text-gray-900">
+                    {(appointment as any).insurance_type || "Particular"}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Segunda linha: Sala - Término - Valor */}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-purple-100 rounded-lg">
+                  <MapPin className="w-5 h-5 text-purple-600" />
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
+                    Sala
+                  </span>
+                  <p className="font-semibold text-gray-900">
+                    {getRoomName(appointment.room_id)}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-rose-100 rounded-lg">
+                  <Clock className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
+                    Término
+                  </span>
+                  <p className="font-semibold text-gray-900">
+                    {(appointment as any).end_time || "N/A"}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-emerald-100 rounded-lg">
+                  <div className="w-5 h-5 flex items-center justify-center">
+                    <span className="text-emerald-600 font-bold">R$</span>
+                  </div>
+                </div>
+                <div>
+                  <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
+                    Valor
+                  </span>
+                  <p className="text-lg font-bold text-emerald-600">
+                    {appointment.value?.toFixed(2) || "0.00"}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Botões de ação para usuários não-psicólogos */}
+          {showActionButtons && (
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <div className="flex gap-3">
+                <button
+                  onClick={handleConfirm}
+                  disabled={isUpdating}
+                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
+                  aria-label={`Confirmar agendamento de ${getPatientName(
+                    appointment.patient_id
+                  )}`}
+                >
+                  {isUpdating ? (
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                      Confirmando...
+                    </div>
+                  ) : (
+                    "Confirmar"
+                  )}
+                </button>
+                <button
+                  onClick={handleCancel}
+                  disabled={isUpdating}
+                  className="flex-1 bg-rose-600 hover:bg-rose-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
+                  aria-label={`Cancelar agendamento de ${getPatientName(
+                    appointment.patient_id
+                  )}`}
+                >
+                  {isUpdating ? (
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                      Cancelando...
+                    </div>
+                  ) : (
+                    "Cancelar"
+                  )}
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Botão para psicólogos */}
+          {showPsychologistButton && (
+            <div className="mt-6 pt-4 border-t border-gray-200">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => onAttendanceCompleted(appointment)}
+                  disabled={isUpdating}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
+                  aria-label={`Marcar atendimento realizado para ${getPatientName(
+                    appointment.patient_id
+                  )}`}
+                >
+                  {isUpdating ? (
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                      Processando...
+                    </div>
+                  ) : (
+                    "Atendimento Realizado"
+                  )}
+                </button>
+              </div>
+              <p className="text-xs text-gray-400 mt-2 text-center opacity-75">
+                Marque quando o atendimento for concluído
+              </p>
+            </div>
+          )}
+
+          {/* Dialog de confirmação para cancelar agendamento */}
+          <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Deseja realmente cancelar este agendamento?
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isUpdating}>Não</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleConfirmCancel}
+                  disabled={isUpdating}
+                  className="bg-rose-600 hover:bg-rose-700 focus:ring-rose-600"
+                >
+                  {isUpdating ? "Cancelando..." : "Sim"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
+
+        {/* Botão Editar no canto superior direito */}
+        {userRole && userRole !== "psychologist" && (
+          <button
+            onClick={handleEdit}
+            disabled={isUpdating}
+            className="text-sm text-purple-600 hover:text-purple-800 disabled:text-gray-400 px-2 py-1 rounded-md transition-colors duration-200 focus:outline-none focus:ring-1 focus:ring-purple-400 disabled:cursor-not-allowed"
+            aria-label={`Editar agendamento de ${getPatientName(
+              appointment.patient_id
             )}`}
           >
-            {getStatusLabel(appointment.status)}
-          </span>
-        </h5>
-      </div>
-
-      <div className="space-y-4">
-        {/* Primeira linha: Psicólogo - Início - Plano */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-blue-100 rounded-lg">
-              <User className="w-5 h-5 text-blue-600" />
-            </div>
-            <div>
-              <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
-                Psicólogo
-              </span>
-              <p className="font-semibold text-gray-900">
-                {getPsychologistName(appointment.psychologist_id)}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-100 rounded-lg">
-              <Clock className="w-5 h-5 text-emerald-600" />
-            </div>
-            <div>
-              <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
-                Início
-              </span>
-              <p className="font-semibold text-gray-900">
-                {(appointment as any).start_time || "N/A"}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-orange-100 rounded-lg">
-              <div className="w-5 h-5 flex items-center justify-center">
-                <span className="text-orange-600 font-bold text-sm">📋</span>
+            {isUpdating ? (
+              <div className="flex items-center">
+                <Loader2 className="animate-spin h-3 w-3 mr-1" />
+                Editando...
               </div>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
-                Plano
-              </span>
-              <p className="font-semibold text-gray-900">
-                {(appointment as any).insurance_type || "Particular"}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Segunda linha: Sala - Término - Valor */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-purple-100 rounded-lg">
-              <MapPin className="w-5 h-5 text-purple-600" />
-            </div>
-            <div>
-              <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
-                Sala
-              </span>
-              <p className="font-semibold text-gray-900">
-                {getRoomName(appointment.room_id)}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-rose-100 rounded-lg">
-              <Clock className="w-5 h-5 text-rose-600" />
-            </div>
-            <div>
-              <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
-                Término
-              </span>
-              <p className="font-semibold text-gray-900">
-                {(appointment as any).end_time || "N/A"}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-emerald-100 rounded-lg">
-              <div className="w-5 h-5 flex items-center justify-center">
-                <span className="text-emerald-600 font-bold">R$</span>
-              </div>
-            </div>
-            <div>
-              <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
-                Valor
-              </span>
-              <p className="text-lg font-bold text-emerald-600">
-                {appointment.value?.toFixed(2) || "0.00"}
-              </p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Botões de ação para usuários não-psicólogos */}
-      {showActionButtons && (
-        <div className="mt-6 pt-4 border-t border-gray-200">
-          <div className="flex gap-3">
-            <button
-              onClick={handleConfirm}
-              disabled={isUpdating}
-              className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
-              aria-label={`Confirmar agendamento de ${getPatientName(
-                appointment.patient_id
-              )}`}
-            >
-              {isUpdating ? (
-                <div className="flex items-center justify-center">
-                  <Loader2 className="animate-spin h-4 w-4 mr-2" />
-                  Confirmando...
-                </div>
-              ) : (
-                "Confirmar"
-              )}
-            </button>
-            <button
-              onClick={handleCancel}
-              disabled={isUpdating}
-              className="flex-1 bg-rose-600 hover:bg-rose-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
-              aria-label={`Cancelar agendamento de ${getPatientName(
-                appointment.patient_id
-              )}`}
-            >
-              {isUpdating ? (
-                <div className="flex items-center justify-center">
-                  <Loader2 className="animate-spin h-4 w-4 mr-2" />
-                  Cancelando...
-                </div>
-              ) : (
-                "Cancelar"
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Botão para psicólogos */}
-      {showPsychologistButton && (
-        <div className="mt-6 pt-4 border-t border-gray-200">
-          <div className="flex gap-3">
-            <button
-              onClick={() => onAttendanceCompleted(appointment)}
-              disabled={isUpdating}
-              className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
-              aria-label={`Marcar atendimento realizado para ${getPatientName(
-                appointment.patient_id
-              )}`}
-            >
-              {isUpdating ? (
-                <div className="flex items-center justify-center">
-                  <Loader2 className="animate-spin h-4 w-4 mr-2" />
-                  Processando...
-                </div>
-              ) : (
-                "Atendimento Realizado"
-              )}
-            </button>
-          </div>
-          <p className="text-xs text-gray-400 mt-2 text-center opacity-75">
-            Marque quando o atendimento for concluído
-          </p>
-        </div>
-      )}
-
-      {/* Dialog de confirmação para cancelar agendamento */}
-      <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Cancelar Agendamento</AlertDialogTitle>
-            <AlertDialogDescription>
-              Deseja realmente cancelar este agendamento?
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isUpdating}>Não</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmCancel}
-              disabled={isUpdating}
-              className="bg-rose-600 hover:bg-rose-700 focus:ring-rose-600"
-            >
-              {isUpdating ? "Cancelando..." : "Sim"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </div>
-
-    {/* Botão Editar no canto superior direito */}
-    {userRole && userRole !== "psychologist" && (
-      <button
-        onClick={handleEdit}
-        disabled={isUpdating}
-        className="text-sm text-purple-600 hover:text-purple-800 disabled:text-gray-400 px-2 py-1 rounded-md transition-colors duration-200 focus:outline-none focus:ring-1 focus:ring-purple-400 disabled:cursor-not-allowed"
-        aria-label={`Editar agendamento de ${getPatientName(
-          appointment.patient_id
-        )}`}
-      >
-        {isUpdating ? (
-          <div className="flex items-center">
-            <Loader2 className="animate-spin h-3 w-3 mr-1" />
-            Editando...
-          </div>
-        ) : (
-          "Editar"
+            ) : (
+              "Editar"
+            )}
+          </button>
         )}
-      </button>
-    )}
-  </div>
-</div>
+      </div>
+    </div>
   );
 });
 
@@ -957,6 +958,7 @@ const AppointmentCalendar = () => {
   const { appointments, workingHours, patients, users, rooms, loading, error, refetch } = useAppointmentData(user);
   const { formatDate, getDaysInMonth, getFirstDayOfMonth, formatDisplayDate } = useDateUtils();
   const { getDayStatus } = useDayStatus(appointments, workingHours);
+  const { toast } = useToast();
 
   // Atualizar automaticamente o calendário quando novos agendamentos forem criados
   useEffect(() => {
@@ -1223,7 +1225,11 @@ const AppointmentCalendar = () => {
 
   const handleSaveObservations = useCallback(async () => {
     if (!selectedAppointment || !observationNotes.trim()) {
-      alert('Por favor, descreva o que aconteceu no atendimento.');
+      toast({
+        title: "Campo obrigatório",
+        description: "Por favor, descreva o que aconteceu no atendimento.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -1259,13 +1265,21 @@ const AppointmentCalendar = () => {
       await handleStatusChange(selectedAppointment.id, 'completed');
 
       // Feedback de sucesso
-      alert('Atendimento marcado como realizado com sucesso!');
+      toast({
+        title: "Atendimento realizado!",
+        description: "Atendimento marcado como realizado com sucesso!",
+        variant: "default",
+      });
 
     } catch (error) {
       console.error('Erro ao salvar observações:', error);
-      alert('Erro ao salvar observações. Tente novamente.');
+      toast({
+        title: "Erro ao salvar observações",
+        description: "Erro ao salvar observações. Tente novamente.",
+        variant: "destructive",
+      });
     }
-  }, [selectedAppointment, observationNotes, handleStatusChange]);
+  }, [selectedAppointment, observationNotes, handleStatusChange, toast]);
 
   const handleEditSubmit = async () => {
     if (!selectedAppointment) return;
@@ -1315,13 +1329,28 @@ const AppointmentCalendar = () => {
 
         // Fechar modal e mostrar toast de sucesso
         setIsEditModalOpen(false);
-        alert('Dados atualizados com sucesso!');
+
+        // Mostrar toast de sucesso no canto inferior direito
+        toast({
+          title: "Edição realizada com sucesso!",
+          description: `Agendamento de ${getPatientName(selectedAppointment.patient_id)} foi atualizado.`,
+          variant: "default",
+        });
+
+        // Atualizar o modal de agendamentos igual ao botão de confirmar
+        await refetch();
       } else {
         throw new Error('Erro ao enviar dados para o webhook');
       }
     } catch (error) {
       console.error('Erro ao salvar edição:', error);
-      alert('Erro ao salvar edição. Tente novamente.');
+
+      // Mostrar toast de erro no canto inferior direito
+      toast({
+        title: "Erro ao salvar edição",
+        description: "Ocorreu um erro ao tentar salvar as alterações. Tente novamente.",
+        variant: "destructive",
+      });
     }
   };
 

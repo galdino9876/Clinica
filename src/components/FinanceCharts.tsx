@@ -28,6 +28,7 @@ import "jspdf-autotable";
 import { Download, Edit, Save, Loader } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { useToast } from "@/components/ui/use-toast";
 
 type FilterPeriod = "day" | "week" | "month" | "year";
 
@@ -82,6 +83,7 @@ interface Patient {
 
 const FinanceCharts = () => {
   const { user } = useAuth();
+  const { toast } = useToast();
   const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>("month");
   const [selectedPsychologist, setSelectedPsychologist] = useState<string>("all");
   const [showReportTable, setShowReportTable] = useState(false);
@@ -120,6 +122,11 @@ const FinanceCharts = () => {
         console.log("Psicólogos carregados:", fetchedPsychologists);
       } else {
         console.error("Erro API usuários:", usersResponse.status, await usersResponse.text());
+        toast({
+          title: "Erro ao carregar psicólogos",
+          description: "Não foi possível carregar a lista de psicólogos.",
+          variant: "destructive",
+        });
       }
 
       // Fetch pacientes usando a mesma URL do PatientsTable
@@ -136,9 +143,19 @@ const FinanceCharts = () => {
       } else {
         console.error("Erro API pacientes:", patientsResponse.status, await patientsResponse.text());
         setPatients([]);
+        toast({
+          title: "Erro ao carregar pacientes",
+          description: "Não foi possível carregar a lista de pacientes.",
+          variant: "destructive",
+        });
       }
     } catch (err) {
       console.error("Erro ao carregar dados:", err);
+      toast({
+        title: "Erro ao carregar dados",
+        description: "Ocorreu um erro ao carregar os dados iniciais.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -174,6 +191,11 @@ const FinanceCharts = () => {
     } catch (error) {
       console.error("Erro ao buscar appointments:", error);
       setAppointments([]);
+      toast({
+        title: "Erro ao carregar agendamentos",
+        description: "Não foi possível carregar os agendamentos.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -384,8 +406,6 @@ const FinanceCharts = () => {
           });
 
           if (response.ok) {
-            console.log('Valor e tipo de convênio da consulta atualizados com sucesso na API');
-            
             // Atualizar o estado local após sucesso na API
             setAppointments((prev) =>
               prev.map((appointment) =>
@@ -394,6 +414,13 @@ const FinanceCharts = () => {
                   : appointment
               )
             );
+
+            // Mostrar toast de sucesso no canto inferior direito
+            toast({
+              title: "Edição realizada com sucesso!",
+              description: `Valor da consulta foi atualizado para R$ ${editTransactionValue.toFixed(2)}`,
+              variant: "default",
+            });
           } else {
             console.error('Erro na API:', response.status, response.statusText);
             const errorText = await response.text();
@@ -403,7 +430,13 @@ const FinanceCharts = () => {
         }
       } catch (error) {
         console.error("Erro ao atualizar valor e tipo de convênio da consulta:", error);
-        // Aqui você pode adicionar um toast ou notificação de erro para o usuário
+        
+        // Mostrar toast de erro no canto inferior direito
+        toast({
+          title: "Erro ao salvar edição",
+          description: "Ocorreu um erro ao tentar salvar as alterações. Tente novamente.",
+          variant: "destructive",
+        });
       } finally {
         setIsEditingLoading(false);
       }
@@ -460,15 +493,17 @@ const FinanceCharts = () => {
       patient?.name || patient?.nome || "Paciente não encontrado",
       format(new Date(appointment.date), "dd/MM/yyyy", { locale: ptBR }),
       `${appointment.start_time} - ${appointment.end_time}`,
+      psychologist?.name || "Psicólogo não encontrado",
+      appointment.payment_method === 'private' ? 'Particular' : 'Convênio',
+      appointment.insurance_type || 'N/A',
       `R$ ${appointmentValue.toFixed(2)}`, // Usar appointmentValue em vez de appointment.value
       `R$ ${commission.toFixed(2)} (${commissionPercentage}%)`,
-      psychologist?.name || "Psicólogo não encontrado",
     ];
   });
 
   (doc as any).autoTable({
     startY: tableY,
-    head: [["Paciente", "Data", "Horário", "Valor", "Comissão", "Psicólogo"]],
+    head: [["Paciente", "Data", "Horário", "Psicólogo", "Método de Pagamento", "Tipo de Convênio", "Valor", "Comissão"]],
     body: tableData,
     theme: "grid",
     headStyles: { fillColor: [0, 123, 255], textColor: 255 },
@@ -701,6 +736,8 @@ const FinanceCharts = () => {
                     <TableHead>Data</TableHead>
                     <TableHead>Horário</TableHead>
                     <TableHead>Psicólogo</TableHead>
+                    <TableHead>Método de Pagamento</TableHead>
+                    <TableHead>Tipo de Convênio</TableHead>
                     <TableHead className="text-right">Valor</TableHead>
                     {isAdmin && <TableHead className="text-right">Comissão</TableHead>}
                     {isAdmin && <TableHead className="text-right">Ações</TableHead>}
@@ -709,21 +746,21 @@ const FinanceCharts = () => {
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={isAdmin ? 7 : 5} className="text-center py-4">
+                      <TableCell colSpan={isAdmin ? 9 : 7} className="text-center py-4">
                         <Loader className="h-5 w-5 animate-spin mx-auto" />
                         <p className="mt-2 text-gray-500">Carregando dados iniciais...</p>
                       </TableCell>
                     </TableRow>
                   ) : loading ? (
                     <TableRow>
-                      <TableCell colSpan={isAdmin ? 7 : 5} className="text-center py-4">
+                      <TableCell colSpan={isAdmin ? 9 : 7} className="text-center py-4">
                         <Loader className="h-5 w-5 animate-spin mx-auto" />
                         <p className="mt-2 text-gray-500">Carregando transações...</p>
                       </TableCell>
                     </TableRow>
                   ) : filteredAppointments.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={isAdmin ? 7 : 5} className="text-center py-4 text-gray-500">
+                      <TableCell colSpan={isAdmin ? 9 : 7} className="text-center py-4 text-gray-500">
                         Nenhuma consulta confirmada encontrada para este período
                       </TableCell>
                     </TableRow>
@@ -744,6 +781,12 @@ const FinanceCharts = () => {
                             {appointment.start_time} - {appointment.end_time}
                           </TableCell>
                           <TableCell>{psychologist?.name || "Psicólogo não encontrado"}</TableCell>
+                          <TableCell>
+                            {appointment.payment_method === 'private' ? 'Particular' : 'Convênio'}
+                          </TableCell>
+                          <TableCell>
+                            {appointment.insurance_type || 'N/A'}
+                          </TableCell>
                           <TableCell className="text-right font-medium">
                             R$ {(Number(appointment.value) || 0).toFixed(2)}
                           </TableCell>
