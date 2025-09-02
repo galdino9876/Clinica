@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, X } from "lucide-react";
 import { InputDynamic } from "./inputDin";
+import { Patient } from "@/types/appointment";
 
 // Schema de validação
 const patientSchema = z.object({
@@ -33,9 +34,11 @@ interface PatientFormProps {
   onSave?: (patient: PatientFormData) => void;
   onCancel?: () => void;
   open?: boolean; // Para controlar a abertura via Dialog
+  patient?: Patient; // Para edição - dados do paciente existente
+  isEdit?: boolean; // Flag para indicar se é edição
 }
 
-const PatientForm = ({ onSave, onCancel, open = false }: PatientFormProps) => {
+const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }: PatientFormProps) => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const valueId = useId();
@@ -43,14 +46,14 @@ const PatientForm = ({ onSave, onCancel, open = false }: PatientFormProps) => {
   const formMethods = useForm<PatientFormData>({
     resolver: zodResolver(patientSchema),
     defaultValues: {
-      name: "",
-      cpf: "",
-      phone: "",
-      email: "",
-      address: "",
-      birthdate: "",
-      identity_document: "",
-      insurance_document: "",
+      name: patient?.name || "",
+      cpf: patient?.cpf || "",
+      phone: patient?.phone || "",
+      email: patient?.email || "",
+      address: patient?.address || "",
+      birthdate: patient?.birthdate || "",
+      identity_document: patient?.identityDocument || "",
+      insurance_document: patient?.insuranceDocument || "",
       value: 200.0,
     },
   });
@@ -105,26 +108,38 @@ const PatientForm = ({ onSave, onCancel, open = false }: PatientFormProps) => {
     setIsLoading(true);
 
     try {
-      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/create-patient", {
+      // Preparar dados para envio
+      const requestData = {
+        ...data,
+        ...(isEdit && patient && { id: patient.id }), // Incluir ID se for edição
+      };
+
+      const url = isEdit 
+        ? "https://webhook.essenciasaudeintegrada.com.br/webhook/patients_edit"
+        : "https://webhook.essenciasaudeintegrada.com.br/webhook/create-patient";
+
+      const response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify(requestData),
       });
 
       if (response.ok) {
-        const newPatient = await response.json();
+        const result = await response.json();
         toast({
           title: "Sucesso",
-          description: "Paciente cadastrado com sucesso.",
+          description: isEdit ? "Paciente atualizado com sucesso." : "Paciente cadastrado com sucesso.",
         });
 
         if (onSave) {
-          onSave(newPatient);
+          onSave(result);
         }
 
-        reset();
+        if (!isEdit) {
+          reset();
+        }
       } else {
         const errorData = await response.json().catch(() => ({}));
         throw new Error(errorData.message || "Erro no servidor");
@@ -133,7 +148,7 @@ const PatientForm = ({ onSave, onCancel, open = false }: PatientFormProps) => {
       console.error("Erro ao salvar paciente:", error);
       toast({
         title: "Erro",
-        description: error instanceof Error ? error.message : "Falha ao cadastrar paciente. Tente novamente.",
+        description: error instanceof Error ? error.message : `Falha ao ${isEdit ? 'atualizar' : 'cadastrar'} paciente. Tente novamente.`,
         variant: "destructive",
       });
     } finally {
@@ -250,10 +265,10 @@ const PatientForm = ({ onSave, onCancel, open = false }: PatientFormProps) => {
           {isLoading ? (
             <>
               <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-              Salvando...
+              {isEdit ? "Atualizando..." : "Salvando..."}
             </>
           ) : (
-            "Cadastrar"
+            isEdit ? "Atualizar" : "Cadastrar"
           )}
         </Button>
       </div>

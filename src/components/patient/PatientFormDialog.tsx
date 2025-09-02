@@ -38,6 +38,7 @@ const PatientFormDialog = ({
         </DialogHeader>
         <PatientForm
           patient={patient || undefined}
+          isEdit={!!patient}
           onSave={handleSave}
           onCancel={() => onOpenChange(false)}
         />

@@ -14,6 +14,8 @@ const PatientsTable = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isFormOpen, setIsFormOpen] = useState(false);
+  const [isEditFormOpen, setIsEditFormOpen] = useState(false);
+  const [editingPatient, setEditingPatient] = useState(null);
   
   // User roles and permissions - baseado no papel real do usuário
   const isAdmin = user?.role === "admin";
@@ -71,6 +73,16 @@ const PatientsTable = () => {
   const handlePatientAdded = (newPatient) => {
     setPatients((prev) => [...prev, newPatient]);
     setIsFormOpen(false);
+  };
+
+  const handlePatientUpdated = (updatedPatient) => {
+    setPatients((prev) => 
+      prev.map(patient => 
+        patient.id === updatedPatient.id ? updatedPatient : patient
+      )
+    );
+    setIsEditFormOpen(false);
+    setEditingPatient(null);
   };
 
   const filteredPatients = patients.filter(
@@ -143,7 +155,10 @@ const PatientsTable = () => {
       label: "Editar",
       icon: Edit,
       color: "text-blue-600 hover:text-blue-800",
-      onClick: (patient) => alert(`Editar paciente: ${patient.name || patient.nome}`),
+      onClick: (patient) => {
+        setEditingPatient(patient);
+        setIsEditFormOpen(true);
+      },
       visible: canManagePatients, // Apenas admin e recepcionistas podem editar
     },
     {
@@ -279,6 +294,24 @@ const PatientsTable = () => {
             <DialogDescription>Preencha os dados do novo paciente</DialogDescription>
           </DialogHeader>
           <PatientForm onSave={handlePatientAdded} onCancel={() => setIsFormOpen(false)} />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isEditFormOpen} onOpenChange={setIsEditFormOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Editar Paciente</DialogTitle>
+            <DialogDescription>Atualize os dados do paciente</DialogDescription>
+          </DialogHeader>
+          <PatientForm 
+            patient={editingPatient} 
+            isEdit={true}
+            onSave={handlePatientUpdated} 
+            onCancel={() => {
+              setIsEditFormOpen(false);
+              setEditingPatient(null);
+            }} 
+          />
         </DialogContent>
       </Dialog>
 
