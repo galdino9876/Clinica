@@ -63,7 +63,10 @@ const Sidebar = ({ onClose }: SidebarProps) => {
         <div>
           {/* Header com botão de fechar para mobile */}
           <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-            <h1 className="text-xl font-bold text-clinic-700">Clínica Psicológica</h1>
+            <div>
+              <h1 className="text-xl font-bold text-clinic-700">Clínica</h1>
+              <p className="text-sm text-gray-600">Essência Saúde Integrada</p>
+            </div>
             {/* Botão de fechar apenas para mobile */}
             <button
               onClick={onClose}
