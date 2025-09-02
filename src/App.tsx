@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import { ThemeProvider } from "./components/ui/theme-provider";
 import { AuthProvider } from "./context/AuthContext";
 import { AppointmentProvider } from "./context/AppointmentContext";
+import { PaymentProvider } from "./context/PaymentContext";
 import { Toaster } from "./components/ui/toaster";
 import LoginPage from "./pages/LoginPage";
 import PrivateRoute from "./components/PrivateRoute";
@@ -25,7 +26,8 @@ const App = () => {
         <Router>
           <AuthProvider>
             <AppointmentProvider>
-              <Routes>
+              <PaymentProvider>
+                <Routes>
                 <Route path="/login" element={<LoginPage />} />
                 <Route
                   path="/"
@@ -79,6 +81,7 @@ const App = () => {
                 <Route path="*" element={<Navigate to="/404" replace />} />
               </Routes>
               <Toaster />
+              </PaymentProvider>
             </AppointmentProvider>
           </AuthProvider>
         </Router>

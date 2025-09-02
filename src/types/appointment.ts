@@ -44,6 +44,7 @@ export interface Appointment {
   is_recurring: boolean; // tinyint(1), mapeado de 0/1 para boolean
   recurrence_type?: RecurrenceType;
   recurrence_group_id?: string; // Referência a um grupo de recorrência
+  control?: string | null; // Campo para controle de pagamento (NULL, pending, payments_created)
   created_at: string; // timestamp
   updated_at: string | null; // timestamp
 }
