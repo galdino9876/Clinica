@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
 import { Send, X, GripVertical } from "lucide-react";
@@ -49,6 +50,7 @@ const ReminderModal = ({ isOpen, onClose, appointments, onSend }: ReminderModalP
   const [messageTemplates, setMessageTemplates] = useState<MessageTemplate[]>([]);
   const [sending, setSending] = useState(false);
   const [cursorPositions, setCursorPositions] = useState<{ [templateId: string]: number }>({});
+  const [selectedMessages, setSelectedMessages] = useState<{ [templateId: string]: boolean }>({});
   const { toast } = useToast();
 
   useEffect(() => {
@@ -72,6 +74,13 @@ Caso não haja retorno até o final do dia, o agendamento será cancelado automa
     });
     
     setMessageTemplates(templates);
+    
+    // Inicializar todos os checkboxes como selecionados por padrão
+    const initialSelection: { [templateId: string]: boolean } = {};
+    templates.forEach(template => {
+      initialSelection[template.id] = true;
+    });
+    setSelectedMessages(initialSelection);
   };
 
   const getVariableValue = (type: string, appointmentId: number): string => {
@@ -169,6 +178,13 @@ Caso não haja retorno até o final do dia, o agendamento será cancelado automa
     setCursorPositions(prev => ({
       ...prev,
       [templateId]: cursorPosition + value.length
+    }));
+  };
+
+  const handleCheckboxChange = (templateId: string, checked: boolean) => {
+    setSelectedMessages(prev => ({
+      ...prev,
+      [templateId]: checked
     }));
   };
 
@@ -286,8 +302,20 @@ Caso não haja retorno até o final do dia, o agendamento será cancelado automa
   const handleSend = async () => {
     setSending(true);
     try {
-      // Fazer requests individuais para cada paciente
-      const promises = messageTemplates.map(async (template) => {
+      // Filtrar apenas as mensagens selecionadas
+      const selectedTemplates = messageTemplates.filter(template => selectedMessages[template.id]);
+      
+      if (selectedTemplates.length === 0) {
+        toast({
+          title: "Nenhuma mensagem selecionada",
+          description: "Selecione pelo menos uma mensagem para enviar.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Fazer requests individuais para cada paciente selecionado
+      const promises = selectedTemplates.map(async (template) => {
         const appointment = appointments.find(app => `template-${app.id}` === template.id);
         if (!appointment) return;
 
@@ -328,7 +356,7 @@ Caso não haja retorno até o final do dia, o agendamento será cancelado automa
       
       toast({
         title: "Lembretes enviados!",
-        description: `${successCount} de ${messageTemplates.length} pacientes receberam o lembrete.`,
+        description: `${successCount} de ${selectedTemplates.length} pacientes selecionados receberam o lembrete.`,
         variant: "default",
       });
       onClose();
@@ -366,43 +394,59 @@ Caso não haja retorno até o final do dia, o agendamento será cancelado automa
               <div key={template.id} className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
                 {/* Header do Card */}
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-white/20 rounded-lg">
-                      <Send className="h-4 w-4 text-white" />
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-white/20 rounded-lg">
+                        <Send className="h-4 w-4 text-white" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge 
+                          variant="secondary" 
+                          className="bg-white/20 text-white border-white/30 cursor-pointer hover:bg-white/30 transition-colors"
+                          onClick={() => insertValue(template.id, appointment.patient_name)}
+                          title="Clique para inserir o nome do paciente"
+                        >
+                          {appointment.patient_name}
+                        </Badge>
+                        <Badge 
+                          variant="secondary" 
+                          className="bg-white/20 text-white border-white/30 cursor-pointer hover:bg-white/30 transition-colors"
+                          onClick={() => insertValue(template.id, appointment.psychologist_name)}
+                          title="Clique para inserir o nome do psicólogo"
+                        >
+                          {appointment.psychologist_name}
+                        </Badge>
+                        <Badge 
+                          variant="secondary" 
+                          className="bg-white/20 text-white border-white/30 cursor-pointer hover:bg-white/30 transition-colors"
+                          onClick={() => insertValue(template.id, appointment.start_time)}
+                          title="Clique para inserir o horário"
+                        >
+                          {appointment.start_time}
+                        </Badge>
+                        <Badge 
+                          variant="secondary" 
+                          className="bg-white/20 text-white border-white/30 cursor-pointer hover:bg-white/30 transition-colors"
+                          onClick={() => insertValue(template.id, formatDateWithWeekday(appointment.date))}
+                          title="Clique para inserir a data"
+                        >
+                          {formatDateWithWeekday(appointment.date)}
+                        </Badge>
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge 
-                        variant="secondary" 
-                        className="bg-white/20 text-white border-white/30 cursor-pointer hover:bg-white/30 transition-colors"
-                        onClick={() => insertValue(template.id, appointment.patient_name)}
-                        title="Clique para inserir o nome do paciente"
+                      <Checkbox
+                        id={`checkbox-${template.id}`}
+                        checked={selectedMessages[template.id] || false}
+                        onCheckedChange={(checked) => handleCheckboxChange(template.id, checked as boolean)}
+                        className="border-white/50 data-[state=checked]:bg-white data-[state=checked]:text-blue-600"
+                      />
+                      <label 
+                        htmlFor={`checkbox-${template.id}`}
+                        className="text-white text-sm font-medium cursor-pointer"
                       >
-                        {appointment.patient_name}
-                      </Badge>
-                      <Badge 
-                        variant="secondary" 
-                        className="bg-white/20 text-white border-white/30 cursor-pointer hover:bg-white/30 transition-colors"
-                        onClick={() => insertValue(template.id, appointment.psychologist_name)}
-                        title="Clique para inserir o nome do psicólogo"
-                      >
-                        {appointment.psychologist_name}
-                      </Badge>
-                      <Badge 
-                        variant="secondary" 
-                        className="bg-white/20 text-white border-white/30 cursor-pointer hover:bg-white/30 transition-colors"
-                        onClick={() => insertValue(template.id, appointment.start_time)}
-                        title="Clique para inserir o horário"
-                      >
-                        {appointment.start_time}
-                      </Badge>
-                      <Badge 
-                        variant="secondary" 
-                        className="bg-white/20 text-white border-white/30 cursor-pointer hover:bg-white/30 transition-colors"
-                        onClick={() => insertValue(template.id, formatDateWithWeekday(appointment.date))}
-                        title="Clique para inserir a data"
-                      >
-                        {formatDateWithWeekday(appointment.date)}
-                      </Badge>
+                        Enviar
+                      </label>
                     </div>
                   </div>
                 </div>
@@ -482,7 +526,7 @@ Caso não haja retorno até o final do dia, o agendamento será cancelado automa
               ) : (
                 <>
                   <Send className="h-4 w-4 mr-2" />
-                  Enviar Lembretes
+                  Enviar Lembretes ({Object.values(selectedMessages).filter(Boolean).length}/{messageTemplates.length})
                 </>
               )}
             </Button>

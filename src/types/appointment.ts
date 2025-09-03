@@ -19,6 +19,8 @@ export interface Patient {
   insuranceDocument?: File | string; // Added for insurance document
   psychologist_name?: string; // Nome do psicólogo responsável
   psychologist_crp?: string; // CRP do psicólogo responsável
+  nome_responsavel?: string; // Nome do responsável (da API)
+  telefone_responsavel?: string; // Telefone do responsável (da API)
 }
 
 export type PaymentMethod = "private" | "insurance";

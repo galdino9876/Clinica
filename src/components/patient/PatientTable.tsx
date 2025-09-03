@@ -72,9 +72,11 @@ const PatientTable = ({
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Nome
                 </th>
+                {/* 
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   CPF
                 </th>
+                */}
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Telefone
                 </th>
@@ -109,9 +111,11 @@ const PatientTable = ({
                     <td className="px-4 py-4 whitespace-nowrap">
                       {patient.name}
                     </td>
+                    
                     <td className="px-4 py-4 whitespace-nowrap">
                       {patient.cpf}
                     </td>
+                    
                     <td className="px-4 py-4 whitespace-nowrap">
                       {patient.phone}
                     </td>

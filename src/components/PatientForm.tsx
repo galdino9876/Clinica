@@ -26,6 +26,8 @@ const patientSchema = z.object({
   identity_document: z.string().optional(),
   insurance_document: z.string().optional(),
   value: z.coerce.number().min(0.01, { message: "O valor deve ser maior que 0!" }),
+  nome_responsavel: z.string().optional(),
+  telefone_responsavel: z.string().optional(),
 });
 
 type PatientFormData = z.infer<typeof patientSchema>;
@@ -41,6 +43,7 @@ interface PatientFormProps {
 const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }: PatientFormProps) => {
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [showComplementaryData, setShowComplementaryData] = useState(false);
   const valueId = useId();
 
   const formMethods = useForm<PatientFormData>({
@@ -55,6 +58,8 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
       identity_document: patient?.identityDocument || "",
       insurance_document: patient?.insuranceDocument || "",
       value: 200.0,
+      nome_responsavel: "",
+      telefone_responsavel: "",
     },
   });
 
@@ -139,6 +144,8 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
 
         if (!isEdit) {
           reset();
+          // Refresh da página para mostrar o novo paciente na lista
+          window.location.reload();
         }
       } else {
         const errorData = await response.json().catch(() => ({}));
@@ -254,6 +261,46 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
           onClear={() => setValue("insurance_document", "")}
         />
 
+        {/* Botão para mostrar dados complementares */}
+        <div className="md:col-span-2 flex justify-center">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setShowComplementaryData(!showComplementaryData)}
+            disabled={isLoading}
+            className="mt-2"
+          >
+            {showComplementaryData ? "Ocultar" : "Dados complementares"}
+          </Button>
+        </div>
+
+        {/* Campos de dados complementares */}
+        {showComplementaryData && (
+          <>
+            <InputDynamic
+              name="nome_responsavel"
+              label="Nome do Responsável"
+              control={control}
+              placeholder="Digite o nome do responsável"
+              disabled={isLoading}
+              errors={errors}
+              className="md:col-span-2"
+              onClear={() => setValue("nome_responsavel", "")}
+            />
+
+            <InputDynamic
+              name="telefone_responsavel"
+              label="Telefone do Responsável"
+              control={control}
+              placeholder="61988888888"
+              type="tel"
+              disabled={isLoading}
+              errors={errors}
+              maxLength={15}
+              onClear={() => setValue("telefone_responsavel", "")}
+            />
+          </>
+        )}
         
       </div>
 

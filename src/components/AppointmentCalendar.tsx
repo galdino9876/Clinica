@@ -184,7 +184,7 @@ const useAppointmentData = (user: any) => {
         .filter(apt => apt && apt.id) // Filtrar dados inválidos
         .map(apt => {
           // Log para debug - verificar estrutura dos dados
-          console.log('Dados do agendamento recebidos:', apt);
+          // console.log('Dados do agendamento recebidos:', apt);
 
           return {
             ...apt,
@@ -206,10 +206,10 @@ const useAppointmentData = (user: any) => {
       const uniqueIds = new Set(appointmentIds);
 
       if (appointmentIds.length !== uniqueIds.size) {
-        console.warn('⚠️ DUPLICAÇÃO DETECTADA nos agendamentos!');
-        console.warn('Total de agendamentos:', appointmentIds.length);
-        console.warn('IDs únicos:', uniqueIds.size);
-        console.warn('IDs duplicados:', appointmentIds.filter((id, index) => appointmentIds.indexOf(id) !== index));
+        // console.warn('⚠️ DUPLICAÇÃO DETECTADA nos agendamentos!');
+        // console.warn('Total de agendamentos:', appointmentIds.length);
+        // console.warn('IDs únicos:', uniqueIds.size);
+        // console.warn('IDs duplicados:', appointmentIds.filter((id, index) => appointmentIds.indexOf(id) !== index));
 
         // Remover duplicatas mantendo apenas o primeiro de cada ID
         const seenIds = new Set();
@@ -221,13 +221,13 @@ const useAppointmentData = (user: any) => {
           return true;
         });
 
-        console.log('Agendamentos após remoção de duplicatas:', deduplicatedAppointments);
+        // console.log('Agendamentos após remoção de duplicatas:', deduplicatedAppointments);
         normalizedAppointments.length = 0;
         normalizedAppointments.push(...deduplicatedAppointments);
       }
 
-      console.log('Agendamentos normalizados:', normalizedAppointments);
-      console.log('IDs dos agendamentos:', normalizedAppointments.map(apt => apt.id));
+      // console.log('Agendamentos normalizados:', normalizedAppointments);
+      // console.log('IDs dos agendamentos:', normalizedAppointments.map(apt => apt.id));
 
       setData({
         appointments: normalizedAppointments,
@@ -280,7 +280,7 @@ const useDateUtils = () => {
 
   const formatDisplayDate = useCallback((dateString: string): string => {
     try {
-      console.log('formatDisplayDate - input dateString:', dateString);
+      // console.log('formatDisplayDate - input dateString:', dateString);
 
       // Tentar diferentes formatos de data
       let date: Date;
@@ -302,7 +302,7 @@ const useDateUtils = () => {
         return 'Data inválida';
       }
 
-      console.log('formatDisplayDate - parsed date:', date);
+      // console.log('formatDisplayDate - parsed date:', date);
 
       const formattedDate = date.toLocaleDateString('pt-BR', {
         weekday: 'long',
@@ -311,7 +311,7 @@ const useDateUtils = () => {
         day: 'numeric'
       });
 
-      console.log('formatDisplayDate - formatted result:', formattedDate);
+      // console.log('formatDisplayDate - formatted result:', formattedDate);
       return formattedDate;
 
     } catch (error) {
@@ -353,22 +353,22 @@ const useDayStatus = (appointments: Appointment[], workingHours: WorkingHour[]) 
     const confirmedAppointments = dayAppointments.filter(apt => apt.status === 'confirmed');
 
     // Debug: Log para verificar os valores
-    console.log(`Dia ${day}: totalSlots=${totalSlots}, occupiedSlots=${occupiedSlots}, confirmed=${confirmedAppointments.length}`);
+    // console.log(`Dia ${day}: totalSlots=${totalSlots}, occupiedSlots=${occupiedSlots}, confirmed=${confirmedAppointments.length}`);
 
     // Se todos os horários estão agendados
     if (occupiedSlots >= totalSlots && totalSlots > 0) {
       // Se todos os agendamentos estão confirmados = VERDE (Confirmados)
       if (confirmedAppointments.length === occupiedSlots && occupiedSlots > 0) {
-        console.log(`Dia ${day}: Status CONFIRMADO (verde)`);
+        // console.log(`Dia ${day}: Status CONFIRMADO (verde)`);
         return { status: 'confirmed', color: '' };
       } else {
         // Se nem todos estão confirmados = VERMELHO (Totalmente agendado)
-        console.log(`Dia ${day}: Status TOTALMENTE AGENDADO (vermelho)`);
+        // console.log(`Dia ${day}: Status TOTALMENTE AGENDADO (vermelho)`);
         return { status: 'full', color: '' };
       }
     } else if (dayWorkingHours.length > 0 && totalSlots > 0) {
       // Se há horários disponíveis = AZUL (Disponibilidade)
-      console.log(`Dia ${day}: Status DISPONÍVEL (azul)`);
+      // console.log(`Dia ${day}: Status DISPONÍVEL (azul)`);
       return { status: 'available', color: '' };
     }
 
@@ -645,27 +645,27 @@ const AppointmentCard = React.memo(({
   const [showCancelDialog, setShowCancelDialog] = useState(false);
 
   // Log para debug - verificar status recebido
-  console.log('AppointmentCard - appointment status:', appointment.status);
-  console.log('AppointmentCard - appointment object:', appointment);
+  // console.log('AppointmentCard - appointment status:', appointment.status);
+  // console.log('AppointmentCard - appointment object:', appointment);
 
   const getStatusColor = useCallback((status: string) => {
-    console.log('getStatusColor - status:', status);
+    // console.log('getStatusColor - status:', status);
     const color = STATUS_COLORS[status as keyof typeof STATUS_COLORS] || 'bg-gray-500';
-    console.log('getStatusColor - color:', color);
+    // console.log('getStatusColor - color:', color);
     return color;
   }, []);
 
   const getStatusLabel = useCallback((status: string) => {
-    console.log('getStatusLabel - status:', status);
+    // console.log('getStatusLabel - status:', status);
     const label = STATUS_LABELS[status as keyof typeof STATUS_LABELS] || status;
-    console.log('getStatusLabel - label:', label);
+    // console.log('getStatusLabel - label:', label);
     return label;
   }, []);
 
   const getStatusBadgeColor = useCallback((status: string) => {
-    console.log('getStatusBadgeColor - status:', status);
+    // console.log('getStatusBadgeColor - status:', status);
     const badgeColor = STATUS_BADGE_COLORS[status as keyof typeof STATUS_BADGE_COLORS] || 'bg-gray-100 text-gray-800';
-    console.log('getStatusBadgeColor - badgeColor:', badgeColor);
+    // console.log('getStatusBadgeColor - badgeColor:', badgeColor);
     return badgeColor;
   }, []);
 
@@ -1068,10 +1068,10 @@ const AppointmentCalendar = () => {
       }));
 
       // Debug: verificar se há duplicação nos dados
-      console.log('Agendamentos filtrados para a data:', dateString);
-      console.log('Total de agendamentos:', dayAppointments.length);
-      console.log('IDs dos agendamentos:', dayAppointments.map(apt => apt.id));
-      console.log('Horários dos agendamentos:', dayAppointments.map(apt => apt.start_time));
+      // console.log('Agendamentos filtrados para a data:', dateString);
+      // console.log('Total de agendamentos:', dayAppointments.length);
+      // console.log('IDs dos agendamentos:', dayAppointments.map(apt => apt.id));
+      // console.log('Horários dos agendamentos:', dayAppointments.map(apt => apt.start_time));
 
       const dayWorkingHours = workingHours.filter(wh => wh.day_of_week === clickedDate.getDay());
 

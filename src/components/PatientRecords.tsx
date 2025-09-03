@@ -6,7 +6,7 @@ import { Patient, PatientRecord } from "@/types/appointment";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Card, CardContent } from "@/components/ui/card";
-import { Trash } from "lucide-react";
+import { Trash, MessageCircle } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 
@@ -31,7 +31,7 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
     try {
       // Validação para garantir que o ID existe
       if (!psychologistId || !Number.isInteger(psychologistId)) {
-        console.warn("ID do psicólogo inválido:", psychologistId);
+        // console.warn("ID do psicólogo inválido:", psychologistId);
         return "Desconhecido";
       }
 
@@ -74,7 +74,7 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
         console.log("Usuário encontrado:", user);
         return user.name || user.nome || "Desconhecido";
       } else {
-        console.warn("Usuário não encontrado com ID:", psychologistId);
+        // console.warn("Usuário não encontrado com ID:", psychologistId);
         console.log("Usuários disponíveis:", users.map(u => ({ id: u.id, name: u.name || u.nome })));
         return "Desconhecido";
       }
@@ -100,7 +100,7 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
         names[id] = name;
         console.log(`Nome carregado para ID ${id}:`, name);
       } else if (!id || !Number.isInteger(id)) {
-        console.warn("ID inválido encontrado:", id);
+        // console.warn("ID inválido encontrado:", id);
         names[id] = "ID Inválido";
       }
     }
@@ -152,8 +152,8 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
 
     console.log("Usuário autenticado:", user);
     
-    if (patient?.id && Number.isInteger(patient.id)) {
-      fetchRecords(patient.id);
+    if (patient?.id && Number.isInteger(Number(patient.id))) {
+      fetchRecords(Number(patient.id));
     } else {
       setError("Paciente inválido.");
       setLoading(false);
@@ -257,6 +257,14 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
     }
   };
 
+  // Função para abrir WhatsApp
+  const openWhatsApp = (phone: string) => {
+    // Remove todos os caracteres não numéricos
+    const cleanPhone = phone.replace(/\D/g, '');
+    // Abre o WhatsApp com o número formatado
+    window.open(`https://wa.me/55${cleanPhone}`, '_blank');
+  };
+
   if (error || !patient) {
     return (
       <div className="p-4">
@@ -293,12 +301,42 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
         </div>
         <div className="space-y-1">
           <p className="text-sm font-medium text-gray-500">Telefone</p>
-          <p>{patient.phone || patient.phone || "N/A"}</p>
+          <div className="flex items-center gap-2">
+            <p>{patient.phone || patient.phone || "N/A"}</p>
+            {(patient.phone || patient.phone) && (
+              <button
+                onClick={() => openWhatsApp(patient.phone || patient.phone)}
+                className="text-green-600 hover:text-green-700 transition-colors"
+                title="Abrir WhatsApp"
+              >
+                <MessageCircle className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
         <div className="space-y-1">
           <p className="text-sm font-medium text-gray-500">E-mail</p>
           <p>{patient.email || "N/A"}</p>
         </div>
+        {/* Campos do responsável - só mostram se tiverem valores */}
+        {patient.nome_responsavel && patient.telefone_responsavel && (
+          <div className="space-y-1 md:col-span-2">
+            <p className="text-sm font-medium text-gray-500">Responsável</p>
+            <div className="space-y-1">
+              <p><span className="text-sm font-medium text-gray-500">Nome:</span> {patient.nome_responsavel}</p>
+              <div className="flex items-center gap-2">
+                <p><span className="text-sm font-medium text-gray-500">Telefone:</span> {patient.telefone_responsavel}</p>
+                <button
+                  onClick={() => openWhatsApp(patient.telefone_responsavel)}
+                  className="text-green-600 hover:text-green-700 transition-colors"
+                  title="Abrir WhatsApp"
+                >
+                  <MessageCircle className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold">Histórico de Prontuários</h3>

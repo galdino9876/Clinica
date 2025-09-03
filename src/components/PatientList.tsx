@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Edit, Trash2, Eye, Plus, FileText, Activity, Send, CircleArrowUp } from "lucide-react";
+import { Edit, Trash2, Eye, Plus, FileText, Activity, Send, CircleArrowUp, MessageCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import PatientForm from "./PatientForm";
 import PatientAppointmentHistory from "./PatientAppointmentHistory";
@@ -200,6 +200,14 @@ const PatientsTable = () => {
     }
   };
 
+  // Função para abrir WhatsApp
+  const openWhatsApp = (phone: string) => {
+    // Remove todos os caracteres não numéricos
+    const cleanPhone = phone.replace(/\D/g, '');
+    // Abre o WhatsApp com o número formatado
+    window.open(`https://wa.me/55${cleanPhone}`, '_blank');
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -233,9 +241,9 @@ const PatientsTable = () => {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">CPF</th>
+                {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">CPF</th> */}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Telefone</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+                {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th> */}
                 {isAdmin && (
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Responsável</th>
                 )}
@@ -246,15 +254,15 @@ const PatientsTable = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredPatients.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 7 : 6} className="px-6 py-4 text-center text-gray-500">Nenhum paciente encontrado</td>
+                  <td colSpan={isAdmin ? 5 : 4} className="px-6 py-4 text-center text-gray-500">Nenhum paciente encontrado</td>
                 </tr>
               ) : (
                 filteredPatients.map((patient, index) => (
                   <tr key={patient.id || index} className={`hover:bg-gray-50 ${patient.status === "Inativo" ? "bg-gray-50" : ""}`}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{patient.name || patient.nome || "N/A"}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.cpf || "N/A"}</td>
+                    {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.cpf || "N/A"}</td> */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.phone || patient.telefone || "N/A"}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.email || "N/A"}</td>
+                    {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.email || "N/A"}</td> */}
                                          {isAdmin && (
                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.psychologist_name || "N/A"}</td>
                      )}
@@ -333,7 +341,18 @@ const PatientsTable = () => {
                 </div>
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-gray-500">Telefone</p>
-                  <p>{selectedPatient.phone || selectedPatient.telefone || "N/A"}</p>
+                  <div className="flex items-center gap-2">
+                    <p>{selectedPatient.phone || selectedPatient.telefone || "N/A"}</p>
+                    {(selectedPatient.phone || selectedPatient.telefone) && (
+                      <button
+                        onClick={() => openWhatsApp(selectedPatient.phone || selectedPatient.telefone)}
+                        className="text-green-600 hover:text-green-700 transition-colors"
+                        title="Abrir WhatsApp"
+                      >
+                        <MessageCircle className="h-4 w-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-gray-500">E-mail</p>
@@ -343,6 +362,25 @@ const PatientsTable = () => {
                   <p className="text-sm font-medium text-gray-500">Status</p>
                   {renderStatus(selectedPatient.status || "Ativo")}
                 </div>
+                {/* Campos do responsável - só mostram se tiverem valores */}
+                {selectedPatient.nome_responsavel && selectedPatient.telefone_responsavel && (
+                  <div className="space-y-1 md:col-span-2">
+                    <p className="text-sm font-medium text-gray-500">Responsável</p>
+                    <div className="space-y-1">
+                      <p><span className="text-sm font-medium text-gray-500">Nome:</span> {selectedPatient.nome_responsavel}</p>
+                      <div className="flex items-center gap-2">
+                        <p><span className="text-sm font-medium text-gray-500">Telefone:</span> {selectedPatient.telefone_responsavel}</p>
+                        <button
+                          onClick={() => openWhatsApp(selectedPatient.telefone_responsavel)}
+                          className="text-green-600 hover:text-green-700 transition-colors"
+                          title="Abrir WhatsApp"
+                        >
+                          <MessageCircle className="h-4 w-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
               <h3 className="text-lg font-semibold">Histórico de Consultas</h3>
               <PatientAppointmentHistory patient={selectedPatient} />

@@ -11,7 +11,7 @@ import {
 } from "recharts";
 import { useAuth } from "@/context/AuthContext";
 import { useAppointments } from "@/context/AppointmentContext";
-import { usePayments } from "@/context/PaymentContext";
+
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -76,7 +76,7 @@ interface Patient {
 const FinanceCharts = () => {
   const { user, users } = useAuth();
   const { appointments } = useAppointments();
-  const { createPaymentBatch, markPaymentAsPaid, getPaymentItemsByBatch, getPsychologistPayments } = usePayments();
+
   const { toast } = useToast();
   
   // Estados para relatórios
@@ -128,12 +128,12 @@ const FinanceCharts = () => {
       });
       if (usersResponse.ok) {
         const userData = await usersResponse.json();
-        console.log("Resposta API usuários (detalhada):", JSON.stringify(userData, null, 2));
+
         const fetchedPsychologists = userData
           .filter((user: any) => user.role === "psychologist")
           .map((user: any) => ({ id: String(user.id), name: user.name }));
         setPsychologists(fetchedPsychologists);
-        console.log("Psicólogos carregados:", fetchedPsychologists);
+
       } else {
         console.error("Erro API usuários:", usersResponse.status, await usersResponse.text());
         toast({
@@ -150,7 +150,7 @@ const FinanceCharts = () => {
       });
       if (patientsResponse.ok) {
         const patientData = await patientsResponse.json();
-        console.log("Resposta API pacientes (detalhada):", JSON.stringify(patientData, null, 2));
+
         // Tratamento similar ao PatientsTable - aceita array direto ou propriedades aninhadas
         const processedPatients = Array.isArray(patientData) ? patientData : patientData.patients || patientData.data || [];
         setPatients(processedPatients);
@@ -196,28 +196,17 @@ const FinanceCharts = () => {
         setTransactions(allAppointments);
       } else {
         url = `https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/appointmens/${effectivePsychologist}`;
-        console.log('=== FETCH APPOINTMENTS ===');
-        console.log('URL:', url);
-        console.log('effectivePsychologist:', effectivePsychologist);
+
         
         const response = await fetch(url);
-        console.log('Response status:', response.status);
-        console.log('Response ok:', response.ok);
+
         
         if (!response.ok) {
           throw new Error("Erro ao buscar appointments");
         }
 
         const data = await response.json();
-        console.log('Dados recebidos da API:', data);
-        console.log('Quantidade de appointments:', data.length);
-        console.log('Sample appointments:', data.slice(0, 3).map((t: any) => ({
-          id: t.id,
-          psychologist_id: t.psychologist_id,
-          status: t.status,
-          date: t.date,
-          value: t.value
-        })));
+
         
         setTransactions(data);
       }
@@ -236,39 +225,31 @@ const FinanceCharts = () => {
 
   const loadPaymentBatches = async () => {
     try {
-      console.log('=== CARREGANDO LOTES DE PAGAMENTO ===');
-      console.log('URL da API:', 'https://webhook.essenciasaudeintegrada.com.br/webhook/payments_get');
+
       
       const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/payments_get", {
         method: "GET",
         headers: { "Content-Type": "application/json" },
       });
       
-      console.log('Resposta da API de lotes:', {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok
-      });
+
       
       if (response.ok) {
         const data = await response.json();
-        console.log('Dados brutos da API:', data);
-        console.log('Tipo dos dados:', Array.isArray(data) ? 'Array' : 'Object');
-        console.log('Quantidade de itens:', Array.isArray(data) ? data.length : 1);
+
         
         // Converter para array se for um objeto único
         const dataArray = Array.isArray(data) ? data : [data];
-        console.log('Dados convertidos para array:', dataArray);
+
         
         // Filtrar lotes com control: 'payments_created' OU 'payments_finish'
         const filteredLots = dataArray.filter((lot: any) => {
           const hasValidControl = lot.control === 'payments_created' || lot.control === 'payments_finish';
-          console.log(`Lote ${lot.id}: control = "${lot.control}", payment_id = ${lot.payment_id}, incluído: ${hasValidControl}`);
+
           return hasValidControl;
         });
         
-        console.log('Lotes filtrados (payments_created + payments_finish):', filteredLots);
-        console.log('Quantidade de lotes filtrados:', filteredLots.length);
+
         setPaymentLots(filteredLots);
       } else {
         console.error('Erro na resposta da API de lotes:', response.status, response.statusText);
@@ -280,19 +261,15 @@ const FinanceCharts = () => {
 
   // Função para agrupar lotes por payment_id e calcular totais
   const getGroupedPaymentLots = () => {
-    console.log('=== INÍCIO getGroupedPaymentLots ===');
-    console.log('paymentLots recebidos:', paymentLots);
-    console.log('Quantidade de paymentLots:', paymentLots.length);
+
     
     const grouped: { [key: string]: any } = {};
     
     paymentLots.forEach((lot, index) => {
-      console.log(`Processando lote ${index + 1}:`, lot);
       const key = lot.payment_id; // Usar payment_id para agrupar
-      console.log(`Chave de agrupamento (payment_id): ${key}`);
       
       if (!grouped[key]) {
-        console.log(`Criando novo grupo para payment_id: ${key}`);
+
         grouped[key] = {
           id: lot.payment_id,
           payment_id: lot.payment_id, // Manter payment_id para exclusão
@@ -312,53 +289,39 @@ const FinanceCharts = () => {
         commission: parseFloat(lot.value) * 0.5 // 50% de comissão
       };
       
-      console.log(`Adicionando appointment ao grupo ${key}:`, appointment);
+
       grouped[key].appointments.push(appointment);
       grouped[key].total_value += parseFloat(lot.value);
-      console.log(`Total atual do grupo ${key}: ${grouped[key].total_value}`);
+
     });
     
     const result = Object.values(grouped);
-    console.log('Lotes agrupados (resultado final):', result);
-    console.log('Quantidade de lotes agrupados:', result.length);
-    console.log('=== FIM getGroupedPaymentLots ===');
+
     return result;
   };
 
   // Função para filtrar lotes de pagamento por psicólogo
   const getPsychologistPaymentLots = (psychologistId: string) => {
-    console.log('=== FILTRANDO LOTES POR PSICÓLOGO ===');
-    console.log('Psychologist ID:', psychologistId);
-    console.log('Tipo do ID:', typeof psychologistId);
+
     
     const allLots = getGroupedPaymentLots();
-    console.log('Todos os lotes:', allLots);
-    console.log('Detalhes de cada lote:');
     allLots.forEach((lot, index) => {
-      console.log(`Lote ${index + 1}:`, {
-        id: lot.id,
-        payment_id: lot.payment_id,
-        psychologist_id: lot.psychologist_id,
-        psychologist_name: lot.psychologist_name,
-        status: lot.status,
-        appointments_count: lot.appointments.length
-      });
     });
     
     const filteredLots = allLots.filter(lot => {
-      console.log(`Comparando lot.psychologist_id (${lot.psychologist_id}) com psychologistId (${psychologistId})`);
-      console.log(`Tipo lot.psychologist_id: ${typeof lot.psychologist_id}`);
-      console.log(`Tipo psychologistId: ${typeof psychologistId}`);
-      console.log(`Status do lote: ${lot.status}`);
+      // console.log(`Comparando lot.psychologist_id (${lot.psychologist_id}) com psychologistId (${psychologistId})`);
+      // console.log(`Tipo lot.psychologist_id: ${typeof lot.psychologist_id}`);
+      // console.log(`Tipo psychologistId: ${typeof psychologistId}`);
+      // console.log(`Status do lote: ${lot.status}`);
       
       const matches = String(lot.psychologist_id) === String(psychologistId);
-      console.log(`Match: ${matches}`);
+      // console.log(`Match: ${matches}`);
       return matches;
     });
     
-    console.log('Lotes filtrados para o psicólogo:', filteredLots);
-    console.log('Quantidade de lotes filtrados:', filteredLots.length);
-    console.log('=== FIM FILTRO POR PSICÓLOGO ===');
+    // console.log('Lotes filtrados para o psicólogo:', filteredLots);
+    // console.log('Quantidade de lotes filtrados:', filteredLots.length);
+    // console.log('=== FIM FILTRO POR PSICÓLOGO ===');
     
     return filteredLots;
   };
@@ -397,19 +360,7 @@ const FinanceCharts = () => {
         
         matchesDateRange = appointmentDateNormalized >= fromDateNormalized && appointmentDateNormalized <= toDateNormalized;
         
-        // Debug log para verificar comparação de datas
-        if (app.id === "139" || app.id === "149" || app.id === "255") { // Log para alguns IDs específicos
-          console.log('Debug data:', {
-            appointmentId: app.id,
-            appointmentDate: app.date,
-            appointmentDateNormalized: appointmentDateNormalized.toISOString().split('T')[0],
-            fromDateNormalized: fromDateNormalized.toISOString().split('T')[0],
-            toDateNormalized: toDateNormalized.toISOString().split('T')[0],
-            matchesDateRange,
-            fromDateStr: paymentDateRange.from,
-            toDateStr: paymentDateRange.to
-          });
-        }
+
       }
       
       // Filtro por nome do paciente
@@ -426,20 +377,7 @@ const FinanceCharts = () => {
       return matchesPsychologist && matchesDateRange && isCompleted && notInBatch && matchesPatient && hasValidControl;
     });
     
-    console.log('Filtro de pagamentos:', {
-      selectedPsychologist: selectedPaymentPsychologist,
-      dateRange: paymentDateRange,
-      patientSearchTerm: patientSearchTerm,
-      totalTransactions: transactions.length,
-      filteredCount: filtered.length,
-      sampleAppointments: transactions.slice(0, 3).map(t => ({
-        id: t.id,
-        date: t.date,
-        status: t.status,
-        psychologist_id: t.psychologist_id,
-        control: (t as any).control
-      }))
-    });
+
     
     return filtered;
   };
@@ -497,12 +435,12 @@ const FinanceCharts = () => {
   };
 
   const handleCreatePayment = async () => {
-    console.log('=== INÍCIO handleCreatePayment ===');
-    console.log('selectedAppointments:', selectedAppointments);
-    console.log('user:', user);
+    // console.log('=== INÍCIO handleCreatePayment ===');
+    // console.log('selectedAppointments:', selectedAppointments);
+    // console.log('user:', user);
     
     if (selectedAppointments.length === 0 || !user) {
-      console.log('Erro: Nenhuma consulta selecionada ou usuário não encontrado');
+      // console.log('Erro: Nenhuma consulta selecionada ou usuário não encontrado');
       toast({
         title: "Nenhuma consulta selecionada",
         description: "Selecione pelo menos uma consulta para criar o lote de pagamento.",
@@ -538,24 +476,18 @@ const FinanceCharts = () => {
         created_at: new Date().toISOString()
       };
 
-      console.log('=== DADOS DE PAGAMENTO ===');
-      console.log('selectedApps:', selectedApps);
-      console.log('psychologist:', psychologist);
-      console.log('totalGross:', totalGross);
-      console.log('totalNet:', totalNet);
-      console.log('user:', user);
-      console.log('paymentData:', paymentData);
-      console.log('Body JSON:', JSON.stringify(paymentData));
-      console.log('URL da API:', 'https://webhook.essenciasaudeintegrada.com.br/webhook/payments_created');
+      // console.log('=== DADOS DE PAGAMENTO ===');
+      // console.log('selectedApps:', selectedApps);
+      // console.log('psychologist:', psychologist);
+      // console.log('totalGross:', totalGross);
+      // console.log('totalNet:', totalNet);
+      // console.log('user:', user);
+      // console.log('paymentData:', paymentData);
+      // console.log('Body JSON:', JSON.stringify(paymentData));
+      // console.log('URL da API:', 'https://webhook.essenciasaudeintegrada.com.br/webhook/payments_created');
 
       // Enviar para a nova API
-      console.log('=== EXECUTANDO FETCH ===');
-      console.log('Método: POST');
-      console.log('Headers:', {
-        'Content-Type': 'application/json',
-        'Accept': 'application/json',
-      });
-      console.log('Body final:', JSON.stringify(paymentData));
+
       
       const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/payments_created', {
         method: 'POST',
@@ -566,25 +498,15 @@ const FinanceCharts = () => {
         body: JSON.stringify(paymentData)
       });
       
-      console.log('=== FETCH EXECUTADO ===');
 
-      console.log('Resposta da API:', {
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok
-      });
 
       // Tentar ler a resposta da API
       try {
         const responseText = await response.text();
-        console.log('Resposta completa da API:', responseText);
-        
         let responseData = null;
         try {
           responseData = JSON.parse(responseText);
-          console.log('Resposta JSON da API:', responseData);
         } catch (parseError) {
-          console.log('Resposta não é JSON válido:', responseText);
         }
       } catch (readError) {
         console.error('Erro ao ler resposta da API:', readError);
@@ -613,17 +535,25 @@ const FinanceCharts = () => {
       });
     }
     
-    console.log('=== FIM handleCreatePayment ===');
+    // console.log('=== FIM handleCreatePayment ===');
   };
 
   const handleMarkAsPaid = async (batchId: string) => {
     try {
-      await markPaymentAsPaid(batchId);
-      loadPaymentBatches();
-      toast({
-        title: "Pagamento processado",
-        description: "O pagamento foi marcado como pago.",
+      const response = await fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/payment-batches/${batchId}/mark-paid`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
       });
+
+      if (response.ok) {
+        loadPaymentBatches();
+        toast({
+          title: "Pagamento processado",
+          description: "O pagamento foi marcado como pago.",
+        });
+      } else {
+        throw new Error('Erro ao marcar pagamento como pago');
+      }
     } catch (error) {
       console.error("Erro ao marcar como pago:", error);
       toast({
@@ -671,15 +601,15 @@ const FinanceCharts = () => {
 
   // Inicializar selectedPsychologist para psicólogos
   useEffect(() => {
-    console.log('=== INICIALIZAÇÃO PSICÓLOGO ===');
-    console.log('isPsychologist:', isPsychologist);
-    console.log('user?.id:', user?.id);
-    console.log('user?.role:', user?.role);
-    console.log('selectedPsychologist atual:', selectedPsychologist);
-    console.log('effectivePsychologist:', effectivePsychologist);
+    // console.log('=== INICIALIZAÇÃO PSICÓLOGO ===');
+    // console.log('isPsychologist:', isPsychologist);
+    // console.log('user?.id:', user?.id);
+    // console.log('user?.role:', user?.role);
+    // console.log('selectedPsychologist atual:', selectedPsychologist);
+    // console.log('effectivePsychologist:', effectivePsychologist);
     
     if (isPsychologist && user?.id) {
-      console.log('Definindo selectedPsychologist para:', user.id);
+      // console.log('Definindo selectedPsychologist para:', user.id);
       setSelectedPsychologist(String(user.id));
     }
   }, [isPsychologist, user?.id, user?.role]);
@@ -718,15 +648,15 @@ const FinanceCharts = () => {
   }, [selectedPaymentPsychologist, paymentDateRange]);
 
   const getFilteredAppointmentsForReports = () => {
-    console.log("=== FILTRO RELATÓRIOS SIMPLIFICADO ===");
-    console.log("filterPeriod:", filterPeriod);
-    console.log("selectedPsychologist:", selectedPsychologist);
-    console.log("isPsychologist:", isPsychologist);
-    console.log("user?.id:", user?.id);
+    // console.log("=== FILTRO RELATÓRIOS SIMPLIFICADO ===");
+    // console.log("filterPeriod:", filterPeriod);
+    // console.log("selectedPsychologist:", selectedPsychologist);
+    // console.log("isPsychologist:", isPsychologist);
+    // console.log("user?.id:", user?.id);
     
     // Para psicólogos, usar sempre o ID do usuário logado
     const effectivePsychologist = isPsychologist ? String(user?.id) : selectedPsychologist;
-    console.log("effectivePsychologist:", effectivePsychologist);
+    // console.log("effectivePsychologist:", effectivePsychologist);
     
     const today = new Date();
     let startDate: Date;
@@ -766,12 +696,12 @@ const FinanceCharts = () => {
       return matchesDate && isCompleted && matchesPsychologist;
     });
 
-    console.log(`=== RESULTADO FILTRO ${filterPeriod.toUpperCase()} ===`);
-    console.log('startDate:', format(startDate, "dd/MM/yyyy"));
-    console.log('endDate:', format(endDate, "dd/MM/yyyy"));
-    console.log('totalTransactions:', transactions.length);
-    console.log('filteredCount:', filtered.length);
-    console.log('effectivePsychologist:', effectivePsychologist);
+    // console.log(`=== RESULTADO FILTRO ${filterPeriod.toUpperCase()} ===`);
+    // console.log('startDate:', format(startDate, "dd/MM/yyyy"));
+    // console.log('endDate:', format(endDate, "dd/MM/yyyy"));
+    // console.log('totalTransactions:', transactions.length);
+    // console.log('filteredCount:', filtered.length);
+    // console.log('effectivePsychologist:', effectivePsychologist);
 
     return filtered;
   };
@@ -779,16 +709,16 @@ const FinanceCharts = () => {
   const filteredAppointmentsForReports = getFilteredAppointmentsForReports();
 
   const calculateFinancials = () => {
-    console.log('=== CÁLCULO DE RECEITAS ===');
-    console.log('filteredAppointmentsForReports:', filteredAppointmentsForReports);
-    console.log('Quantidade de appointments filtrados:', filteredAppointmentsForReports?.length || 0);
+    // console.log('=== CÁLCULO DE RECEITAS ===');
+    // console.log('filteredAppointmentsForReports:', filteredAppointmentsForReports);
+    // console.log('Quantidade de appointments filtrados:', filteredAppointmentsForReports?.length || 0);
     
     let totalRevenue = 0;
     let psychologistCommission = 0;
     let clinicRevenue = 0;
 
     if (!filteredAppointmentsForReports || filteredAppointmentsForReports.length === 0) {
-      console.log('Nenhum appointment encontrado para cálculo');
+      // console.log('Nenhum appointment encontrado para cálculo');
       return { totalRevenue: 0, psychologistCommission: 0, clinicRevenue: 0 };
     }
 
@@ -801,14 +731,7 @@ const FinanceCharts = () => {
       psychologistCommission += commission;
       clinicRevenue += value - commission;
       
-      console.log(`Appointment ${index + 1} (ID: ${appointment.id}):`, {
-        value: appointment.value,
-        parsedValue: value,
-        commission,
-        totalRevenue,
-        psychologistCommission,
-        clinicRevenue
-      });
+
     });
 
     const result = {
@@ -817,7 +740,7 @@ const FinanceCharts = () => {
       clinicRevenue: Number(clinicRevenue) || 0,
     };
     
-    console.log('Resultado final do cálculo:', result);
+    // console.log('Resultado final do cálculo:', result);
     return result;
   };
 
@@ -934,7 +857,7 @@ const FinanceCharts = () => {
             value: editTransactionValue
           };
 
-          console.log('Enviando dados para API:', appointmentData);
+          // console.log('Enviando dados para API:', appointmentData);
 
           // Enviar requisição POST para a API
           const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/appointmens_edit', {
@@ -1035,12 +958,12 @@ const FinanceCharts = () => {
 
   const deletePaymentLot = async (lot: any) => {
     try {
-      console.log('=== EXCLUINDO LOTE DE PAGAMENTO ===');
-      console.log('Lot completo:', lot);
-      console.log('Lot.payment_id:', lot.payment_id);
-      console.log('Lot.id:', lot.id);
-      console.log('Tipo do payment_id:', typeof lot.payment_id);
-      console.log('URL da API:', 'https://webhook.essenciasaudeintegrada.com.br/webhook/payments_delete');
+      // console.log('=== EXCLUINDO LOTE DE PAGAMENTO ===');
+      // console.log('Lot completo:', lot);
+      // console.log('Lot.payment_id:', lot.payment_id);
+      // console.log('Lot.id:', lot.id);
+      // console.log('Tipo do payment_id:', typeof lot.payment_id);
+      // console.log('URL da API:', 'https://webhook.essenciasaudeintegrada.com.br/webhook/payments_delete');
 
       // Verificar se payment_id existe e não é undefined/null
       if (!lot.payment_id) {
@@ -1053,7 +976,7 @@ const FinanceCharts = () => {
         payment_id: lot.payment_id
       };
 
-      console.log('Body da requisição:', JSON.stringify(requestBody));
+      // console.log('Body da requisição:', JSON.stringify(requestBody));
 
       const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/payments_delete', {
         method: 'POST',
@@ -1064,11 +987,11 @@ const FinanceCharts = () => {
         body: JSON.stringify(requestBody),
       });
 
-      console.log('Resposta da API:', response.status);
-      console.log('Resposta completa:', await response.text());
+      // console.log('Resposta da API:', response.status);
+      // console.log('Resposta completa:', await response.text());
       
       if (response.ok) {
-        console.log('Lote de pagamento excluído com sucesso');
+        // console.log('Lote de pagamento excluído com sucesso');
         // Recarregar a lista de lotes
         loadPaymentBatches();
         // Fechar modais
@@ -1084,12 +1007,12 @@ const FinanceCharts = () => {
 
   const approvePaymentLot = async (lot: any) => {
     try {
-      console.log('=== APROVANDO LOTE DE PAGAMENTO ===');
-      console.log('Lot completo:', lot);
-      console.log('Lot.payment_id:', lot.payment_id);
-      console.log('Lot.id:', lot.id);
-      console.log('Tipo do payment_id:', typeof lot.payment_id);
-      console.log('URL da API:', 'https://webhook.essenciasaudeintegrada.com.br/webhook/payments_aprove');
+      // console.log('=== APROVANDO LOTE DE PAGAMENTO ===');
+      // console.log('Lot completo:', lot);
+      // console.log('Lot.payment_id:', lot.payment_id);
+      // console.log('Lot.id:', lot.id);
+      // console.log('Tipo do payment_id:', typeof lot.payment_id);
+      // console.log('URL da API:', 'https://webhook.essenciasaudeintegrada.com.br/webhook/payments_aprove');
 
       // Verificar se payment_id existe e não é undefined/null
       if (!lot.payment_id) {
@@ -1102,7 +1025,7 @@ const FinanceCharts = () => {
         payment_id: lot.payment_id
       };
 
-      console.log('Body da requisição:', JSON.stringify(requestBody));
+      // console.log('Body da requisição:', JSON.stringify(requestBody));
 
       const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/payments_aprove', {
         method: 'POST',
@@ -1113,11 +1036,11 @@ const FinanceCharts = () => {
         body: JSON.stringify(requestBody),
       });
 
-      console.log('Resposta da API:', response.status);
-      console.log('Resposta completa:', await response.text());
+      // console.log('Resposta da API:', response.status);
+      // console.log('Resposta completa:', await response.text());
       
       if (response.ok) {
-        console.log('Lote de pagamento aprovado com sucesso');
+        // console.log('Lote de pagamento aprovado com sucesso');
         // Recarregar a lista de lotes
         loadPaymentBatches();
         // Fechar modais
@@ -1375,9 +1298,9 @@ const FinanceCharts = () => {
 
                       <Button 
                         onClick={() => {
-                          console.log('=== BOTÃO CLICADO ===');
-                          console.log('selectedAppointments.length:', selectedAppointments.length);
-                          console.log('totalNet:', totalNet);
+                          // console.log('=== BOTÃO CLICADO ===');
+                          // console.log('selectedAppointments.length:', selectedAppointments.length);
+                          // console.log('totalNet:', totalNet);
                           handleCreatePayment();
                         }}
                         disabled={selectedAppointments.length === 0}
@@ -2030,7 +1953,7 @@ const FinanceCharts = () => {
                       
                       // Log para verificar se o campo control está presente
                       if (appointment.control) {
-                        console.log(`Appointment ${appointment.id} tem control: ${appointment.control}`);
+                        // console.log(`Appointment ${appointment.id} tem control: ${appointment.control}`);
                       }
 
                       return (
@@ -2176,7 +2099,6 @@ const FinanceCharts = () => {
           </DialogHeader>
           {showBatchDetails && (() => {
             const batch = paymentBatches.find(b => b.id === showBatchDetails);
-            const items = getPaymentItemsByBatch(showBatchDetails);
             
             if (!batch) return null;
             
@@ -2219,16 +2141,14 @@ const FinanceCharts = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {items.map(item => (
-                        <TableRow key={item.id}>
-                          <TableCell>{item.patientName}</TableCell>
-                          <TableCell>
-                            {format(new Date(item.appointmentDate), "dd/MM/yyyy", { locale: ptBR })}
-                          </TableCell>
-                          <TableCell>R$ {item.grossValue.toFixed(2)}</TableCell>
-                          <TableCell>R$ {item.netValue.toFixed(2)}</TableCell>
+                      {/* {batch.appointmentIds?.map((appointmentId, index) => (
+                        <TableRow key={appointmentId}>
+                          <TableCell>Consulta {index + 1}</TableCell>
+                          <TableCell>ID: {appointmentId}</TableCell>
+                          <TableCell>-</TableCell>
+                          <TableCell>-</TableCell>
                         </TableRow>
-                      ))}
+                      ))} */}
                     </TableBody>
                   </Table>
                 </div>

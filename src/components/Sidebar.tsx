@@ -13,10 +13,7 @@ const Sidebar = ({ onClose }: SidebarProps) => {
   const { user, logout } = useAuth();
   const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
 
-  // Debug para verificar o estado do user
-  useEffect(() => {
-    console.log("User no Sidebar:", user);
-  }, [user]);
+
 
   const handleNavClick = () => {
     // Fechar sidebar no mobile quando um item for clicado

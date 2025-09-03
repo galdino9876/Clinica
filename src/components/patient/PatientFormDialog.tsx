@@ -20,7 +20,6 @@ const PatientFormDialog = ({
   // Effect to ensure dialog properly resets when opened/closed
   useEffect(() => {
     // Reset any form state if needed when dialog opens/closes
-    console.log("Patient form dialog state changed:", isOpen);
   }, [isOpen]);
 
   // Handle patient save with proper dialog closure
