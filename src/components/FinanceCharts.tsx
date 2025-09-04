@@ -114,7 +114,9 @@ const FinanceCharts = () => {
   const [showApproveConfirm, setShowApproveConfirm] = useState<any | null>(null);
 
   const isAdmin = user?.role === "admin";
+  const isReceptionist = user?.role === "receptionist";
   const isPsychologist = user?.role === "psychologist";
+  const canManageFinance = isAdmin || isReceptionist;
 
   const effectivePsychologist = isPsychologist ? user?.id : selectedPsychologist;
 
@@ -1083,7 +1085,7 @@ const FinanceCharts = () => {
           <DollarSign className="h-4 w-4 mr-2" />
           {isPsychologist ? "Meus Pagamentos" : "Pagamentos"}
         </Button>
-        {isAdmin && (
+        {canManageFinance && (
           <Button
             variant={activeTab === "dashboard" ? "default" : "ghost"}
             size="sm"
@@ -1097,9 +1099,9 @@ const FinanceCharts = () => {
 
       {activeTab === "payments" && (
         <>
-          {isAdmin && (
+          {canManageFinance && (
             <div className="space-y-6">
-              {/* Payment Management for Admin */}
+              {/* Payment Management for Admin and Receptionist */}
               <Card>
                 <CardHeader>
                   <CardTitle>Criar Novo Pagamento</CardTitle>
@@ -1534,7 +1536,7 @@ const FinanceCharts = () => {
         </>
       )}
 
-      {activeTab === "dashboard" && isAdmin && (
+      {activeTab === "dashboard" && canManageFinance && (
         <div className="space-y-6">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold">Dashboard de Pagamentos</h2>
@@ -1745,7 +1747,7 @@ const FinanceCharts = () => {
             </Button>
           </div>
 
-          {isAdmin && (
+          {canManageFinance && (
             <div className="mb-4">
               <Select
                 value={selectedPsychologist}
@@ -1784,7 +1786,7 @@ const FinanceCharts = () => {
             </CardContent>
           </Card>
 
-          {isAdmin && (
+          {canManageFinance && (
             <>
               <Card>
                 <CardHeader className="pb-2">
@@ -1814,7 +1816,7 @@ const FinanceCharts = () => {
             </>
           )}
 
-          {!isAdmin && isPsychologist && (
+          {!canManageFinance && isPsychologist && (
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-gray-500">
@@ -1862,7 +1864,7 @@ const FinanceCharts = () => {
                   fill="#0ea5e9"
                   radius={[4, 4, 0, 0]}
                 />
-                {isAdmin && (
+                {canManageFinance && (
                   <>
                     <Bar
                       name="Receita da Clínica (R$)"
@@ -1919,28 +1921,28 @@ const FinanceCharts = () => {
                     <TableHead>Método de Pagamento</TableHead>
                     <TableHead>Tipo de Convênio</TableHead>
                     <TableHead className="text-right">Valor</TableHead>
-                    {isAdmin && <TableHead className="text-right">Comissão</TableHead>}
-                    {isAdmin && <TableHead className="text-right">Ações</TableHead>}
+                    {canManageFinance && <TableHead className="text-right">Comissão</TableHead>}
+                    {canManageFinance && <TableHead className="text-right">Ações</TableHead>}
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     <TableRow>
-                      <TableCell colSpan={isAdmin ? 9 : 7} className="text-center py-4">
+                      <TableCell colSpan={canManageFinance ? 9 : 7} className="text-center py-4">
                         <Loader className="h-5 w-5 animate-spin mx-auto" />
                         <p className="mt-2 text-gray-500">Carregando dados iniciais...</p>
                       </TableCell>
                     </TableRow>
                   ) : loading ? (
                     <TableRow>
-                      <TableCell colSpan={isAdmin ? 9 : 7} className="text-center py-4">
+                      <TableCell colSpan={canManageFinance ? 9 : 7} className="text-center py-4">
                         <Loader className="h-5 w-5 animate-spin mx-auto" />
                         <p className="mt-2 text-gray-500">Carregando transações...</p>
                       </TableCell>
                     </TableRow>
                   ) : filteredAppointmentsForReports.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={isAdmin ? 9 : 7} className="text-center py-4 text-gray-500">
+                      <TableCell colSpan={canManageFinance ? 9 : 7} className="text-center py-4 text-gray-500">
                         Nenhuma consulta confirmada encontrada para este período
                       </TableCell>
                     </TableRow>
@@ -1978,12 +1980,12 @@ const FinanceCharts = () => {
                           <TableCell className="text-right font-medium">
                             R$ {(Number(appointment.value) || 0).toFixed(2)}
                           </TableCell>
-                          {isAdmin && (
+                          {canManageFinance && (
                             <TableCell className="text-right font-medium">
                               R$ {commission.toFixed(2)} ({commissionPercentage}%)
                             </TableCell>
                           )}
-                          {isAdmin && (
+                          {canManageFinance && (
                             <TableCell className="text-right">
                               <Button
                                 variant="ghost"
@@ -2005,7 +2007,7 @@ const FinanceCharts = () => {
         </CardContent>
       </Card>
 
-      {(isAdmin && effectivePsychologist !== "all") || (isPsychologist && effectivePsychologist !== "all") && (
+      {(canManageFinance && effectivePsychologist !== "all") || (isPsychologist && effectivePsychologist !== "all") && (
         <Card>
           <CardHeader>
             <CardTitle>Detalhes do Psicólogo</CardTitle>
