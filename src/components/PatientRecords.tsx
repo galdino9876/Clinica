@@ -374,16 +374,14 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
                       )}
                     </p>
                   </div>
-                  {user?.role !== 'psychologist' && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleDeleteRecord(record.id)}
-                      className="text-red-500 hover:bg-red-50 hover:text-red-600"
-                    >
-                      <Trash className="h-4 w-4" />
-                    </Button>
-                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleDeleteRecord(record.id)}
+                    className="text-red-500 hover:bg-red-50 hover:text-red-600"
+                  >
+                    <Trash className="h-4 w-4" />
+                  </Button>
                 </div>
                 <p className="text-sm text-gray-600 whitespace-pre-wrap">{record.notes}</p>
               </CardContent>

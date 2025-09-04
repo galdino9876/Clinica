@@ -40,8 +40,8 @@ const Sidebar = ({ onClose }: SidebarProps) => {
       );
     }
 
-    // Adiciona a página de confirmações apenas para admin (não para psicólogos)
-    if (user?.role === "admin") {
+    // Adiciona a página de confirmações para usuários que não são psicólogos
+    if (user?.role !== "psychologist") {
       baseItems.push(
         { to: "/confirmations", label: "Confirmações", icon: <User className="mr-2 h-5 w-5" /> }
       );

@@ -7,8 +7,8 @@ import { Navigate } from "react-router-dom";
 const Confirmations = () => {
   const { user } = useAuth();
   
-  // Only admins and receptionists should access this page
-  if (user?.role !== "admin" && user?.role !== "receptionist") {
+  // Only non-psychologist users should access this page
+  if (user?.role === "psychologist") {
     return <Navigate to="/" replace />;
   }
   
