@@ -649,7 +649,8 @@ const FinanceCharts = () => {
     }
   }, [selectedPaymentPsychologist, paymentDateRange]);
 
-  const getFilteredAppointmentsForReports = () => {
+  // Retorna o range de datas e aplica filtros base (data + psicólogo)
+  const getBaseFilteredAppointmentsForReports = () => {
     // console.log("=== FILTRO RELATÓRIOS SIMPLIFICADO ===");
     // console.log("filterPeriod:", filterPeriod);
     // console.log("selectedPsychologist:", selectedPsychologist);
@@ -692,10 +693,9 @@ const FinanceCharts = () => {
     const filtered = transactions.filter((appointment) => {
       const appointmentDate = new Date(appointment.date);
       const matchesDate = appointmentDate >= startDate && appointmentDate <= endDate;
-      const isCompleted = appointment.status === "completed";
       const matchesPsychologist = effectivePsychologist === "all" || String(appointment.psychologist_id) === effectivePsychologist;
 
-      return matchesDate && isCompleted && matchesPsychologist;
+      return matchesDate && matchesPsychologist;
     });
 
     // console.log(`=== RESULTADO FILTRO ${filterPeriod.toUpperCase()} ===`);
@@ -708,9 +708,15 @@ const FinanceCharts = () => {
     return filtered;
   };
 
-  const filteredAppointmentsForReports = getFilteredAppointmentsForReports();
+  // Listas filtradas por status para relatórios
+  const baseFilteredAppointmentsForReports = getBaseFilteredAppointmentsForReports();
+  const filteredAppointmentsCompletedForReports = baseFilteredAppointmentsForReports.filter(a => a.status === "completed");
+  const filteredAppointmentsConfirmedForReports = baseFilteredAppointmentsForReports.filter(a => a.status === "confirmed");
 
-  const calculateFinancials = () => {
+  // Mantém compatibilidade: usar completed como default para gráficos/tabelas existentes
+  const filteredAppointmentsForReports = filteredAppointmentsCompletedForReports;
+
+  const calculateFinancialsFrom = (list: Appointment[]) => {
     // console.log('=== CÁLCULO DE RECEITAS ===');
     // console.log('filteredAppointmentsForReports:', filteredAppointmentsForReports);
     // console.log('Quantidade de appointments filtrados:', filteredAppointmentsForReports?.length || 0);
@@ -719,12 +725,12 @@ const FinanceCharts = () => {
     let psychologistCommission = 0;
     let clinicRevenue = 0;
 
-    if (!filteredAppointmentsForReports || filteredAppointmentsForReports.length === 0) {
+    if (!list || list.length === 0) {
       // console.log('Nenhum appointment encontrado para cálculo');
       return { totalRevenue: 0, psychologistCommission: 0, clinicRevenue: 0 };
     }
 
-    filteredAppointmentsForReports.forEach((appointment, index) => {
+    list.forEach((appointment, index) => {
       const value = Number(appointment.value) || 0;
       totalRevenue += value;
 
@@ -746,7 +752,8 @@ const FinanceCharts = () => {
     return result;
   };
 
-  const { totalRevenue, psychologistCommission, clinicRevenue } = calculateFinancials();
+  const { totalRevenue: totalRevenueCompleted, psychologistCommission: psychologistCommissionCompleted, clinicRevenue: clinicRevenueCompleted } = calculateFinancialsFrom(filteredAppointmentsCompletedForReports);
+  const { totalRevenue: totalRevenueConfirmed, psychologistCommission: psychologistCommissionConfirmed, clinicRevenue: clinicRevenueConfirmed } = calculateFinancialsFrom(filteredAppointmentsConfirmedForReports);
 
 
 
@@ -1773,16 +1780,23 @@ const FinanceCharts = () => {
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm text-gray-500">
-                Receita Total ({getPeriodName()})
+                Receitas por Status ({getPeriodName()})
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                R$ {totalRevenue.toFixed(2)}
+              <div className="flex gap-6 justify-between">
+                <div className="flex-1">
+                  <p className="text-xs text-gray-500">Finalizados</p>
+                  <div className="text-2xl font-bold">R$ {totalRevenueCompleted.toFixed(2)}</div>
+                  <p className="text-xs text-gray-500">{filteredAppointmentsCompletedForReports.length} consultas</p>
+                </div>
+                <div className="w-px bg-gray-200" />
+                <div className="flex-1">
+                  <p className="text-xs text-gray-500">Aguardando relatório</p>
+                  <div className="text-2xl font-bold">R$ {totalRevenueConfirmed.toFixed(2)}</div>
+                  <p className="text-xs text-gray-500">{filteredAppointmentsConfirmedForReports.length} consultas</p>
+                </div>
               </div>
-              <p className="text-xs text-gray-500">
-                {filteredAppointmentsForReports.length} consultas confirmadas
-              </p>
             </CardContent>
           </Card>
 
@@ -1796,7 +1810,7 @@ const FinanceCharts = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-green-600">
-                    R$ {clinicRevenue.toFixed(2)}
+                    R$ {clinicRevenueCompleted.toFixed(2)}
                   </div>
                 </CardContent>
               </Card>
@@ -1809,7 +1823,7 @@ const FinanceCharts = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-blue-600">
-                    R$ {psychologistCommission.toFixed(2)}
+                    R$ {psychologistCommissionCompleted.toFixed(2)}
                   </div>
                 </CardContent>
               </Card>
@@ -1825,7 +1839,7 @@ const FinanceCharts = () => {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-blue-600">
-                  R$ {psychologistCommission.toFixed(2)}
+                  R$ {psychologistCommissionCompleted.toFixed(2)}
                 </div>
                 <p className="text-xs text-gray-500">
                   Baseado nos percentuais individuais
@@ -2029,7 +2043,7 @@ const FinanceCharts = () => {
                   <p className="text-sm text-gray-500">Média por Consulta:</p>
                   <p className="font-medium">
                     R$ {filteredAppointmentsForReports.length > 0
-                      ? (totalRevenue / filteredAppointmentsForReports.length).toFixed(2)
+                      ? (totalRevenueCompleted / filteredAppointmentsForReports.length).toFixed(2)
                       : "0.00"}
                   </p>
                 </div>
@@ -2039,15 +2053,15 @@ const FinanceCharts = () => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Receita Total:</p>
-                  <p className="font-medium">R$ {totalRevenue.toFixed(2)}</p>
+                  <p className="font-medium">R$ {totalRevenueCompleted.toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Comissão Total:</p>
-                  <p className="font-medium">R$ {psychologistCommission.toFixed(2)}</p>
+                  <p className="font-medium">R$ {psychologistCommissionCompleted.toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Receita da Clínica:</p>
-                  <p className="font-medium">R$ {clinicRevenue.toFixed(2)}</p>
+                  <p className="font-medium">R$ {clinicRevenueCompleted.toFixed(2)}</p>
                 </div>
               </div>
             </div>
