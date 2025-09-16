@@ -643,6 +643,8 @@ const AppointmentCard = React.memo(({
 }) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
+  const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
+  const [selectedNewDate, setSelectedNewDate] = useState<Date | null>(null);
 
   // Log para debug - verificar status recebido
   // console.log('AppointmentCard - appointment status:', appointment.status);
@@ -683,6 +685,45 @@ const AppointmentCard = React.memo(({
 
   const handleCancel = async () => {
     setShowCancelDialog(true);
+  };
+
+  const handleReschedule = () => {
+    setShowRescheduleDialog(true);
+    setSelectedNewDate(null);
+  };
+
+  const handleRescheduleSubmit = async () => {
+    if (!selectedNewDate || isUpdating) return;
+    
+    setIsUpdating(true);
+    try {
+      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/edit_appoitments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          appointment_id: appointment.id,
+          date: selectedNewDate.toISOString().split('T')[0] // Formato YYYY-MM-DD
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro ao reagendar: ${response.status}`);
+      }
+
+      // Fechar modal e mostrar sucesso
+      setShowRescheduleDialog(false);
+      setSelectedNewDate(null);
+      
+      // Aqui você pode adicionar um toast de sucesso se quiser
+      console.log('Agendamento reagendado com sucesso');
+      
+    } catch (error) {
+      console.error('Erro ao reagendar agendamento:', error);
+    } finally {
+      setIsUpdating(false);
+    }
   };
 
   const handleConfirmCancel = async () => {
@@ -840,6 +881,23 @@ const AppointmentCard = React.memo(({
                   )}
                 </button>
                 <button
+                  onClick={handleReschedule}
+                  disabled={isUpdating}
+                  className="flex-1 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
+                  aria-label={`Reagendar agendamento de ${getPatientName(
+                    appointment.patient_id
+                  )}`}
+                >
+                  {isUpdating ? (
+                    <div className="flex items-center justify-center">
+                      <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                      Processando...
+                    </div>
+                  ) : (
+                    "Reagendar"
+                  )}
+                </button>
+                <button
                   onClick={handleCancel}
                   disabled={isUpdating}
                   className="flex-1 bg-rose-600 hover:bg-rose-700 disabled:bg-gray-300 text-white px-4 py-2 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 disabled:cursor-not-allowed shadow-sm hover:shadow-md font-medium"
@@ -905,6 +963,50 @@ const AppointmentCard = React.memo(({
                   className="bg-rose-600 hover:bg-rose-700 focus:ring-rose-600"
                 >
                   {isUpdating ? "Cancelando..." : "Sim"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          {/* Dialog de reagendamento */}
+          <AlertDialog open={showRescheduleDialog} onOpenChange={setShowRescheduleDialog}>
+            <AlertDialogContent className="max-w-md">
+              <AlertDialogHeader>
+                <AlertDialogTitle>Reagendar Agendamento</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Selecione a nova data para este agendamento
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              
+              <div className="py-4">
+                <div className="text-sm text-gray-600 mb-3">
+                  <strong>Paciente:</strong> {getPatientName(appointment.patient_id)}<br/>
+                  <strong>Data atual:</strong> {new Date(appointment.date + 'T00:00:00').toLocaleDateString('pt-BR')}<br/>
+                  <strong>Horário:</strong> {appointment.start_time} - {appointment.end_time}
+                </div>
+                
+                <div className="space-y-3">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Nova data:
+                  </label>
+                  <input
+                    type="date"
+                    value={selectedNewDate ? selectedNewDate.toISOString().split('T')[0] : ''}
+                    onChange={(e) => setSelectedNewDate(e.target.value ? new Date(e.target.value) : null)}
+                    min={new Date().toISOString().split('T')[0]} // Não permite datas passadas
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+              
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={isUpdating}>Cancelar</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleRescheduleSubmit}
+                  disabled={isUpdating || !selectedNewDate}
+                  className="bg-blue-600 hover:bg-blue-700 focus:ring-blue-600"
+                >
+                  {isUpdating ? "Reagendando..." : "Reagendar"}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>

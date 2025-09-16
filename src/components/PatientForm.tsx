@@ -33,7 +33,7 @@ const patientSchema = z.object({
 type PatientFormData = z.infer<typeof patientSchema>;
 
 interface PatientFormProps {
-  onSave?: (patient: PatientFormData) => void;
+  onSave?: (patient: Patient) => void;
   onCancel?: () => void;
   open?: boolean; // Para controlar a abertura via Dialog
   patient?: Patient; // Para edição - dados do paciente existente
@@ -139,13 +139,28 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
         });
 
         if (onSave) {
-          onSave(result);
+          // Criar um objeto Patient com o ID retornado pela API
+          const patientWithId: Patient = {
+            id: result.id || result.patient_id || result.data?.id || "unknown",
+            name: data.name,
+            cpf: data.cpf,
+            phone: data.phone,
+            email: data.email,
+            address: data.address,
+            birthdate: data.birthdate,
+            active: true,
+            identityDocument: data.identity_document,
+            insuranceDocument: data.insurance_document,
+            nome_responsavel: data.nome_responsavel,
+            telefone_responsavel: data.telefone_responsavel,
+          };
+          onSave(patientWithId);
         }
 
         if (!isEdit) {
           reset();
-          // Refresh da página para mostrar o novo paciente na lista
-          window.location.reload();
+          // Não fazer reload da página quando usado no contexto de agendamento
+          // O formulário de agendamento irá atualizar a lista de pacientes automaticamente
         }
       } else {
         const errorData = await response.json().catch(() => ({}));

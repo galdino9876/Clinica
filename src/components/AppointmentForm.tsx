@@ -539,9 +539,54 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
   };
 
   const handleNewPatient = () => setIsPatientFormOpen(true);
-  const handlePatientAdded = (newPatient: Patient) => {
-    formMethods.setValue("patientId", newPatient.id.toString());
+  const handlePatientAdded = async (newPatient: Patient) => {
+    // Fechar o modal do novo paciente primeiro
     setIsPatientFormOpen(false);
+    
+    // Fazer refresh da lista de pacientes da API para garantir que temos o ID correto
+    try {
+      const patientsResponse = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/patients", {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+      
+      if (patientsResponse.ok) {
+        const data = await patientsResponse.json();
+        const fetchedPatients: Patient[] = data.map((patient: any) => ({
+          id: String(patient.id),
+          name: patient.name,
+          cpf: patient.cpf,
+          phone: patient.phone,
+          email: patient.email,
+          birthdate: patient.birthdate ? new Date(patient.birthdate) : null,
+          createdAt: patient.created_at ? new Date(patient.created_at) : new Date(),
+          updatedAt: patient.updated_at ? new Date(patient.updated_at) : null,
+          deactivationDate: patient.deactivation_date ? new Date(patient.deactivation_date) : null,
+          deactivationReason: patient.deactivation_reason || null,
+          address: patient.address || null,
+          identityDocument: patient.identity_document || null,
+          insuranceDocument: patient.insurance_document || null,
+          active: patient.active === 1,
+        }));
+        
+        // Atualizar a lista de pacientes com os dados da API
+        setPatients(fetchedPatients);
+        
+        // Encontrar o paciente recém-criado pelo nome e CPF (já que o ID pode ter mudado)
+        const createdPatient = fetchedPatients.find(p => 
+          p.name === newPatient.name && p.cpf === newPatient.cpf
+        );
+        
+        if (createdPatient) {
+          // Definir o paciente recém-criado como selecionado com o ID correto da API
+          formMethods.setValue("patientId", createdPatient.id.toString());
+        }
+      }
+    } catch (error) {
+      console.error("Erro ao atualizar lista de pacientes:", error);
+      // Em caso de erro, usar o ID que tínhamos antes
+      formMethods.setValue("patientId", newPatient.id.toString());
+    }
   };
 
   // Gerar opções de horário de término baseado no horário de início selecionado
