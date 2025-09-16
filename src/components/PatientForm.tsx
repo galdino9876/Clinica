@@ -30,10 +30,11 @@ const patientSchema = z.object({
   value: z.coerce.number().min(0.01, { message: "O valor deve ser maior que 0!" }),
   nome_responsavel: z.string().optional(),
   telefone_responsavel: z.string()
-    .min(11, "Telefone deve ter 11 dígitos (DDD + 9 + número)")
-    .max(11, "Telefone deve ter 11 dígitos (DDD + 9 + número)")
-    .regex(/^\d{11}$/, "Telefone deve conter apenas números no formato DDD+9+número")
-    .optional(),
+    .optional()
+    .refine((val) => {
+      if (!val || val.trim() === '') return true; // Permite vazio ou nulo
+      return val.length === 11 && /^\d{11}$/.test(val);
+    }, "Telefone deve ter 11 dígitos (DDD + 9 + número) ou estar vazio"),
 });
 
 type PatientFormData = z.infer<typeof patientSchema>;
