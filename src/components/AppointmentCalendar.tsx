@@ -645,6 +645,8 @@ const AppointmentCard = React.memo(({
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
   const [selectedNewDate, setSelectedNewDate] = useState<Date | null>(null);
+  const [newStartTime, setNewStartTime] = useState<string>('');
+  const [newEndTime, setNewEndTime] = useState<string>('');
 
   // Log para debug - verificar status recebido
   // console.log('AppointmentCard - appointment status:', appointment.status);
@@ -690,10 +692,12 @@ const AppointmentCard = React.memo(({
   const handleReschedule = () => {
     setShowRescheduleDialog(true);
     setSelectedNewDate(null);
+    setNewStartTime(appointment.start_time || appointment.startTime || '');
+    setNewEndTime(appointment.end_time || appointment.endTime || '');
   };
 
   const handleRescheduleSubmit = async () => {
-    if (!selectedNewDate || isUpdating) return;
+    if (!selectedNewDate || !newStartTime || !newEndTime || isUpdating) return;
     
     setIsUpdating(true);
     try {
@@ -704,7 +708,9 @@ const AppointmentCard = React.memo(({
         },
         body: JSON.stringify({
           appointment_id: appointment.id,
-          date: selectedNewDate.toISOString().split('T')[0] // Formato YYYY-MM-DD
+          date: selectedNewDate.toISOString().split('T')[0], // Formato YYYY-MM-DD
+          start_time: newStartTime,
+          end_time: newEndTime
         }),
       });
 
@@ -715,6 +721,8 @@ const AppointmentCard = React.memo(({
       // Fechar modal e mostrar sucesso
       setShowRescheduleDialog(false);
       setSelectedNewDate(null);
+      setNewStartTime('');
+      setNewEndTime('');
       
       // Aqui você pode adicionar um toast de sucesso se quiser
       console.log('Agendamento reagendado com sucesso');
@@ -970,32 +978,62 @@ const AppointmentCard = React.memo(({
 
           {/* Dialog de reagendamento */}
           <AlertDialog open={showRescheduleDialog} onOpenChange={setShowRescheduleDialog}>
-            <AlertDialogContent className="max-w-md">
+            <AlertDialogContent className="max-w-lg">
               <AlertDialogHeader>
                 <AlertDialogTitle>Reagendar Agendamento</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Selecione a nova data para este agendamento
+                  Selecione a nova data e horário para este agendamento
                 </AlertDialogDescription>
               </AlertDialogHeader>
               
               <div className="py-4">
-                <div className="text-sm text-gray-600 mb-3">
-                  <strong>Paciente:</strong> {getPatientName(appointment.patient_id)}<br/>
-                  <strong>Data atual:</strong> {new Date(appointment.date + 'T00:00:00').toLocaleDateString('pt-BR')}<br/>
-                  <strong>Horário:</strong> {appointment.start_time} - {appointment.end_time}
+                <div className="bg-gray-50 p-4 rounded-lg mb-4">
+                  <div className="text-sm text-gray-600 space-y-1">
+                    <div><strong>Paciente:</strong> {getPatientName(appointment.patient_id)}</div>
+                    <div><strong>Data atual:</strong> {new Date(appointment.date + 'T00:00:00').toLocaleDateString('pt-BR')}</div>
+                    <div><strong>Horário:</strong> {appointment.start_time} - {appointment.end_time}</div>
+                  </div>
                 </div>
                 
-                <div className="space-y-3">
-                  <label className="block text-sm font-medium text-gray-700">
-                    Nova data:
-                  </label>
-                  <input
-                    type="date"
-                    value={selectedNewDate ? selectedNewDate.toISOString().split('T')[0] : ''}
-                    onChange={(e) => setSelectedNewDate(e.target.value ? new Date(e.target.value) : null)}
-                    min={new Date().toISOString().split('T')[0]} // Não permite datas passadas
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Nova data:
+                    </label>
+                    <input
+                      type="date"
+                      value={selectedNewDate ? selectedNewDate.toISOString().split('T')[0] : ''}
+                      onChange={(e) => setSelectedNewDate(e.target.value ? new Date(e.target.value) : null)}
+                      min={new Date().toISOString().split('T')[0]} // Não permite datas passadas
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Novo Horário:
+                    </label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Horário início</label>
+                        <input
+                          type="time"
+                          value={newStartTime}
+                          onChange={(e) => setNewStartTime(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-gray-600 mb-1">Horário fim</label>
+                        <input
+                          type="time"
+                          value={newEndTime}
+                          onChange={(e) => setNewEndTime(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
               
@@ -1003,7 +1041,7 @@ const AppointmentCard = React.memo(({
                 <AlertDialogCancel disabled={isUpdating}>Cancelar</AlertDialogCancel>
                 <AlertDialogAction
                   onClick={handleRescheduleSubmit}
-                  disabled={isUpdating || !selectedNewDate}
+                  disabled={isUpdating || !selectedNewDate || !newStartTime || !newEndTime}
                   className="bg-blue-600 hover:bg-blue-700 focus:ring-blue-600"
                 >
                   {isUpdating ? "Reagendando..." : "Reagendar"}
