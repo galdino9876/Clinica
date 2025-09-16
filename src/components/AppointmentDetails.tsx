@@ -29,8 +29,8 @@ const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) =
   const { updateAppointmentStatus, deleteAppointment, findNextAvailableSlot, rescheduleAppointment, updateAppointment } = useAppointments();
   const [isReschedulingOpen, setIsReschedulingOpen] = useState(false);
   const [newDate, setNewDate] = useState<string>(appointment.date);
-  const [newStartTime, setNewStartTime] = useState<string>(appointment.start_time);
-  const [newEndTime, setNewEndTime] = useState<string>(appointment.end_time);
+  const [newStartTime, setNewStartTime] = useState<string>(appointment.start_time || appointment.startTime || '');
+  const [newEndTime, setNewEndTime] = useState<string>(appointment.end_time || appointment.endTime || '');
   const [insuranceToken, setInsuranceToken] = useState<string>(appointment.insurance_token || "");
 
   const formattedDate = format(new Date(appointment.date), "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
@@ -57,6 +57,20 @@ const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) =
   };
 
   const handleOpenReschedule = () => {
+    console.log('Abrindo modal de reagendamento...');
+    console.log('Dados do agendamento:', appointment);
+    
+    // Define os valores atuais como padrão
+    setNewDate(appointment.date);
+    setNewStartTime(appointment.start_time || appointment.startTime || '');
+    setNewEndTime(appointment.end_time || appointment.endTime || '');
+    
+    console.log('Valores iniciais:', {
+      newDate: appointment.date,
+      newStartTime: appointment.start_time || appointment.startTime || '',
+      newEndTime: appointment.end_time || appointment.endTime || ''
+    });
+    
     // Encontra o próximo horário disponível para o psicólogo
     const nextSlot = findNextAvailableSlot(appointment.psychologist_id);
     
@@ -70,6 +84,23 @@ const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) =
   };
 
   const handleReschedule = () => {
+    // Validação do campo obrigatório
+    if (!newDate) {
+      toast({
+        title: "Erro",
+        description: "Por favor, selecione uma nova data.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    console.log('Reagendando com dados:', {
+      id: appointment.id,
+      newDate,
+      newStartTime,
+      newEndTime
+    });
+    
     rescheduleAppointment(appointment.id, newDate, newStartTime, newEndTime);
     setIsReschedulingOpen(false);
   };
@@ -306,43 +337,42 @@ const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) =
 
       {/* Modal de reagendamento */}
       <Dialog open={isReschedulingOpen} onOpenChange={setIsReschedulingOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Reagendar Consulta</DialogTitle>
+            <DialogTitle>Reagendar Agendamento</DialogTitle>
+            <p className="text-sm text-gray-600">Selecione a nova data para este agendamento</p>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="newDate">Nova Data</Label>
-              <Input
-                id="newDate"
-                type="date"
-                value={newDate}
-                onChange={(e) => setNewDate(e.target.value)}
-                className="mt-1"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-6">
+            {/* Informações do agendamento atual */}
+            <div className="bg-gray-50 p-4 rounded-lg space-y-2">
               <div>
-                <Label htmlFor="newStartTime">Horário de Início</Label>
-                <Input
-                  id="newStartTime"
-                  type="time"
-                  value={newStartTime}
-                  onChange={(e) => setNewStartTime(e.target.value)}
-                  className="mt-1"
-                />
+                <span className="text-sm font-medium text-gray-700">Paciente: </span>
+                <span className="text-sm text-gray-900">{(appointment as any).patient?.name || 'N/A'}</span>
               </div>
               <div>
-                <Label htmlFor="newEndTime">Horário de Término</Label>
+                <span className="text-sm font-medium text-gray-700">Data atual: </span>
+                <span className="text-sm text-gray-900">{format(new Date(appointment.date), "dd/MM/yyyy")}</span>
+              </div>
+              <div>
+                <span className="text-sm font-medium text-gray-700">Horário: </span>
+                <span className="text-sm text-gray-900">{appointment.startTime} - {appointment.endTime}</span>
+              </div>
+            </div>
+
+            {/* Campos para reagendamento */}
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="newDate" className="block text-sm font-medium text-gray-700 mb-2">Nova data:</label>
                 <Input
-                  id="newEndTime"
-                  type="time"
-                  value={newEndTime}
-                  onChange={(e) => setNewEndTime(e.target.value)}
-                  className="mt-1"
+                  id="newDate"
+                  type="date"
+                  value={newDate}
+                  onChange={(e) => setNewDate(e.target.value)}
+                  className="w-full"
                 />
               </div>
             </div>
+
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setIsReschedulingOpen(false)}>
                 Cancelar

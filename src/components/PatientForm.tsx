@@ -18,7 +18,9 @@ const patientSchema = z.object({
   cpf: z.string().min(14, "CPF deve estar no formato 000.000.000-00"),
   phone: z
     .string()
-    .min(11, "Telefone deve conter no minimo 11 digitos")
+    .min(11, "Telefone deve ter 11 dígitos (DDD + 9 + número)")
+    .max(11, "Telefone deve ter 11 dígitos (DDD + 9 + número)")
+    .regex(/^\d{11}$/, "Telefone deve conter apenas números no formato DDD+9+número")
     .transform(v => v.replace(/\D/g, "")),
   email: z.string().email("E-mail inválido"),
   address: z.string().min(10, "Endereço deve ter pelo menos 10 caracteres"),
@@ -27,7 +29,11 @@ const patientSchema = z.object({
   insurance_document: z.string().optional(),
   value: z.coerce.number().min(0.01, { message: "O valor deve ser maior que 0!" }),
   nome_responsavel: z.string().optional(),
-  telefone_responsavel: z.string().optional(),
+  telefone_responsavel: z.string()
+    .min(11, "Telefone deve ter 11 dígitos (DDD + 9 + número)")
+    .max(11, "Telefone deve ter 11 dígitos (DDD + 9 + número)")
+    .regex(/^\d{11}$/, "Telefone deve conter apenas números no formato DDD+9+número")
+    .optional(),
 });
 
 type PatientFormData = z.infer<typeof patientSchema>;

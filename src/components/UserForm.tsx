@@ -19,7 +19,11 @@ const userSchema = z.object({
   role: z.enum(["admin", "receptionist", "psychologist"], {
     required_error: "Função é obrigatória",
   }),
-  phone: z.string().max(20, "Telefone deve ter no máximo 20 caracteres").optional(),
+  phone: z.string()
+    .min(11, "Telefone deve ter 11 dígitos (DDD + 9 + número)")
+    .max(11, "Telefone deve ter 11 dígitos (DDD + 9 + número)")
+    .regex(/^\d{11}$/, "Telefone deve conter apenas números no formato DDD+9+número")
+    .optional(),
   username: z.string().max(30, "Usuário deve ter no máximo 30 caracteres").optional(),
   password: z.string().max(255, "Senha deve ter no máximo 255 caracteres").optional(), // Opcional em edição
   crp: z.string().max(20, "CRP deve ter no máximo 20 caracteres").optional(), // Opcional para psicólogos

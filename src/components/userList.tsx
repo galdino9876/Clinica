@@ -79,19 +79,6 @@ const UsersTable = () => {
          }
        },
     },
-    {
-      id: "plans",
-      label: "Planos",
-      icon: CreditCard,
-      color: "text-purple-600 hover:text-purple-800",
-      onClick: (user) => {
-        setSelectedUser(user);
-        setPlansSearchTerm("");
-        setCurrentPage(1);
-        fetchPlans();
-        setIsPlansModalOpen(true);
-      },
-    },
   ];
 
   const fetchUsers = async () => {
@@ -432,12 +419,26 @@ const UsersTable = () => {
             <h2 className="text-xl font-semibold text-gray-800 flex items-center gap-2">
               <User size={24} /> Usuários ({users.length})
             </h2>
-            <button
-              onClick={() => { setSelectedUser(null); setIsUserFormOpen(true); }}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center gap-2"
-            >
-              <Plus size={16} /> Novo Usuário
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setSelectedUser(null);
+                  setPlansSearchTerm("");
+                  setCurrentPage(1);
+                  fetchPlans();
+                  setIsPlansModalOpen(true);
+                }}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-md flex items-center gap-2"
+              >
+                <CreditCard size={16} /> Planos
+              </button>
+              <button
+                onClick={() => { setSelectedUser(null); setIsUserFormOpen(true); }}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center gap-2"
+              >
+                <Plus size={16} /> Novo Usuário
+              </button>
+            </div>
           </div>
           {error && <div className="mt-2 text-red-600">{error}</div>}
         </div>
@@ -518,7 +519,7 @@ const UsersTable = () => {
       </Dialog>
 
       <Dialog open={isPlansModalOpen} onOpenChange={setIsPlansModalOpen}>
-        <DialogContent className="max-w-4xl">
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Planos Disponíveis</DialogTitle>
             <DialogDescription>
@@ -534,9 +535,9 @@ const UsersTable = () => {
             </div>
           </DialogHeader>
           
-          <div className="mt-4">
+          <div className="mt-3">
             {/* Campo de busca discreto */}
-            <div className="mb-4">
+            <div className="mb-3">
               <div className="relative max-w-xs">
                 <input
                   type="text"
@@ -586,16 +587,16 @@ const UsersTable = () => {
                    <table className="min-w-full divide-y divide-gray-200">
                      <thead className="bg-gray-50">
                        <tr>
-                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                            ID
                          </th>
-                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                            Plano
                          </th>
-                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                            Valor
                          </th>
-                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                         <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                            Ações
                          </th>
                        </tr>
@@ -603,16 +604,16 @@ const UsersTable = () => {
                      <tbody className="bg-white divide-y divide-gray-200">
                        {currentPlans.map((plan, index) => (
                          <tr key={plan.ID || plan.id || index} className="hover:bg-gray-50">
-                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                              {plan.ID || plan.id || startIndex + index + 1}
                            </td>
-                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                              {plan.plano || plan.Plano || plan.name || 'N/A'}
                            </td>
-                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                              {plan.Valor || plan.valor || plan.price || 'N/A'}
                            </td>
-                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                              <div className="flex space-x-2">
                                <button
                                  onClick={() => openEditModal(plan)}
@@ -640,15 +641,15 @@ const UsersTable = () => {
 
                  {/* Paginação */}
                  {totalPages > 1 && (
-                   <div className="mt-6 flex items-center justify-between">
-                     <div className="text-sm text-gray-700">
+                   <div className="mt-4 flex items-center justify-between">
+                     <div className="text-xs text-gray-700">
                        Mostrando {startIndex + 1} a {Math.min(endIndex, filteredPlans.length)} de {filteredPlans.length} planos
                      </div>
-                     <div className="flex items-center space-x-2">
+                     <div className="flex items-center space-x-1">
                        <button
                          onClick={prevPage}
                          disabled={currentPage === 1}
-                         className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                         className="px-2 py-1 text-xs border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                        >
                          Anterior
                        </button>
@@ -657,7 +658,7 @@ const UsersTable = () => {
                          <button
                            key={page}
                            onClick={() => goToPage(page)}
-                           className={`px-3 py-1 text-sm border rounded-md ${
+                           className={`px-2 py-1 text-xs border rounded-md ${
                              currentPage === page
                                ? 'bg-blue-600 text-white border-blue-600'
                                : 'border-gray-300 text-gray-700 hover:bg-gray-50'
@@ -670,7 +671,7 @@ const UsersTable = () => {
                        <button
                          onClick={nextPage}
                          disabled={currentPage === totalPages}
-                         className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                         className="px-2 py-1 text-xs border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                        >
                          Próxima
                        </button>

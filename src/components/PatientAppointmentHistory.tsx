@@ -44,7 +44,15 @@ const PatientAppointmentHistory = ({ patient }: PatientAppointmentHistoryProps) 
         }
 
         const data = await response.json();
-        setAppointments(Array.isArray(data) ? data : []);
+        // Filtrar objetos vazios da resposta
+        const validAppointments = Array.isArray(data) 
+          ? data.filter(appointment => 
+              appointment && 
+              Object.keys(appointment).length > 0 && 
+              appointment.date // Verificar se tem pelo menos a propriedade date
+            ) 
+          : [];
+        setAppointments(validAppointments);
       } catch (err) {
         console.error('Erro ao buscar agendamentos do paciente:', err);
         setError(err instanceof Error ? err.message : 'Erro desconhecido');

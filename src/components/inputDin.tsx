@@ -44,6 +44,27 @@ export const InputDynamic = forwardRef<HTMLInputElement, InputDynamicProps>(
 
     const inputRef = useRef<HTMLInputElement>(null);
 
+    // Função para formatar telefone no formato DDD+9+número
+    const formatPhone = (value: string) => {
+      // Remove todos os caracteres não numéricos
+      const numbers = value.replace(/\D/g, '');
+      
+      // Limita a 11 dígitos (DDD + 9 + 8 dígitos)
+      const limitedNumbers = numbers.slice(0, 11);
+      
+      return limitedNumbers;
+    };
+
+    // Função para lidar com mudanças no input
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (type === 'tel') {
+        const formattedValue = formatPhone(e.target.value);
+        onChange(formattedValue);
+      } else {
+        onChange(e.target.value);
+      }
+    };
+
     useEffect(() => {
       if (inputRef.current) {
         inputRef.current.focus();
@@ -65,11 +86,11 @@ export const InputDynamic = forwardRef<HTMLInputElement, InputDynamicProps>(
             id={name}
             type={type}
             value={value ?? ""}
-            onChange={onChange}
+            onChange={handleChange}
             onBlur={onBlur}
             placeholder={placeholder || "Digite..."}
             disabled={disabled}
-            maxLength={maxLength}
+            maxLength={type === 'tel' ? 11 : maxLength}
             className={twMerge(
               "w-full border rounded px-3 py-2 text-sm",
               error ? "border-red-500" : "border-gray-300"
