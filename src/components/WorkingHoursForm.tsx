@@ -193,8 +193,8 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
   if (!open) return null;
 
   return (
-    <div className="w-full max-w-md mx-auto">
-      <div className="space-y-4">
+    <div className="w-full max-w-4xl mx-auto max-h-[80vh] overflow-y-auto">
+      <div className="space-y-4 p-4">
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
             {error}
@@ -239,7 +239,7 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div className="space-y-2">
             <label htmlFor="start_time" className="block text-sm font-medium text-gray-700">
               Horário de Início *
@@ -315,27 +315,29 @@ const WorkingHoursForm = ({ userId, onSave, onCancel, open }) => {
         {/* Lista de Horários Cadastrados */}
         {workingHours.length > 0 && (
           <div className="mt-6 border-t pt-4">
-            <h4 className="text-md font-medium text-gray-800 mb-3">Horários Cadastrados:</h4>
-            <div className="space-y-2">
+            <h4 className="text-md font-medium text-gray-800 mb-3">Horários Cadastrados ({workingHours.length}):</h4>
+            <div className="max-h-96 overflow-y-auto space-y-2 pr-2">
               {workingHours.map((hour) => (
-                <div key={hour.id} className="bg-gray-50 p-3 rounded-md flex justify-between items-center">
-                  <div>
-                    <span className="font-medium">{daysOfWeek.find(d => d.value === hour.day_of_week)?.label}</span>
-                    <span className="text-gray-600 ml-2">
-                      {hour.start_time?.substring(0, 5)} às {hour.end_time?.substring(0, 5)}
-                    </span>
-                    <span className="text-gray-500 ml-2">
-                      ({hour.appointment_type === "presential" ? "Presencial" : "Online"})
-                    </span>
+                <div key={hour.id} className="bg-gray-50 p-3 rounded-md flex justify-between items-center hover:bg-gray-100 transition-colors">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium text-sm">{daysOfWeek.find(d => d.value === hour.day_of_week)?.label}</span>
+                      <span className="text-gray-600 text-sm">
+                        {hour.start_time?.substring(0, 5)} às {hour.end_time?.substring(0, 5)}
+                      </span>
+                      <span className="text-gray-500 text-xs px-2 py-1 bg-gray-200 rounded">
+                        {hour.appointment_type === "presential" ? "Presencial" : "Online"}
+                      </span>
+                    </div>
                   </div>
                   <button
                     type="button"
                     onClick={() => handleDelete(hour.id)}
-                    className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded-md flex items-center space-x-1 transition-colors"
+                    className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded-md flex items-center space-x-1 transition-colors text-sm flex-shrink-0"
                     disabled={loading}
                   >
-                    <Trash2 size={16} />
-                    <span>Excluir</span>
+                    <Trash2 size={14} />
+                    <span className="hidden sm:inline">Excluir</span>
                   </button>
                 </div>
               ))}
