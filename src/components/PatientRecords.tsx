@@ -1,7 +1,7 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
+// Removido Textarea para usar contenteditable com suporte a imagens inline
 import { Patient, PatientRecord } from "@/types/appointment";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -23,6 +23,8 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
   const [error, setError] = useState<string | null>(null);
   const [psychologists, setPsychologists] = useState<{ [key: number]: string }>({}); // Mapeamento ID -> Nome
   const [usersCache, setUsersCache] = useState<any[]>([]); // Cache da lista de usuários
+  const [selectedImages, setSelectedImages] = useState<{ id: string; file: File; url: string }[]>([]);
+  const editorRef = useRef<HTMLDivElement | null>(null);
 
   const { user } = useAuth();
 
@@ -166,7 +168,9 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
   }, [psychologists]);
 
   const handleSaveRecord = async () => {
-    if (!notes.trim()) {
+    const currentEditor = editorRef.current;
+    const notesText = currentEditor ? currentEditor.innerText.trim() : notes.trim();
+    if (!notesText) {
       setError("As anotações são obrigatórias.");
       return;
     }
@@ -183,21 +187,73 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
       patient_id: patient.id,
       appointment_id: null,
       date: new Date().toISOString().split("T")[0],
-      notes: notes.trim(),
+      notes: notesText,
       created_by: user.id,
     };
 
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(
-        "https://webhook.essenciasaudeintegrada.com.br/webhook/create-patients-records",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(newRecord),
+      let response: Response | null = null;
+
+      // Tenta enviar como multipart se houver imagens
+      if (selectedImages.length > 0) {
+        const formData = new FormData();
+        formData.append("patient_id", String(newRecord.patient_id));
+        formData.append("appointment_id", String(newRecord.appointment_id ?? ""));
+        formData.append("date", newRecord.date);
+        formData.append("notes", newRecord.notes);
+        formData.append("created_by", String(newRecord.created_by));
+        selectedImages.forEach((img) => {
+          // Usa mesma chave várias vezes para múltiplas imagens
+          formData.append("images", img.file, img.file.name);
+        });
+
+        response = await fetch(
+          "https://webhook.essenciasaudeintegrada.com.br/webhook/create-patients-records",
+          {
+            method: "POST",
+            body: formData,
+          }
+        );
+
+        // Se a API não aceitar multipart, vamos tentar JSON com base64 (todas as imagens)
+        if (!response.ok) {
+          // Converte todas as imagens para base64
+          const imagesBase64 = await Promise.all(
+            selectedImages.map(({ file }) => new Promise<{ name: string; data: string }>((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => resolve({ name: file.name, data: String(reader.result) });
+              reader.onerror = () => reject(new Error("Falha ao ler imagem"));
+              reader.readAsDataURL(file);
+            }))
+          );
+
+          const payloadWithImages = {
+            ...newRecord,
+            images_base64: imagesBase64,
+          } as any;
+
+          response = await fetch(
+            "https://webhook.essenciasaudeintegrada.com.br/webhook/create-patients-records",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(payloadWithImages),
+            }
+          );
         }
-      );
+      } else {
+        // Sem imagem: mantém JSON como antes
+        response = await fetch(
+          "https://webhook.essenciasaudeintegrada.com.br/webhook/create-patients-records",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(newRecord),
+          }
+        );
+      }
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || "Falha ao salvar prontuário");
@@ -213,6 +269,11 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
       };
       setRecords([normalizedRecord, ...records].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
       setNotes("");
+      // Limpa editor
+      if (editorRef.current) editorRef.current.innerHTML = "";
+      // Limpa imagens e revoga URLs
+      selectedImages.forEach((img) => URL.revokeObjectURL(img.url));
+      setSelectedImages([]);
       const psychologistName = await fetchPsychologistName(user.id);
       setPsychologists((prev) => ({ ...prev, [user.id]: psychologistName }));
     } catch (err: any) {
@@ -221,6 +282,88 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
       setLoading(false);
     }
   };
+
+  const handlePaste = async (e: React.ClipboardEvent<HTMLDivElement>) => {
+    if (!e.clipboardData) return;
+    const items = e.clipboardData.items;
+    for (let i = 0; i < items.length; i++) {
+      const item = items[i];
+      if (item.type.startsWith("image/")) {
+        const file = item.getAsFile();
+        if (file) {
+          insertImageFileAtCursor(file);
+        }
+        // não insere nada no texto para a imagem
+        e.preventDefault();
+        break;
+      }
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const files = e.dataTransfer.files;
+    if (!files || files.length === 0) return;
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      if (file && file.type.startsWith("image/")) {
+        insertImageFileAtCursor(file);
+      }
+    }
+  };
+
+  const insertImageFileAtCursor = (file: File) => {
+    const url = URL.createObjectURL(file);
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = file.name;
+    img.setAttribute("data-image-id", id);
+    img.style.maxWidth = "100%";
+    img.style.maxHeight = "240px";
+    img.style.borderRadius = "6px";
+    img.style.display = "block";
+    img.style.margin = "8px 0";
+
+    insertNodeAtCursor(img);
+
+    setSelectedImages((prev) => [...prev, { id, file, url }]);
+  };
+
+  const insertNodeAtCursor = (node: Node) => {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0) {
+      // Append at the end if no selection
+      const ed = editorRef.current;
+      if (ed) ed.appendChild(node);
+      return;
+    }
+    const range = sel.getRangeAt(0);
+    range.deleteContents();
+    range.insertNode(node);
+    // Move caret after the inserted node
+    range.setStartAfter(node);
+    range.setEndAfter(node);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  };
+
+  // Atualiza estado de notas baseado no texto do editor
+  const handleEditorInput = () => {
+    const ed = editorRef.current;
+    setNotes(ed ? ed.innerText : "");
+  };
+
+  // Cleanup URLs ao desmontar
+  useEffect(() => {
+    return () => {
+      selectedImages.forEach((img) => URL.revokeObjectURL(img.url));
+    };
+  }, []);
 
   const handleDeleteRecord = async (recordId: number) => {
     if (!window.confirm("Tem certeza que deseja excluir este prontuário?")) return;
@@ -391,13 +534,17 @@ const PatientRecords = ({ patient, onClose }: PatientRecordsProps) => {
       )}
       <div className="space-y-3 pt-4 border-t">
         <h3 className="text-lg font-semibold">Adicionar Registro</h3>
-        <Textarea
-          placeholder="Digite suas anotações sobre o paciente..."
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={6}
-          className="w-full border-gray-300 focus:ring-blue-500"
-        />
+        <div onDragOver={handleDragOver} onDrop={handleDrop} className="w-full">
+          <div
+            ref={editorRef}
+            contentEditable
+            onInput={handleEditorInput}
+            onPaste={handlePaste}
+            className="w-full min-h-[160px] rounded-md border border-gray-300 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            style={{ whiteSpace: "pre-wrap" }}
+          />
+          <p className="text-xs text-gray-500 mt-1">Dica: cole imagens (Ctrl+V) ou arraste e solte diretamente dentro do campo.</p>
+        </div>
         <div className="flex justify-end space-x-2">
           <Button
             variant="outline"
