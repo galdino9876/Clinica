@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Edit, Trash2, Eye, Plus, FileText, Activity, Send, CircleArrowUp, MessageCircle } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import PatientForm from "./PatientForm";
@@ -30,6 +30,15 @@ const PatientsTable = () => {
   const [isRecordsOpen, setIsRecordsOpen] = useState(false);
   const [isReferralOpen, setIsReferralOpen] = useState(false);
   const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
+  const [isNameSearchActive, setIsNameSearchActive] = useState(false);
+  const nameSearchInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (isNameSearchActive && nameSearchInputRef.current) {
+      nameSearchInputRef.current.focus();
+      nameSearchInputRef.current.select();
+    }
+  }, [isNameSearchActive]);
 
   // Estados para o modal de atestado
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
@@ -93,6 +102,13 @@ const PatientsTable = () => {
       (patient.email || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
       (isAdmin && patient.psychologist_name ? patient.psychologist_name.toLowerCase().includes(searchTerm.toLowerCase()) : false)
   );
+
+  // Ordena alfabeticamente pelo nome (considera name ou nome), case-insensitive e locale PT
+  const sortedFilteredPatients = [...filteredPatients].sort((a, b) => {
+    const nameA = (a.name || a.nome || "").toString();
+    const nameB = (b.name || b.nome || "").toString();
+    return nameA.localeCompare(nameB, "pt", { sensitivity: "base" });
+  });
 
   const actions = [
     {
@@ -240,7 +256,28 @@ const PatientsTable = () => {
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Nome</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                  {isNameSearchActive ? (
+                    <input
+                      ref={nameSearchInputRef}
+                      type="text"
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      onBlur={() => setIsNameSearchActive(false)}
+                      placeholder="Pesquisar por nome..."
+                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setIsNameSearchActive(true)}
+                      className="text-left w-full hover:text-gray-700"
+                      title="Clique para pesquisar por nome"
+                    >
+                      Nome
+                    </button>
+                  )}
+                </th>
                 {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">CPF</th> */}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Telefone</th>
                 {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th> */}
@@ -257,7 +294,7 @@ const PatientsTable = () => {
                   <td colSpan={isAdmin ? 5 : 4} className="px-6 py-4 text-center text-gray-500">Nenhum paciente encontrado</td>
                 </tr>
               ) : (
-                filteredPatients.map((patient, index) => (
+                sortedFilteredPatients.map((patient, index) => (
                   <tr key={patient.id || index} className={`hover:bg-gray-50 ${patient.status === "Inativo" ? "bg-gray-50" : ""}`}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{patient.name || patient.nome || "N/A"}</td>
                     {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.cpf || "N/A"}</td> */}

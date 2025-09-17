@@ -153,7 +153,10 @@ const AppointmentsDashboard = () => {
                   <div key={appointment.id} className="flex items-center justify-between p-2 bg-red-50 rounded text-sm">
                     <div className="flex items-center gap-2">
                       <Users className="h-3 w-3 text-gray-500" />
-                      <span className="font-medium">{appointment.patient_name}</span>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{appointment.patient_name}</span>
+                        <span className="text-[11px] text-gray-600">{appointment.psychologist_name}</span>
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="h-3 w-3 text-gray-500" />
@@ -186,7 +189,10 @@ const AppointmentsDashboard = () => {
                   <div key={appointment.id} className="flex items-center justify-between p-2 bg-green-50 rounded text-sm">
                     <div className="flex items-center gap-2">
                       <Users className="h-3 w-3 text-gray-500" />
-                      <span className="font-medium">{appointment.patient_name}</span>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{appointment.patient_name}</span>
+                        <span className="text-[11px] text-gray-600">{appointment.psychologist_name}</span>
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="h-3 w-3 text-gray-500" />
@@ -211,6 +217,7 @@ const AppointmentsDashboard = () => {
                           <div key={appointment.id} className="flex items-center justify-between text-sm">
                             <div className="flex flex-col">
                               <span className="font-medium text-gray-800">{appointment.patient_name}</span>
+                              <span className="text-[11px] text-gray-600">{appointment.psychologist_name}</span>
                               <div className="flex items-center gap-2 text-xs text-gray-600">
                                 <span>{appointment.start_time}</span>
                                 <span className="text-[10px] text-gray-500">
@@ -275,7 +282,10 @@ const AppointmentsDashboard = () => {
                   <div key={appointment.id} className="flex items-center justify-between p-2 bg-red-50 rounded text-sm">
                     <div className="flex items-center gap-2">
                       <Users className="h-3 w-3 text-gray-500" />
-                      <span className="font-medium">{appointment.patient_name}</span>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{appointment.patient_name}</span>
+                        <span className="text-[11px] text-gray-600">{appointment.psychologist_name}</span>
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="h-3 w-3 text-gray-500" />
@@ -308,7 +318,10 @@ const AppointmentsDashboard = () => {
                   <div key={appointment.id} className="flex items-center justify-between p-2 bg-green-50 rounded text-sm">
                     <div className="flex items-center gap-2">
                       <Users className="h-3 w-3 text-gray-500" />
-                      <span className="font-medium">{appointment.patient_name}</span>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{appointment.patient_name}</span>
+                        <span className="text-[11px] text-gray-600">{appointment.psychologist_name}</span>
+                      </div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="h-3 w-3 text-gray-500" />
@@ -333,6 +346,7 @@ const AppointmentsDashboard = () => {
                           <div key={appointment.id} className="flex items-center justify-between text-sm">
                             <div className="flex flex-col">
                               <span className="font-medium text-gray-800">{appointment.patient_name}</span>
+                              <span className="text-[11px] text-gray-600">{appointment.psychologist_name}</span>
                               <div className="flex items-center gap-2 text-xs text-gray-600">
                                 <span>{appointment.start_time}</span>
                                 <span className="text-[10px] text-gray-500">
