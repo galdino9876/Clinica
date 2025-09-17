@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Calendar, Clock, Users, CheckCircle, AlertCircle } from "lucide-react";
 import { format } from "date-fns";
 
@@ -157,6 +158,9 @@ const AppointmentsDashboard = () => {
                     <div className="flex items-center gap-2">
                       <Clock className="h-3 w-3 text-gray-500" />
                       <span className="text-xs">{appointment.start_time}</span>
+                      <span className="text-[10px] text-gray-500">
+                        ({appointment.appointment_type === 'online' ? 'online' : 'presencial'})
+                      </span>
                       {getStatusBadge(appointment.status)}
                     </div>
                   </div>
@@ -187,14 +191,41 @@ const AppointmentsDashboard = () => {
                     <div className="flex items-center gap-2">
                       <Clock className="h-3 w-3 text-gray-500" />
                       <span className="text-xs">{appointment.start_time}</span>
+                      <span className="text-[10px] text-gray-500">
+                        ({appointment.appointment_type === 'online' ? 'online' : 'presencial'})
+                      </span>
                       {getStatusBadge(appointment.status)}
                     </div>
                   </div>
                 ))}
                 {dashboardData.today.confirmed.length > 3 && (
-                  <p className="text-xs text-gray-500 text-center">
-                    +{dashboardData.today.confirmed.length - 3} mais confirmados
-                  </p>
+                  <HoverCard>
+                    <HoverCardTrigger asChild>
+                      <p className="text-xs text-gray-500 text-center cursor-default">
+                        +{dashboardData.today.confirmed.length - 3} mais confirmados
+                      </p>
+                    </HoverCardTrigger>
+                    <HoverCardContent className="w-80">
+                      <div className="space-y-2">
+                        {dashboardData.today.confirmed.slice(3).map((appointment) => (
+                          <div key={appointment.id} className="flex items-center justify-between text-sm">
+                            <div className="flex flex-col">
+                              <span className="font-medium text-gray-800">{appointment.patient_name}</span>
+                              <div className="flex items-center gap-2 text-xs text-gray-600">
+                                <span>{appointment.start_time}</span>
+                                <span className="text-[10px] text-gray-500">
+                                  ({appointment.appointment_type === 'online' ? 'online' : 'presencial'})
+                                </span>
+                              </div>
+                            </div>
+                            <div>
+                              {getStatusBadge(appointment.status)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </HoverCardContent>
+                  </HoverCard>
                 )}
               </div>
             </div>
@@ -249,6 +280,9 @@ const AppointmentsDashboard = () => {
                     <div className="flex items-center gap-2">
                       <Clock className="h-3 w-3 text-gray-500" />
                       <span className="text-xs">{appointment.start_time}</span>
+                      <span className="text-[10px] text-gray-500">
+                        ({appointment.appointment_type === 'online' ? 'online' : 'presencial'})
+                      </span>
                       {getStatusBadge(appointment.status)}
                     </div>
                   </div>
@@ -279,14 +313,41 @@ const AppointmentsDashboard = () => {
                     <div className="flex items-center gap-2">
                       <Clock className="h-3 w-3 text-gray-500" />
                       <span className="text-xs">{appointment.start_time}</span>
+                      <span className="text-[10px] text-gray-500">
+                        ({appointment.appointment_type === 'online' ? 'online' : 'presencial'})
+                      </span>
                       {getStatusBadge(appointment.status)}
                     </div>
                   </div>
                 ))}
                 {dashboardData.tomorrow.confirmed.length > 3 && (
-                  <p className="text-xs text-gray-500 text-center">
-                    +{dashboardData.tomorrow.confirmed.length - 3} mais confirmados
-                  </p>
+                  <HoverCard>
+                    <HoverCardTrigger asChild>
+                      <p className="text-xs text-gray-500 text-center cursor-default">
+                        +{dashboardData.tomorrow.confirmed.length - 3} mais confirmados
+                      </p>
+                    </HoverCardTrigger>
+                    <HoverCardContent className="w-80">
+                      <div className="space-y-2">
+                        {dashboardData.tomorrow.confirmed.slice(3).map((appointment) => (
+                          <div key={appointment.id} className="flex items-center justify-between text-sm">
+                            <div className="flex flex-col">
+                              <span className="font-medium text-gray-800">{appointment.patient_name}</span>
+                              <div className="flex items-center gap-2 text-xs text-gray-600">
+                                <span>{appointment.start_time}</span>
+                                <span className="text-[10px] text-gray-500">
+                                  ({appointment.appointment_type === 'online' ? 'online' : 'presencial'})
+                                </span>
+                              </div>
+                            </div>
+                            <div>
+                              {getStatusBadge(appointment.status)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </HoverCardContent>
+                  </HoverCard>
                 )}
               </div>
             </div>
