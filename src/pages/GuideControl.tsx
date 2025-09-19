@@ -24,6 +24,7 @@ import {
 import { format, parseISO, startOfWeek, endOfWeek, eachDayOfInterval, differenceInDays, addDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast, Toaster } from "sonner";
+import { useAuth } from "@/context/AuthContext";
 
 interface Appointment {
   id: number;
@@ -89,6 +90,7 @@ interface DashboardStats {
 }
 
 const GuideControl = () => {
+  const { user } = useAuth();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [guideData, setGuideData] = useState<GuideData[]>([]);
   const [patientSessions, setPatientSessions] = useState<PatientSessionInfo[]>([]);
@@ -126,6 +128,12 @@ const GuideControl = () => {
   });
   const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
   const [activeFilter, setActiveFilter] = useState<'all' | 'urgent' | 'no_guides' | 'incomplete'>('all');
+
+  // Verificação de permissões do usuário
+  const isAdmin = user?.role === "admin";
+  const isReceptionist = user?.role === "receptionist";
+  const isPsychologist = user?.role === "psychologist";
+  const canViewAlerts = isAdmin || isReceptionist; // Apenas admin e recepcionista podem ver alertas
 
   useEffect(() => {
     fetchData();
@@ -674,84 +682,87 @@ const GuideControl = () => {
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Stats Cards - Apenas para Admin e Recepcionista */}
+        {canViewAlerts && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total de Agendamentos</CardTitle>
+                <Calendar className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{stats.total}</div>
+                <p className="text-xs text-muted-foreground">
+                  +{stats.thisWeek} esta semana
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card 
+              className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
+                activeFilter === 'incomplete' ? 'ring-2 ring-blue-500 bg-blue-50' : ''
+              }`}
+              onClick={() => setActiveFilter(activeFilter === 'incomplete' ? 'all' : 'incomplete')}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Pacientes com agendamento e faltando pelo menos 1 guia</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {patientSessions.filter(p => p.status === 'incomplete' || p.status === 'urgent').length}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {patientSessions.filter(p => p.status === 'incomplete').length} precisam completar guias
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card 
+              className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
+                activeFilter === 'urgent' ? 'ring-2 ring-red-500 bg-red-50' : ''
+              }`}
+              onClick={() => setActiveFilter(activeFilter === 'urgent' ? 'all' : 'urgent')}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Urgentes</CardTitle>
+                <AlertCircle className="h-4 w-4 text-red-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-red-600">
+                  {patientSessions.filter(p => p.status === 'urgent').length}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Próximos 5 dias sem guia autorizada
+                </p>
+              </CardContent>
+            </Card>
+
+            <Card 
+              className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
+                activeFilter === 'no_guides' ? 'ring-2 ring-gray-500 bg-gray-50' : ''
+              }`}
+              onClick={() => setActiveFilter(activeFilter === 'no_guides' ? 'all' : 'no_guides')}
+            >
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Sem Guias</CardTitle>
+                <FileText className="h-4 w-4 text-gray-500" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-gray-600">
+                  {patientSessions.filter(p => p.status === 'no_guides').length}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Agendamentos sem nenhuma guia autorizada para aquele mês
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Dashboard de Sessões por Paciente - Apenas para Admin e Recepcionista */}
+        {canViewAlerts && (
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total de Agendamentos</CardTitle>
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.total}</div>
-              <p className="text-xs text-muted-foreground">
-                +{stats.thisWeek} esta semana
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
-              activeFilter === 'incomplete' ? 'ring-2 ring-blue-500 bg-blue-50' : ''
-            }`}
-            onClick={() => setActiveFilter(activeFilter === 'incomplete' ? 'all' : 'incomplete')}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Pacientes com agendamento e faltando pelo menos 1 guia</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {patientSessions.filter(p => p.status === 'incomplete' || p.status === 'urgent').length}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {patientSessions.filter(p => p.status === 'incomplete').length} precisam completar guias
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
-              activeFilter === 'urgent' ? 'ring-2 ring-red-500 bg-red-50' : ''
-            }`}
-            onClick={() => setActiveFilter(activeFilter === 'urgent' ? 'all' : 'urgent')}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Urgentes</CardTitle>
-              <AlertCircle className="h-4 w-4 text-red-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-red-600">
-                {patientSessions.filter(p => p.status === 'urgent').length}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Próximos 5 dias sem guia autorizada
-              </p>
-            </CardContent>
-          </Card>
-
-          <Card 
-            className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
-              activeFilter === 'no_guides' ? 'ring-2 ring-gray-500 bg-gray-50' : ''
-            }`}
-            onClick={() => setActiveFilter(activeFilter === 'no_guides' ? 'all' : 'no_guides')}
-          >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Sem Guias</CardTitle>
-              <FileText className="h-4 w-4 text-gray-500" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-gray-600">
-                {patientSessions.filter(p => p.status === 'no_guides').length}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Agendamentos sem nenhuma guia autorizada para aquele mês
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Dashboard de Sessões por Paciente */}
-        <Card>
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
@@ -969,7 +980,30 @@ const GuideControl = () => {
             )}
           </CardContent>
         </Card>
+        )}
 
+        {/* Mensagem para Psicólogos */}
+        {isPsychologist && (
+          <Card>
+            <CardContent className="p-6">
+              <div className="text-center">
+                <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                  <Users className="h-8 w-8 text-blue-600" />
+                </div>
+                <h3 className="text-lg font-semibold text-gray-700 mb-2">
+                  Acesso Restrito
+                </h3>
+                <p className="text-gray-500 mb-4">
+                  Esta página é destinada apenas para administradores e recepcionistas. 
+                  Como psicólogo, você não tem permissão para visualizar os alertas de agendamentos e controle de guias.
+                </p>
+                <p className="text-sm text-gray-400">
+                  Entre em contato com um administrador se precisar de acesso a essas informações.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Modal para Adicionar Guias */}
         <Dialog open={isAddGuideModalOpen} onOpenChange={(open) => {

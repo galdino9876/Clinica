@@ -5,6 +5,7 @@ import { AuthProvider } from "./context/AuthContext";
 import { AppointmentProvider } from "./context/AppointmentContext";
 
 import { Toaster } from "./components/ui/toaster";
+import { Toaster as SonnerToaster } from "sonner";
 import LoginPage from "./pages/LoginPage";
 import PrivateRoute from "./components/PrivateRoute";
 import Index from "./pages/Index";
@@ -89,6 +90,7 @@ const App = () => {
                 <Route path="*" element={<Navigate to="/404" replace />} />
               </Routes>
               <Toaster />
+              <SonnerToaster position="bottom-right" />
             </AppointmentProvider>
           </AuthProvider>
         </Router>

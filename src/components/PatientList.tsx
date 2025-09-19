@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Edit, Trash2, Eye, Plus, FileText, Activity, Send, CircleArrowUp, MessageCircle } from "lucide-react";
+import { Edit, Trash2, Eye, Plus, FileText, Activity, Send, CircleArrowUp, MessageCircle, ClipboardList } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import PatientForm from "./PatientForm";
 import PatientAppointmentHistory from "./PatientAppointmentHistory";
@@ -7,6 +7,7 @@ import PatientRecords from "./PatientRecords";
 import ReferralDialog from "./patient/ReferralDialog";
 import AttendanceDialog from "./patient/AttendanceDialog";
 import { useAuth } from "@/context/AuthContext";
+import { toast } from "sonner";
 
 const PatientsTable = () => {
   const { user } = useAuth(); // Adicionado para obter o usuário autenticado
@@ -30,6 +31,7 @@ const PatientsTable = () => {
   const [isRecordsOpen, setIsRecordsOpen] = useState(false);
   const [isReferralOpen, setIsReferralOpen] = useState(false);
   const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
+  const [isContinuityOpen, setIsContinuityOpen] = useState(false);
   const [isNameSearchActive, setIsNameSearchActive] = useState(false);
   const nameSearchInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -45,6 +47,12 @@ const PatientsTable = () => {
   const [attendanceStartTime, setAttendanceStartTime] = useState("08:00");
   const [attendanceEndTime, setAttendanceEndTime] = useState("09:00");
   const [attendancePeriod, setAttendancePeriod] = useState("specific");
+
+  // Estados para o modal de pedido de continuidade
+  const [continuityTitle, setContinuityTitle] = useState("RELATORIO PSICOLOGICO");
+  const [continuityCid, setContinuityCid] = useState("F-41");
+  const [continuityPlan, setContinuityPlan] = useState("PMDF");
+  const [continuityLoading, setContinuityLoading] = useState(false);
 
   const fetchPatients = async () => {
     try {
@@ -159,6 +167,17 @@ const PatientsTable = () => {
       },
     },
     {
+      id: "continuity",
+      label: "Pedido de Continuidade",
+      icon: ClipboardList,
+      color: "text-orange-600 hover:text-orange-800",
+      onClick: (patient) => {
+        setSelectedPatient(patient);
+        setIsContinuityOpen(true);
+      },
+      visible: canViewRecords, // Apenas admin e psicólogos podem gerar pedido de continuidade
+    },
+    {
       id: "reactivate",
       label: "Reativar",
       icon: Activity,
@@ -222,6 +241,53 @@ const PatientsTable = () => {
     const cleanPhone = phone.replace(/\D/g, '');
     // Abre o WhatsApp com o número formatado
     window.open(`https://wa.me/55${cleanPhone}`, '_blank');
+  };
+
+  // Função para enviar pedido de continuidade
+  const handleContinuityRequest = async () => {
+    if (!selectedPatient) return;
+
+    try {
+      setContinuityLoading(true);
+      
+      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/atestado', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          nome: selectedPatient.name || selectedPatient.nome,
+          titulo: continuityTitle,
+          cid: continuityCid,
+          plano: continuityPlan
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Erro ao gerar pedido de continuidade');
+      }
+
+      // Criar blob da imagem retornada
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      // Criar link para download
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `pedido_continuidade_${selectedPatient.name || selectedPatient.nome}_${new Date().toISOString().split('T')[0]}.png`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.success('Pedido de continuidade gerado com sucesso!');
+      setIsContinuityOpen(false);
+    } catch (error) {
+      console.error('Erro ao gerar pedido de continuidade:', error);
+      toast.error('Erro ao gerar pedido de continuidade. Tente novamente.');
+    } finally {
+      setContinuityLoading(false);
+    }
   };
 
   if (loading) {
@@ -463,6 +529,79 @@ const PatientsTable = () => {
               onClose={() => setIsAttendanceOpen(false)}
             />
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Pedido de Continuidade */}
+      <Dialog open={isContinuityOpen} onOpenChange={setIsContinuityOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Pedido de Continuidade</DialogTitle>
+            <DialogDescription>
+              Gere um pedido de continuidade para {selectedPatient?.name || selectedPatient?.nome || "o paciente"}
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Título
+              </label>
+              <input
+                type="text"
+                value={continuityTitle}
+                onChange={(e) => setContinuityTitle(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="RELATORIO PSICOLOGICO"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                CID
+              </label>
+              <input
+                type="text"
+                value={continuityCid}
+                onChange={(e) => setContinuityCid(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="F-41"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Plano
+              </label>
+              <input
+                type="text"
+                value={continuityPlan}
+                onChange={(e) => setContinuityPlan(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                placeholder="PMDF"
+              />
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-4">
+              <button
+                onClick={() => setIsContinuityOpen(false)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                disabled={continuityLoading}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleContinuityRequest}
+                disabled={continuityLoading}
+                className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {continuityLoading && (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                )}
+                {continuityLoading ? 'Gerando...' : 'Gerar Pedido'}
+              </button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
