@@ -14,6 +14,7 @@ import Finance from "./pages/Finance";
 import NotFound from "./pages/NotFound";
 import Confirmations from "./pages/Confirmations";
 import DatabaseSchema from "./pages/DatabaseSchema";
+import GuideControl from "./pages/GuideControl";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 // Criando a instância do QueryClient
@@ -73,6 +74,14 @@ const App = () => {
                   element={
                     <PrivateRoute allowedRoles={["admin"]}>
                       <DatabaseSchema />
+                    </PrivateRoute>
+                  }
+                />
+                <Route
+                  path="/guide-control"
+                  element={
+                    <PrivateRoute allowedRoles={["admin", "receptionist"]}>
+                      <GuideControl />
                     </PrivateRoute>
                   }
                 />

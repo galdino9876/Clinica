@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
-import { Calendar, Users, BarChart3, LogOut, User, Key, X } from "lucide-react";
+import { Calendar, Users, BarChart3, LogOut, User, Key, X, ClipboardList } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import ChangePasswordModal from "./ChangePasswordModal";
@@ -44,6 +44,13 @@ const Sidebar = ({ onClose }: SidebarProps) => {
     if (user?.role !== "psychologist") {
       baseItems.push(
         { to: "/confirmations", label: "Confirmações", icon: <User className="mr-2 h-5 w-5" /> }
+      );
+    }
+
+    // Adiciona controle de guias para admin e recepcionistas
+    if (user?.role === "admin" || user?.role === "receptionist") {
+      baseItems.push(
+        { to: "/guide-control", label: "Controle de Guias", icon: <ClipboardList className="mr-2 h-5 w-5" /> }
       );
     }
 
