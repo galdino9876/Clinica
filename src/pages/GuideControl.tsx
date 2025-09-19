@@ -62,6 +62,8 @@ interface PatientSessionInfo {
   patient_id: number;
   patient_name: string;
   psychologist_name: string;
+  payment_method: "private" | "insurance";
+  insurance_type: string | null;
   total_appointments: number;
   monthly_appointments: string[];
   guide_dates: string[];
@@ -215,6 +217,8 @@ const GuideControl = () => {
           patient_id: patientId,
           patient_name: appointment.patient_name,
           psychologist_name: appointment.psychologist_name,
+          payment_method: appointment.payment_method,
+          insurance_type: appointment.insurance_type,
           total_appointments: 0,
           monthly_appointments: [],
           guide_dates: [],
@@ -853,6 +857,12 @@ const GuideControl = () => {
                       <div className="w-48">
                         <p className="font-medium text-gray-900">{patient.patient_name}</p>
                         <p className="text-sm text-gray-600">{patient.psychologist_name}</p>
+                        <p className="text-xs text-gray-500">
+                          {patient.insurance_type 
+                            ? `🏥 ${patient.insurance_type}` 
+                            : '💰 Particular'
+                          }
+                        </p>
                       </div>
                       
                       {/* Coluna 2: Agendamentos e Guias */}
