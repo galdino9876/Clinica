@@ -301,14 +301,17 @@ const Index = () => {
           const appointmentsArray = Array.from(monthAppointmentsDays).sort((a, b) => a - b);
           const controlsArray = Array.from(monthControlDays).sort((a, b) => a - b);
           
-          // Se agendamentos e guias estão iguais, não gerar alertas
+          // Verificar se agendamentos e guias estão sincronizados (mas ainda pode faltar mais agendamentos)
           const appointmentsMatch = appointmentsArray.length === controlsArray.length && 
             appointmentsArray.every((date, index) => date === controlsArray[index]);
           
           if (appointmentsMatch) {
-            console.log(`✅ ${item.paciente_nome}: Agendamentos e guias estão sincronizados, sem alertas necessários`);
-            // Não gerar alertas para este paciente
-          } else {
+            console.log(`✅ ${item.paciente_nome}: Agendamentos e guias estão sincronizados para as datas existentes`);
+            // Continuar para verificar se faltam mais agendamentos
+          }
+          
+          // Sempre verificar se faltam agendamentos/guias (independente de estarem sincronizados)
+          {
             // 1. Detectar guias faltantes para agendamentos existentes
             const missingGuideDates = appointmentsArray.filter(date => 
               !monthControlDays.has(date)
@@ -359,7 +362,10 @@ const Index = () => {
               controlDates: controlsArray,
               missingGuideDates,
               missingAppointmentDates,
-              appointmentsMatch
+              appointmentsMatch,
+              lastAppointment: appointmentsArray[appointmentsArray.length - 1],
+              daysInMonth: new Date(year, monthIndex + 1, 0).getDate(),
+              interval: appointmentsArray.length >= 2 ? 'calculated' : 7
             });
             
             if (missingGuideDates.length > 0) {
@@ -392,7 +398,7 @@ const Index = () => {
         }
       }
       
-      // 8. VERIFICAÇÃO FINAL: Se agendamentos e guias estão sincronizados, limpar alertas desnecessários
+      // 8. VERIFICAÇÃO FINAL: Se agendamentos e guias estão sincronizados, limpar apenas alertas de guias duplicadas
       if (hasAppointmentsThisMonth && hasControlsThisMonth) {
         const appointmentsArray = Array.from(monthAppointmentsDays).sort((a, b) => a - b);
         const controlsArray = Array.from(monthControlDays).sort((a, b) => a - b);
@@ -400,12 +406,12 @@ const Index = () => {
           appointmentsArray.every((date, index) => date === controlsArray[index]);
         
         if (appointmentsMatch) {
-          // Limpar alertas desnecessários quando tudo está sincronizado
-          missingDatesForCompleteMonth = [];
-          missingDatesForGuides = [];
-          needsMoreAppointmentsForCompleteMonth = false;
-          needsMoreAppointmentsForWeeklyPattern = false;
+          // Limpar apenas guias faltantes para agendamentos EXISTENTES (não futuros)
+          missingDatesForGuides = missingDatesForGuides.filter(date => 
+            !monthAppointmentsDays.has(date)
+          );
           appointmentsWithoutGuides.length = 0;
+          // Manter missingDatesForCompleteMonth - ainda pode faltar agendamentos futuros
         }
       }
 
@@ -491,7 +497,9 @@ const Index = () => {
           appointmentWeeks: a.appointmentWeeks,
           hasAppointmentWeeks: a.appointmentWeeks.length > 0,
           missingDatesForCompleteMonth: a.missingDatesForCompleteMonth,
-          missingDatesForGuides: a.missingDatesForGuides
+          missingDatesForGuides: a.missingDatesForGuides,
+          needsMoreAppointmentsForWeeklyPattern: a.needsMoreAppointmentsForWeeklyPattern,
+          needsMoreAppointmentsForCompleteMonth: a.needsMoreAppointmentsForCompleteMonth
         });
         
         return hasAlerts;
@@ -654,9 +662,9 @@ const Index = () => {
                                         <div className="flex flex-wrap gap-1">
                                           <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs font-medium">
                                             📅 Próximo mês
-                                          </span>
-                                        </div>
-                                      )}
+                            </span>
+                          </div>
+                        )}
                                       
                                       {alertType === "both" && (
                                         <div className="space-y-2">
@@ -691,21 +699,21 @@ const Index = () => {
                                           {missingAppointments.map(day => (
                                             <span key={day} className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
                                               📅 {formatDateForDisplay(day, year, monthIndex)}
-                                            </span>
+                            </span>
                                           ))}
-                                        </div>
-                                      )}
+                          </div>
+                        )}
                                       
                                       {alertType === "guides" && allMissingGuides.length > 0 && (
                                         <div className="flex flex-wrap gap-1">
                                           {allMissingGuides.map(day => (
                                             <span key={day} className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">
                                               📋 {formatDateForDisplay(day, year, monthIndex)}
-                                            </span>
+                            </span>
                                           ))}
-                                        </div>
-                                      )}
-                                    </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                                 </div>
                               </div>
