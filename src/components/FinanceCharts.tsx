@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import {
   BarChart,
   Bar,
@@ -182,34 +182,29 @@ const FinanceCharts = () => {
   const fetchAppointments = async () => {
     setLoading(true);
     try {
-      let url = "";
-
       if (effectivePsychologist === "all") {
-        const allAppointments: any[] = [];
-        for (const psych of psychologists) {
-          const response = await fetch(
-            `https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/appointmens/${psych.id}`
-          );
-          if (response.ok) {
-            const data = await response.json();
-            allAppointments.push(...data);
-          }
-        }
+        // OTIMIZAÇÃO: Requisições paralelas em vez de sequenciais
+        const appointmentPromises = psychologists.map(psych => 
+          fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/appointmens/${psych.id}`)
+            .then(response => response.ok ? response.json() : [])
+            .catch(error => {
+              console.error(`Erro ao buscar appointments do psicólogo ${psych.id}:`, error);
+              return [];
+            })
+        );
+        
+        const allResponses = await Promise.all(appointmentPromises);
+        const allAppointments = allResponses.flat();
         setTransactions(allAppointments);
       } else {
-        url = `https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/appointmens/${effectivePsychologist}`;
-
-        
+        const url = `https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/appointmens/${effectivePsychologist}`;
         const response = await fetch(url);
-
         
         if (!response.ok) {
           throw new Error("Erro ao buscar appointments");
         }
 
         const data = await response.json();
-
-        
         setTransactions(data);
       }
     } catch (error) {
@@ -752,13 +747,23 @@ const FinanceCharts = () => {
     return result;
   };
 
-  const { totalRevenue: totalRevenueCompleted, psychologistCommission: psychologistCommissionCompleted, clinicRevenue: clinicRevenueCompleted } = calculateFinancialsFrom(filteredAppointmentsCompletedForReports);
-  const { totalRevenue: totalRevenueConfirmed, psychologistCommission: psychologistCommissionConfirmed, clinicRevenue: clinicRevenueConfirmed } = calculateFinancialsFrom(filteredAppointmentsConfirmedForReports);
+  // OTIMIZAÇÃO: Memoizar cálculos financeiros para evitar recálculos desnecessários
+  const financialTotalsCompleted = useMemo(() => {
+    return calculateFinancialsFrom(filteredAppointmentsCompletedForReports);
+  }, [filteredAppointmentsCompletedForReports]);
+
+  const financialTotalsConfirmed = useMemo(() => {
+    return calculateFinancialsFrom(filteredAppointmentsConfirmedForReports);
+  }, [filteredAppointmentsConfirmedForReports]);
+
+  const { totalRevenue: totalRevenueCompleted, psychologistCommission: psychologistCommissionCompleted, clinicRevenue: clinicRevenueCompleted } = financialTotalsCompleted;
+  const { totalRevenue: totalRevenueConfirmed, psychologistCommission: psychologistCommissionConfirmed, clinicRevenue: clinicRevenueConfirmed } = financialTotalsConfirmed;
 
 
 
 
-  const generateChartData = () => {
+  // OTIMIZAÇÃO: Memoizar geração de dados do gráfico
+  const chartData = useMemo(() => {
     if (!filteredAppointmentsForReports || filteredAppointmentsForReports.length === 0) return [];
 
     if (effectivePsychologist === "all") {
@@ -822,9 +827,7 @@ const FinanceCharts = () => {
 
       return Object.values(dateGroups);
     }
-  };
-
-  const chartData = generateChartData();
+  }, [filteredAppointmentsForReports, effectivePsychologist, psychologists, filterPeriod]);
 
   const getPeriodName = () => {
     switch (filterPeriod) {
