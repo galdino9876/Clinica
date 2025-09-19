@@ -262,8 +262,9 @@ const GuideControl = () => {
           return guideYear === year && guideMonth === month;
         });
         
-        patient.guide_dates = monthlyGuideDates;
-        patient.last_guide_date = monthlyGuideDates[monthlyGuideDates.length - 1] || null;
+        // Acumular as datas das guias (não sobrescrever)
+        patient.guide_dates = [...patient.guide_dates, ...monthlyGuideDates];
+        patient.last_guide_date = monthlyGuideDates[monthlyGuideDates.length - 1] || patient.last_guide_date;
       }
     });
 
@@ -426,9 +427,9 @@ const GuideControl = () => {
         payload[`date_${index + 1}`] = date;
       });
 
-      // Preencher as datas restantes com a última data selecionada
+      // Preencher as datas restantes com null
       for (let i = selectedDates.length; i < 5; i++) {
-        payload[`date_${i + 1}`] = selectedDates[selectedDates.length - 1];
+        payload[`date_${i + 1}`] = null;
       }
 
       const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/insert_date_guias', {
@@ -888,30 +889,31 @@ const GuideControl = () => {
                               ✅ Guias:
                             </span>
                             <div className="flex gap-1 whitespace-nowrap min-w-0 overflow-hidden">
-                              {patient.guide_dates.length > 0 
-                                ? patient.guide_dates.map(date => (
+                              {(() => {
+                                // Combinar todas as datas (guias existentes + agendamentos) e ordenar cronologicamente
+                                const allDates = [...patient.monthly_appointments];
+                                const sortedDates = allDates.sort();
+                                
+                                return sortedDates.map(date => {
+                                  const hasGuide = patient.guide_dates.includes(date);
+                                  return (
                                     <span
                                       key={date}
-                                      className="px-1.5 py-0.5 rounded text-xs border bg-green-100 text-green-800 border-green-300 whitespace-nowrap"
+                                      className={`px-1.5 py-0.5 rounded text-xs border whitespace-nowrap ${
+                                        hasGuide 
+                                          ? 'bg-green-100 text-green-800 border-green-300'
+                                          : 'bg-red-100 text-red-800 border-red-300'
+                                      }`}
+                                      title={hasGuide ? 'Guia autorizada' : 'Precisa solicitar guia para esta data'}
                                     >
-                                      {format(parseISO(date), 'dd/MM', { locale: ptBR })}
+                                      {hasGuide 
+                                        ? format(parseISO(date), 'dd/MM', { locale: ptBR })
+                                        : `(${format(parseISO(date), 'dd/MM', { locale: ptBR })})`
+                                      }
                                     </span>
-                                  ))
-                                : <span className="text-sm text-gray-700"></span>
-                              }
-                              {/* Mostrar datas que precisam de guia */}
-                              {patient.monthly_appointments
-                                .filter(appDate => !patient.guide_dates.includes(appDate))
-                                .map(date => (
-                                  <span
-                                    key={`missing-${date}`}
-                                    className="px-1.5 py-0.5 rounded text-xs border bg-red-100 text-red-800 border-red-300 whitespace-nowrap"
-                                    title="Precisa solicitar guia para esta data"
-                                  >
-                                    ({format(parseISO(date), 'dd/MM', { locale: ptBR })})
-                                  </span>
-                                ))
-                              }
+                                  );
+                                });
+                              })()}
                             </div>
                           </div>
                         </div>
