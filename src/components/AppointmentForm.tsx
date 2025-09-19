@@ -60,6 +60,8 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
       value: 200.0,
       paymentMethod: "",
       insuranceType: "",
+      numeroPrestador: "",
+      quantidadeAutorizada: 1,
     },
   });
 
@@ -73,6 +75,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
 
   const appointmentType = watch("appointmentType");
   const selectedPsychologistId = watch("psychologistId");
+  const paymentMethod = watch("paymentMethod");
 
   // Limpar consultório quando mudar para online
   useEffect(() => {
@@ -80,6 +83,14 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
       setValue("roomId", "");
     }
   }, [appointmentType, setValue]);
+
+  // Limpar campos de guia quando mudar para particular
+  useEffect(() => {
+    if (paymentMethod === "private") {
+      setValue("numeroPrestador", "");
+      setValue("quantidadeAutorizada", 1);
+    }
+  }, [paymentMethod, setValue]);
 
   // Função para buscar horários de trabalho do psicólogo
   const fetchPsychologistWorkingHours = async (psychologistId: string) => {
@@ -496,6 +507,44 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
         }
       }
 
+      // Enviar dados de guia para a API (apenas para planos de saúde)
+      if (successCount > 0 && data.paymentMethod && data.paymentMethod !== "private") {
+        try {
+          // Preparar dados da guia baseados na quantidade autorizada
+          const quantidadeAutorizada = data.quantidadeAutorizada;
+          const guiaData: any = {
+            numero_prestador: Number(data.numeroPrestador),
+            id_patient: Number(data.patientId),
+            date_1: "",
+            date_2: "",
+            date_3: "",
+            date_4: "",
+            date_5: ""
+          };
+
+          // Preencher as datas baseadas na quantidade autorizada e nas datas selecionadas
+          for (let i = 1; i <= quantidadeAutorizada && i <= selectedDates.length; i++) {
+            const dateKey = `date_${i}` as keyof typeof guiaData;
+            guiaData[dateKey] = format(selectedDates[i - 1], "yyyy-MM-dd");
+          }
+
+          // Enviar para a API de guias
+          const guiaResponse = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/insert_date_guias", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(guiaData),
+          });
+
+          if (guiaResponse.ok) {
+            console.log("Guia enviada com sucesso:", guiaData);
+          } else {
+            console.error("Erro ao enviar guia:", guiaResponse.status);
+          }
+        } catch (error) {
+          console.error("Erro ao enviar dados da guia:", error);
+        }
+      }
+
       // Mostrar resultado
       if (successCount > 0) {
         const message = errorCount > 0 
@@ -876,6 +925,52 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
           </div>
         )}
       </div>
+
+      {/* Seção de Guia - Apenas para planos de saúde */}
+      {watch("paymentMethod") && watch("paymentMethod") !== "private" && (
+        <div className="border-t pt-4">
+          <h3 className="text-lg font-semibold mb-4 text-blue-600">GUIA</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <InputDynamic
+                name="numeroPrestador"
+                label="Número do Prestador *"
+                control={control}
+                type="text"
+                placeholder="Ex: 32113578"
+                required
+                disabled={isLoading}
+                errors={errors}
+                onClear={() => formMethods.setValue("numeroPrestador", "")}
+              />
+            </div>
+            <div className="space-y-2">
+              <ComboboxDynamic
+                name="quantidadeAutorizada"
+                control={control}
+                label="Quantidade Autorizada *"
+                options={[
+                  { id: "1", label: "1" },
+                  { id: "2", label: "2" },
+                  { id: "3", label: "3" },
+                  { id: "4", label: "4" },
+                  { id: "5", label: "5" },
+                ]}
+                placeholder="Selecione a quantidade"
+                required
+                errors={errors}
+                disabled={isLoading}
+                searchPlaceholder="Digite para buscar..."
+                emptyMessage="Nenhuma quantidade encontrada."
+                onClear={() => formMethods.setValue("quantidadeAutorizada", 1)}
+              />
+            </div>
+          </div>
+          <div className="text-xs text-gray-500 mt-2">
+            * Campos obrigatórios para planos de saúde. A quantidade autorizada determina quantas datas do calendário serão enviadas para a guia.
+          </div>
+        </div>
+      )}
 
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
