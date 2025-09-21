@@ -4,6 +4,7 @@ import Layout from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import React, { useEffect, useMemo, useState } from "react";
 import { X, AlertTriangle, Calendar, ClipboardList, User } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 type AlertWebhookItem = {
   numero_prestador?: number | string;
@@ -109,10 +110,17 @@ const formatDateForDisplay = (day: number, year: number, monthIndex: number) => 
 };
 
 const Index = () => {
+  const { user } = useAuth();
   const [showAlertModal, setShowAlertModal] = useState(true);
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [alertError, setAlertError] = useState<string | null>(null);
   const [alertItems, setAlertItems] = useState<AlertWebhookItem[]>([]);
+
+  // Verificação de permissões do usuário
+  const isAdmin = user?.role === "admin";
+  const isReceptionist = user?.role === "receptionist";
+  const isPsychologist = user?.role === "psychologist";
+  const canViewAlerts = isAdmin || isReceptionist; // Apenas admin e recepcionista podem ver alertas
 
   const now = new Date();
   const year = now.getFullYear();
@@ -120,6 +128,12 @@ const Index = () => {
   const monthLabel = now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
   useEffect(() => {
+    // Só buscar alertas se o usuário tem permissão para vê-los
+    if (!canViewAlerts) {
+      setShowAlertModal(false);
+      return;
+    }
+
     let aborted = false;
     const fetchAlerts = async () => {
       try {
@@ -151,7 +165,7 @@ const Index = () => {
     return () => {
       aborted = true;
     };
-  }, []);
+  }, [canViewAlerts]);
 
   const computedAlerts = useMemo(() => {
     const totalWeeks = getWeeksInMonth(year, monthIndex);
@@ -516,7 +530,7 @@ const Index = () => {
         <AppointmentCalendar />
       </div>
 
-      {showAlertModal && (
+      {showAlertModal && canViewAlerts && (
         <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4"
           onClick={() => setShowAlertModal(false)}
