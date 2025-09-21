@@ -243,6 +243,29 @@ const PatientsTable = () => {
     window.open(`https://wa.me/55${cleanPhone}`, '_blank');
   };
 
+  // Função para processar e baixar arquivo
+  const downloadFile = (blob: Blob, filename: string, mimeType: string) => {
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    
+    // Determinar extensão baseada no MIME type
+    let extension = '';
+    if (mimeType.includes('pdf')) {
+      extension = '.pdf';
+    } else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) {
+      extension = '.jpg';
+    } else if (mimeType.includes('png')) {
+      extension = '.png';
+    }
+    
+    link.download = `${filename}${extension}`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+  };
+
   // Função para enviar pedido de continuidade
   const handleContinuityRequest = async () => {
     if (!selectedPatient) return;
@@ -250,38 +273,54 @@ const PatientsTable = () => {
     try {
       setContinuityLoading(true);
       
-      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/atestado', {
+      const patientName = selectedPatient.name || selectedPatient.nome;
+      const dateStr = new Date().toISOString().split('T')[0];
+      const requestBody = {
+        nome: patientName,
+        titulo: continuityTitle,
+        cid: continuityCid,
+        plano: continuityPlan
+      };
+
+      // 1. Primeira chamada - documento_pessoal
+      const response1 = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/documento_pessoal', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          nome: selectedPatient.name || selectedPatient.nome,
-          titulo: continuityTitle,
-          cid: continuityCid,
-          plano: continuityPlan
-        })
+        body: JSON.stringify(requestBody)
       });
 
-      if (!response.ok) {
-        throw new Error('Erro ao gerar pedido de continuidade');
+      if (!response1.ok) {
+        throw new Error('Erro ao gerar documento pessoal');
       }
 
-      // Criar blob da imagem retornada
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      
-      // Criar link para download
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `pedido_continuidade_${selectedPatient.name || selectedPatient.nome}_${new Date().toISOString().split('T')[0]}.png`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+      const arrayBuffer1 = await response1.arrayBuffer();
+      const blob1 = new Blob([arrayBuffer1], { type: 'application/pdf' });
+      const filename1 = `DOCUMENTO_PESSOAL_${patientName}_${dateStr}`;
+      downloadFile(blob1, filename1, 'application/pdf');
 
-      toast.success('Pedido de continuidade gerado com sucesso!');
+      // 2. Segunda chamada - relatorio
+      const response2 = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/relatorio', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      if (!response2.ok) {
+        throw new Error('Erro ao gerar relatório');
+      }
+
+      const arrayBuffer2 = await response2.arrayBuffer();
+      const blob2 = new Blob([arrayBuffer2], { type: 'application/pdf' });
+      const filename2 = `RELATORIO_${patientName}_${dateStr}`;
+      downloadFile(blob2, filename2, 'application/pdf');
+
+      toast.success('Documentos de pedido de continuidade gerados com sucesso!');
       setIsContinuityOpen(false);
+      
     } catch (error) {
       console.error('Erro ao gerar pedido de continuidade:', error);
       toast.error('Erro ao gerar pedido de continuidade. Tente novamente.');
