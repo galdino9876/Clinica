@@ -207,7 +207,7 @@ const Index = () => {
       
       console.log("Enviando dados para API:", requestBody);
       
-      const response = await fetch("https://n8n.essenciasaudeintegrada.com.br/webhook-test/alter_alerta", {
+      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/alter_alerta", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
