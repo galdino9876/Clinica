@@ -3,15 +3,17 @@ import AppointmentCalendar from "@/components/AppointmentCalendar";
 import Layout from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import React, { useEffect, useMemo, useState } from "react";
-import { X, AlertTriangle, Calendar, ClipboardList, User } from "lucide-react";
+import { X, AlertTriangle, Calendar, ClipboardList, User, Edit } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 type AlertWebhookItem = {
   numero_prestador?: number | string;
-  id_patient: number;
+  patient_id: number; // Corrigido: a API retorna patient_id, não id_patient
   paciente_nome: string;
   controle_datas?: string | null; // CSV "YYYY-MM-DD, ..."
   appointment_datas?: string | null; // CSV "YYYY-MM-DD, ..."
+  exibir?: number | string; // 1 para ativo, 0 para desabilitado (pode ser number ou string)
+  motivo?: string | null; // Motivo da desativação
 };
 
 const parseCsvDatesToMonthMap = (csv: string | null | undefined, year: number, monthIndex: number) => {
@@ -115,6 +117,13 @@ const Index = () => {
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [alertError, setAlertError] = useState<string | null>(null);
   const [alertItems, setAlertItems] = useState<AlertWebhookItem[]>([]);
+  
+  // Estados para o modal de edição
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingAlert, setEditingAlert] = useState<AlertWebhookItem | null>(null);
+  const [editExibir, setEditExibir] = useState(true);
+  const [editMotivo, setEditMotivo] = useState("");
+  const [savingAlert, setSavingAlert] = useState(false);
 
   // Verificação de permissões do usuário
   const isAdmin = user?.role === "admin";
@@ -127,6 +136,32 @@ const Index = () => {
   const monthIndex = now.getMonth(); // 0-based
   const monthLabel = now.toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
 
+  // Função para buscar alertas da API
+  const fetchAlerts = async () => {
+    try {
+      setLoadingAlerts(true);
+      setAlertError(null);
+      const response = await fetch(
+        "https://webhook.essenciasaudeintegrada.com.br/webhook/ALERTA",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        }
+      );
+      if (!response.ok) {
+        throw new Error(`Erro ao buscar alertas: ${response.status}`);
+      }
+      const data = await response.json();
+      const arr: AlertWebhookItem[] = Array.isArray(data) ? data : [];
+      setAlertItems(arr);
+    } catch (e: any) {
+      setAlertError(e?.message || "Erro desconhecido");
+    } finally {
+      setLoadingAlerts(false);
+    }
+  };
+
   useEffect(() => {
     // Só buscar alertas se o usuário tem permissão para vê-los
     if (!canViewAlerts) {
@@ -135,37 +170,74 @@ const Index = () => {
     }
 
     let aborted = false;
-    const fetchAlerts = async () => {
-      try {
-        setLoadingAlerts(true);
-        setAlertError(null);
-        const response = await fetch(
-          "https://webhook.essenciasaudeintegrada.com.br/webhook/ALERTA",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({}),
-          }
-        );
-        if (!response.ok) {
-          throw new Error(`Erro ao buscar alertas: ${response.status}`);
-        }
-        const data = await response.json();
-        if (!aborted) {
-          const arr: AlertWebhookItem[] = Array.isArray(data) ? data : [];
-          setAlertItems(arr);
-        }
-      } catch (e: any) {
-        if (!aborted) setAlertError(e?.message || "Erro desconhecido");
-      } finally {
-        if (!aborted) setLoadingAlerts(false);
-      }
+    const loadAlerts = async () => {
+      await fetchAlerts();
     };
-    fetchAlerts();
+    
+    loadAlerts();
     return () => {
       aborted = true;
     };
   }, [canViewAlerts]);
+
+  // Função para abrir modal de edição
+  const handleEditAlert = (alert: AlertWebhookItem) => {
+    console.log("Abrindo modal de edição para alerta:", alert);
+    setEditingAlert(alert);
+    setEditExibir(alert.exibir !== 0);
+    setEditMotivo(alert.motivo || "");
+    setShowEditModal(true);
+  };
+
+  // Função para salvar alterações do alerta
+  const handleSaveAlert = async () => {
+    if (!editingAlert) return;
+
+    try {
+      setSavingAlert(true);
+      
+      console.log("editingAlert:", editingAlert);
+      console.log("editingAlert.patient_id:", editingAlert.patient_id);
+      
+      const requestBody = {
+        patient_id: editingAlert.patient_id,
+        exibir: editExibir ? "1" : "0",
+        motivo: editMotivo
+      };
+      
+      console.log("Enviando dados para API:", requestBody);
+      
+      const response = await fetch("https://n8n.essenciasaudeintegrada.com.br/webhook-test/alter_alerta", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        throw new Error("Erro ao salvar alterações");
+      }
+
+      // Não atualizar a lista local - aguardar a próxima consulta da API ALERTA
+      // A fonte da verdade deve ser sempre a API ALERTA
+      
+      setShowEditModal(false);
+      setEditingAlert(null);
+      setEditMotivo("");
+      
+      // Recarregar os alertas da API para obter os dados atualizados
+      await fetchAlerts();
+      
+      // Mostrar feedback de sucesso
+      alert("Alerta atualizado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao salvar alerta:", error);
+      alert("Erro ao salvar alterações. Tente novamente.");
+    } finally {
+      setSavingAlert(false);
+    }
+  };
 
   const computedAlerts = useMemo(() => {
     const totalWeeks = getWeeksInMonth(year, monthIndex);
@@ -180,7 +252,7 @@ const Index = () => {
       lastWeekNow,
       alertItemsCount: alertItems.length,
       alertItems: alertItems.map(item => ({
-        id: item.id_patient,
+        id: item.patient_id,
         nome: item.paciente_nome,
         appointment_datas: item.appointment_datas,
         controle_datas: item.controle_datas
@@ -445,7 +517,7 @@ const Index = () => {
       const noGuides = hasAppointmentsThisMonth && !hasControlsThisMonth;
 
       const result = {
-        id_patient: item.id_patient,
+        patient_id: item.patient_id,
         paciente_nome: item.paciente_nome,
         totalWeeks,
         appointmentWeeks: Array.from(appointmentWeeks).sort((a, b) => a - b),
@@ -487,7 +559,7 @@ const Index = () => {
 
       return result;
     })
-    // Show only patients with relevant alerts
+    // Show all patients with alerts (active and disabled)
     .filter((a) => {
       try {
         const hasAlerts = a.appointmentWeeks.length > 0 && (
@@ -521,6 +593,16 @@ const Index = () => {
         console.error('Error in filter:', error);
         return false;
       }
+    })
+    // Separar alertas ativos e desabilitados
+    .sort((a, b) => {
+      const aExibir = alertItems.find(item => item.patient_id === a.patient_id)?.exibir !== 0;
+      const bExibir = alertItems.find(item => item.patient_id === b.patient_id)?.exibir !== 0;
+      
+      // Alertas ativos primeiro, depois desabilitados
+      if (aExibir && !bExibir) return -1;
+      if (!aExibir && bExibir) return 1;
+      return 0;
     });
   }, [alertItems, monthIndex, year, now]);
 
@@ -587,157 +669,482 @@ const Index = () => {
                       </div>
 
                       <div className="space-y-1">
-                        {computedAlerts
-                          .filter(a => 
+                        {(() => {
+                          const filteredAlerts = computedAlerts.filter(a => 
                             (a.needsMoreAppointmentsForCompleteMonth && a.missingDatesForCompleteMonth && a.missingDatesForCompleteMonth.length > 0) ||
                             (a.needsMoreAppointmentsForWeeklyPattern && a.missingDatesForGuides && a.missingDatesForGuides.length > 0) ||
                             (a.appointmentsWithoutGuides && a.appointmentsWithoutGuides.length > 0) ||
                             a.noGuides || 
                             a.needsMoreGuidesForRestOfMonth || 
                             a.needsNextMonthScheduling
-                          )
-                          .map((a) => {
-                            // Agendamentos faltantes
-                            const missingAppointments = a.missingDatesForCompleteMonth || [];
-                            
-                            // Guias faltantes
-                            const allMissingGuides = [
-                              ...(a.missingDatesForGuides || []),
-                              ...(a.appointmentsWithoutGuides || [])
-                            ].filter((value, index, self) => self.indexOf(value) === index);
-                            
-                            // Outros alertas
-                            const otherAlerts = [];
-                            if (a.noGuides) otherAlerts.push("Sem guia para este mês");
-                            if (a.needsMoreGuidesForRestOfMonth) otherAlerts.push("Faltam guias para semanas 3 e 4");
-                            
-                            // Determinar o tipo de alerta e cor
-                            let alertType = "";
-                            let alertColor = "";
-                            let alertMessage = "";
-                            let alertIcon = null;
-                            
-                            if (a.needsNextMonthScheduling && a.hasAppointmentsInLastWeek) {
-                              // Alerta laranja: precisa agendamento para próximo mês
-                              alertType = "nextMonth";
-                              alertColor = "bg-orange-50 border-orange-200";
-                              alertMessage = `Precisa agendamento para próximo mês`;
-                              alertIcon = <Calendar className="h-4 w-4 text-orange-600" />;
-                            } else if (missingAppointments.length > 0 && allMissingGuides.length > 0) {
-                              // Ambos faltando - usar alerta azul melhorado
-                              alertType = "both";
-                              alertColor = "bg-blue-50 border-blue-200";
-                              alertMessage = `Faltam agendamentos e guias`;
-                              alertIcon = <AlertTriangle className="h-4 w-4 text-blue-600" />;
-                            } else if (missingAppointments.length > 0) {
-                              // Só agendamentos faltando
-                              alertType = "appointments";
-                              alertColor = "bg-blue-50 border-blue-200";
-                              alertMessage = `Faltam agendamentos`;
-                              alertIcon = <Calendar className="h-4 w-4 text-blue-600" />;
-                            } else if (allMissingGuides.length > 0) {
-                              // Só guias faltando
-                              alertType = "guides";
-                              alertColor = "bg-green-50 border-green-200";
-                              alertMessage = `Faltam guias`;
-                              alertIcon = <ClipboardList className="h-4 w-4 text-green-600" />;
-                            } else if (otherAlerts.length > 0) {
-                              // Outros alertas
-                              alertType = "other";
-                              alertColor = "bg-amber-50 border-amber-200";
-                              alertMessage = otherAlerts[0];
-                              alertIcon = <AlertTriangle className="h-4 w-4 text-amber-600" />;
-                            }
-                            
-                            return (
-                              <div key={a.id_patient} className={`flex items-center px-4 py-3 rounded text-sm hover:bg-opacity-80 transition-colors border-l-4 ${alertColor}`}>
-                                <div className="flex items-center gap-3 flex-1 min-w-0">
-                                  <User className="h-4 w-4 text-gray-500 flex-shrink-0" />
-                                  <span className="font-medium truncate">{a.paciente_nome}</span>
-                                </div>
-                                
-                                {/* Status do Alerta */}
-                                <div className="flex items-center gap-2 flex-1 min-w-0">
-                                  {alertIcon}
-                                  <div className="flex flex-col gap-1">
-                                    <span className={`text-xs font-medium ${
-                                      alertType === "nextMonth" ? "text-orange-700" :
-                                      alertType === "appointments" ? "text-blue-700" :
-                                      alertType === "guides" ? "text-green-700" :
-                                      alertType === "both" ? "text-blue-700" :
-                                      "text-amber-700"
-                                    }`}>
-                                      {alertMessage}
-                                    </span>
+                          );
+                          
+                          // Separar alertas ativos e desabilitados
+                          const activeAlerts = filteredAlerts.filter(a => {
+                            const alertItem = alertItems.find(item => item.patient_id === a.patient_id);
+                            return alertItem?.exibir !== 0;
+                          });
+                          
+                          const disabledAlerts = filteredAlerts.filter(a => {
+                            const alertItem = alertItems.find(item => item.patient_id === a.patient_id);
+                            return alertItem?.exibir === 0;
+                          });
+                          
+                          return (
+                            <>
+                              {/* Alertas Ativos */}
+                              {activeAlerts.length > 0 && (
+                                <>
+                                  <div className="flex items-center gap-3 px-4 py-2 bg-green-50 border-l-4 border-green-400">
+                                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                    <span className="text-sm font-semibold text-green-800">ATIVOS</span>
+                                  </div>
+                                  <div className="border-b border-gray-200 mb-2"></div>
+                                  {activeAlerts.map((a) => {
+                                    // Verificar se o alerta está desabilitado
+                                    const alertItem = alertItems.find(item => item.patient_id === a.patient_id);
+                                    const isDisabled = alertItem?.exibir === 0;
                                     
-                                    {/* Datas específicas */}
-                                    <div className="flex flex-col gap-2">
-                                      {alertType === "nextMonth" && (
-                                        <div className="flex flex-wrap gap-1">
-                                          <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-xs font-medium">
-                                            📅 Próximo mês
-                            </span>
-                          </div>
-                        )}
-                                      
-                                      {alertType === "both" && (
-                                        <div className="space-y-2">
-                                          {/* Agendamentos Faltantes */}
-                                          <div className="flex flex-col gap-1">
-                                            <span className="text-xs font-semibold text-blue-800">Agendamentos:</span>
-                                            <div className="flex flex-wrap gap-1">
-                                              {missingAppointments.map(day => (
-                                                <span key={day} className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
-                                                  {formatDateForDisplay(day, year, monthIndex)}
-                                                </span>
-                                              ))}
-                                            </div>
-                                          </div>
-                                          
-                                          {/* Guias Faltantes */}
-                                          <div className="flex flex-col gap-1">
-                                            <span className="text-xs font-semibold text-green-800">Guias Faltantes:</span>
-                                            <div className="flex flex-wrap gap-1">
-                                              {allMissingGuides.map(day => (
-                                                <span key={day} className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">
-                                                  {formatDateForDisplay(day, year, monthIndex)}
-                                                </span>
-                                              ))}
-                                            </div>
-                                          </div>
+                                    console.log("Debug alertItem:", {
+                                      patient_id: a.patient_id,
+                                      alertItem: alertItem,
+                                      alertItemId: alertItem?.patient_id
+                                    });
+                                    // Agendamentos faltantes
+                                    const missingAppointments = a.missingDatesForCompleteMonth || [];
+                                    
+                                    // Guias faltantes
+                                    const allMissingGuides = [
+                                      ...(a.missingDatesForGuides || []),
+                                      ...(a.appointmentsWithoutGuides || [])
+                                    ].filter((value, index, self) => self.indexOf(value) === index);
+                                    
+                                    // Outros alertas
+                                    const otherAlerts = [];
+                                    if (a.noGuides) otherAlerts.push("Sem guia para este mês");
+                                    if (a.needsMoreGuidesForRestOfMonth) otherAlerts.push("Faltam guias para semanas 3 e 4");
+                                    
+                                    // Determinar o tipo de alerta e cor
+                                    let alertType = "";
+                                    let alertColor = "";
+                                    let alertMessage = "";
+                                    let alertIcon = null;
+                                    
+                                    if (isDisabled) {
+                                      // Alerta desabilitado - tema cinza
+                                      alertType = "disabled";
+                                      alertColor = "bg-gray-50 border-gray-200";
+                                      alertMessage = `Alerta desabilitado`;
+                                      alertIcon = <AlertTriangle className="h-4 w-4 text-gray-600" />;
+                                    } else if (a.needsNextMonthScheduling && a.hasAppointmentsInLastWeek) {
+                                      // Alerta laranja: precisa agendamento para próximo mês
+                                      alertType = "nextMonth";
+                                      alertColor = "bg-orange-100 border-orange-400";
+                                      alertMessage = `Precisa agendamento para próximo mês`;
+                                      alertIcon = <Calendar className="h-4 w-4 text-orange-700" />;
+                                    } else if (missingAppointments.length > 0 && allMissingGuides.length > 0) {
+                                      // Ambos faltando - usar alerta azul melhorado
+                                      alertType = "both";
+                                      alertColor = "bg-blue-100 border-blue-400";
+                                      alertMessage = `Faltam agendamentos e guias`;
+                                      alertIcon = <AlertTriangle className="h-4 w-4 text-blue-700" />;
+                                    } else if (missingAppointments.length > 0) {
+                                      // Só agendamentos faltando
+                                      alertType = "appointments";
+                                      alertColor = "bg-blue-100 border-blue-400";
+                                      alertMessage = `Faltam agendamentos`;
+                                      alertIcon = <Calendar className="h-4 w-4 text-blue-700" />;
+                                    } else if (allMissingGuides.length > 0) {
+                                      // Só guias faltando
+                                      alertType = "guides";
+                                      alertColor = "bg-green-100 border-green-400";
+                                      alertMessage = `Faltam guias`;
+                                      alertIcon = <ClipboardList className="h-4 w-4 text-green-700" />;
+                                    } else if (otherAlerts.length > 0) {
+                                      // Outros alertas
+                                      alertType = "other";
+                                      alertColor = "bg-amber-100 border-amber-400";
+                                      alertMessage = otherAlerts[0];
+                                      alertIcon = <AlertTriangle className="h-4 w-4 text-amber-700" />;
+                                    }
+                                    
+                                    return (
+                                      <div key={a.patient_id} className={`flex items-center px-4 py-3 rounded text-sm hover:bg-opacity-80 transition-colors border-l-4 ${alertColor}`}>
+                                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                                          <User className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                                          <span className="font-medium truncate">{a.paciente_nome}</span>
                                         </div>
-                                      )}
-                                      
-                                      {alertType === "appointments" && missingAppointments.length > 0 && (
-                                        <div className="flex flex-wrap gap-1">
-                                          {missingAppointments.map(day => (
-                                            <span key={day} className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
-                                              📅 {formatDateForDisplay(day, year, monthIndex)}
-                            </span>
-                                          ))}
-                          </div>
-                        )}
-                                      
-                                      {alertType === "guides" && allMissingGuides.length > 0 && (
-                                        <div className="flex flex-wrap gap-1">
-                                          {allMissingGuides.map(day => (
-                                            <span key={day} className="px-2 py-1 bg-green-100 text-green-800 rounded text-xs font-medium">
-                                              📋 {formatDateForDisplay(day, year, monthIndex)}
-                            </span>
-                                          ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                                        
+                                        {/* Status do Alerta */}
+                                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                                          {alertIcon}
+                                          <div className="flex flex-col gap-1">
+                                            <span className={`text-xs font-medium ${
+                                              alertType === "disabled" ? "text-gray-700" :
+                                              alertType === "nextMonth" ? "text-orange-800" :
+                                              alertType === "appointments" ? "text-blue-800" :
+                                              alertType === "guides" ? "text-green-800" :
+                                              alertType === "both" ? "text-blue-800" :
+                                              "text-amber-800"
+                                            }`}>
+                                              {alertMessage}
+                                            </span>
+                                            
+                                            {/* Datas específicas */}
+                                            <div className="flex flex-col gap-2">
+                                              {alertType === "disabled" && alertItem?.motivo && (
+                                                <div className="flex flex-wrap gap-1">
+                                                  <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs font-medium">
+                                                    Motivo: {alertItem.motivo}
+                                                  </span>
+                                                </div>
+                                              )}
+                                              
+                                              {alertType === "nextMonth" && (
+                                                <div className="flex flex-wrap gap-1">
+                                                  <span className="px-2 py-1 bg-orange-200 text-orange-900 rounded text-xs font-medium">
+                                                    📅 Próximo mês
+                                  </span>
                                 </div>
-                              </div>
-                            );
-                          })}
+                              )}
+                                              
+                                              {alertType === "both" && (
+                                                <div className="space-y-2">
+                                                  {/* Agendamentos Faltantes */}
+                                                  <div className="flex flex-col gap-1">
+                                                    <span className="text-xs font-semibold text-blue-900">Agendamentos:</span>
+                                                    <div className="flex flex-wrap gap-1">
+                                                      {missingAppointments.map(day => (
+                                                        <span key={day} className="px-2 py-1 bg-blue-200 text-blue-900 rounded text-xs font-medium">
+                                                          {formatDateForDisplay(day, year, monthIndex)}
+                                                        </span>
+                                                      ))}
+                                                    </div>
+                                                  </div>
+                                                  
+                                                  {/* Guias Faltantes */}
+                                                  <div className="flex flex-col gap-1">
+                                                    <span className="text-xs font-semibold text-green-900">Guias Faltantes:</span>
+                                                    <div className="flex flex-wrap gap-1">
+                                                      {allMissingGuides.map(day => (
+                                                        <span key={day} className="px-2 py-1 bg-green-200 text-green-900 rounded text-xs font-medium">
+                                                          {formatDateForDisplay(day, year, monthIndex)}
+                                                        </span>
+                                                      ))}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              )}
+                                              
+                                              {alertType === "appointments" && missingAppointments.length > 0 && (
+                                                <div className="flex flex-wrap gap-1">
+                                                  {missingAppointments.map(day => (
+                                                    <span key={day} className="px-2 py-1 bg-blue-200 text-blue-900 rounded text-xs font-medium">
+                                                      📅 {formatDateForDisplay(day, year, monthIndex)}
+                                  </span>
+                                                ))}
+                                </div>
+                              )}
+                                              
+                                              {alertType === "guides" && allMissingGuides.length > 0 && (
+                                                <div className="flex flex-wrap gap-1">
+                                                  {allMissingGuides.map(day => (
+                                                    <span key={day} className="px-2 py-1 bg-green-200 text-green-900 rounded text-xs font-medium">
+                                                      📋 {formatDateForDisplay(day, year, monthIndex)}
+                                  </span>
+                                                ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                                        </div>
+                                        
+                                        {/* Botão Editar */}
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            onClick={() => handleEditAlert(alertItem)}
+                                            className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                            title="Editar alerta"
+                                          >
+                                            <Edit className="h-4 w-4" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </>
+                              )}
+                              
+                              {/* Separador entre ativos e desabilitados */}
+                              {activeAlerts.length > 0 && disabledAlerts.length > 0 && (
+                                <div className="my-4 border-t border-gray-300"></div>
+                              )}
+                              
+                              {/* Alertas Desabilitados */}
+                              {disabledAlerts.length > 0 && (
+                                <>
+                                  <div className="flex items-center gap-3 px-4 py-2 bg-gray-50 border-l-4 border-gray-400">
+                                    <div className="w-2 h-2 bg-gray-500 rounded-full"></div>
+                                    <span className="text-sm font-semibold text-gray-800">DESATIVADOS</span>
+                                  </div>
+                                  <div className="border-b border-gray-200 mb-2"></div>
+                                  {disabledAlerts.map((a) => {
+                                    // Verificar se o alerta está desabilitado
+                                    const alertItem = alertItems.find(item => item.patient_id === a.patient_id);
+                                    const isDisabled = alertItem?.exibir === 0;
+                                    
+                                    // Agendamentos faltantes
+                                    const missingAppointments = a.missingDatesForCompleteMonth || [];
+                                    
+                                    // Guias faltantes
+                                    const allMissingGuides = [
+                                      ...(a.missingDatesForGuides || []),
+                                      ...(a.appointmentsWithoutGuides || [])
+                                    ].filter((value, index, self) => self.indexOf(value) === index);
+                                    
+                                    // Outros alertas
+                                    const otherAlerts = [];
+                                    if (a.noGuides) otherAlerts.push("Sem guia para este mês");
+                                    if (a.needsMoreGuidesForRestOfMonth) otherAlerts.push("Faltam guias para semanas 3 e 4");
+                                    
+                                    // Determinar o tipo de alerta e cor
+                                    let alertType = "";
+                                    let alertColor = "";
+                                    let alertMessage = "";
+                                    let alertIcon = null;
+                                    
+                                    if (isDisabled) {
+                                      // Alerta desabilitado - tema cinza
+                                      alertType = "disabled";
+                                      alertColor = "bg-gray-50 border-gray-200";
+                                      alertMessage = `Alerta desabilitado`;
+                                      alertIcon = <AlertTriangle className="h-4 w-4 text-gray-600" />;
+                                    } else if (a.needsNextMonthScheduling && a.hasAppointmentsInLastWeek) {
+                                      // Alerta laranja: precisa agendamento para próximo mês
+                                      alertType = "nextMonth";
+                                      alertColor = "bg-orange-100 border-orange-400";
+                                      alertMessage = `Precisa agendamento para próximo mês`;
+                                      alertIcon = <Calendar className="h-4 w-4 text-orange-700" />;
+                                    } else if (missingAppointments.length > 0 && allMissingGuides.length > 0) {
+                                      // Ambos faltando - usar alerta azul melhorado
+                                      alertType = "both";
+                                      alertColor = "bg-blue-100 border-blue-400";
+                                      alertMessage = `Faltam agendamentos e guias`;
+                                      alertIcon = <AlertTriangle className="h-4 w-4 text-blue-700" />;
+                                    } else if (missingAppointments.length > 0) {
+                                      // Só agendamentos faltando
+                                      alertType = "appointments";
+                                      alertColor = "bg-blue-100 border-blue-400";
+                                      alertMessage = `Faltam agendamentos`;
+                                      alertIcon = <Calendar className="h-4 w-4 text-blue-700" />;
+                                    } else if (allMissingGuides.length > 0) {
+                                      // Só guias faltando
+                                      alertType = "guides";
+                                      alertColor = "bg-green-100 border-green-400";
+                                      alertMessage = `Faltam guias`;
+                                      alertIcon = <ClipboardList className="h-4 w-4 text-green-700" />;
+                                    } else if (otherAlerts.length > 0) {
+                                      // Outros alertas
+                                      alertType = "other";
+                                      alertColor = "bg-amber-100 border-amber-400";
+                                      alertMessage = otherAlerts[0];
+                                      alertIcon = <AlertTriangle className="h-4 w-4 text-amber-700" />;
+                                    }
+                                    
+                                    return (
+                                      <div key={a.patient_id} className={`flex items-center px-4 py-3 rounded text-sm hover:bg-opacity-80 transition-colors border-l-4 ${alertColor}`}>
+                                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                                          <User className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                                          <span className="font-medium truncate">{a.paciente_nome}</span>
+                                        </div>
+                                        
+                                        {/* Status do Alerta */}
+                                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                                          {alertIcon}
+                                          <div className="flex flex-col gap-1">
+                                            <span className={`text-xs font-medium ${
+                                              alertType === "disabled" ? "text-gray-700" :
+                                              alertType === "nextMonth" ? "text-orange-800" :
+                                              alertType === "appointments" ? "text-blue-800" :
+                                              alertType === "guides" ? "text-green-800" :
+                                              alertType === "both" ? "text-blue-800" :
+                                              "text-amber-800"
+                                            }`}>
+                                              {alertMessage}
+                                            </span>
+                                            
+                                            {/* Datas específicas */}
+                                            <div className="flex flex-col gap-2">
+                                              {alertType === "disabled" && alertItem?.motivo && (
+                                                <div className="flex flex-wrap gap-1">
+                                                  <span className="px-2 py-1 bg-gray-100 text-gray-800 rounded text-xs font-medium">
+                                                    Motivo: {alertItem.motivo}
+                                                  </span>
+                                                </div>
+                                              )}
+                                              
+                                              {alertType === "nextMonth" && (
+                                                <div className="flex flex-wrap gap-1">
+                                                  <span className="px-2 py-1 bg-orange-200 text-orange-900 rounded text-xs font-medium">
+                                                    📅 Próximo mês
+                                  </span>
+                                </div>
+                              )}
+                                              
+                                              {alertType === "both" && (
+                                                <div className="space-y-2">
+                                                  {/* Agendamentos Faltantes */}
+                                                  <div className="flex flex-col gap-1">
+                                                    <span className="text-xs font-semibold text-blue-900">Agendamentos:</span>
+                                                    <div className="flex flex-wrap gap-1">
+                                                      {missingAppointments.map(day => (
+                                                        <span key={day} className="px-2 py-1 bg-blue-200 text-blue-900 rounded text-xs font-medium">
+                                                          {formatDateForDisplay(day, year, monthIndex)}
+                                                        </span>
+                                                      ))}
+                                                    </div>
+                                                  </div>
+                                                  
+                                                  {/* Guias Faltantes */}
+                                                  <div className="flex flex-col gap-1">
+                                                    <span className="text-xs font-semibold text-green-900">Guias Faltantes:</span>
+                                                    <div className="flex flex-wrap gap-1">
+                                                      {allMissingGuides.map(day => (
+                                                        <span key={day} className="px-2 py-1 bg-green-200 text-green-900 rounded text-xs font-medium">
+                                                          {formatDateForDisplay(day, year, monthIndex)}
+                                                        </span>
+                                                      ))}
+                                                    </div>
+                                                  </div>
+                                                </div>
+                                              )}
+                                              
+                                              {alertType === "appointments" && missingAppointments.length > 0 && (
+                                                <div className="flex flex-wrap gap-1">
+                                                  {missingAppointments.map(day => (
+                                                    <span key={day} className="px-2 py-1 bg-blue-200 text-blue-900 rounded text-xs font-medium">
+                                                      📅 {formatDateForDisplay(day, year, monthIndex)}
+                                  </span>
+                                                ))}
+                                </div>
+                              )}
+                                              
+                                              {alertType === "guides" && allMissingGuides.length > 0 && (
+                                                <div className="flex flex-wrap gap-1">
+                                                  {allMissingGuides.map(day => (
+                                                    <span key={day} className="px-2 py-1 bg-green-200 text-green-900 rounded text-xs font-medium">
+                                                      📋 {formatDateForDisplay(day, year, monthIndex)}
+                                  </span>
+                                                ))}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                                        </div>
+                                        
+                                        {/* Botão Editar */}
+                                        <div className="flex items-center gap-2">
+                                          <button
+                                            onClick={() => handleEditAlert(alertItem)}
+                                            className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                            title="Editar alerta"
+                                          >
+                                            <Edit className="h-4 w-4" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     </CardContent>
                   </Card>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Edição de Alerta */}
+      {showEditModal && editingAlert && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          onClick={() => setShowEditModal(false)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white p-4 flex items-center justify-between rounded-t-xl">
+              <h3 className="text-lg font-bold">Editar Alerta</h3>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="p-1 rounded-full hover:bg-white/20 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <p className="text-sm text-gray-600">
+                  <strong>Paciente:</strong> {editingAlert.paciente_nome}
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="exibir"
+                    checked={editExibir}
+                    onChange={(e) => setEditExibir(e.target.checked)}
+                    className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
+                  />
+                  <label htmlFor="exibir" className="text-sm font-medium text-gray-700">
+                    Alerta ativo
+                  </label>
+                </div>
+
+                <div>
+                  <label htmlFor="motivo" className="block text-sm font-medium text-gray-700 mb-1">
+                    Motivo (opcional)
+                  </label>
+                  <textarea
+                    id="motivo"
+                    value={editMotivo}
+                    onChange={(e) => setEditMotivo(e.target.value)}
+                    placeholder="Digite o motivo da alteração..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end space-x-2 pt-4">
+                <button
+                  onClick={() => setShowEditModal(false)}
+                  className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+                  disabled={savingAlert}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSaveAlert}
+                  disabled={savingAlert}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                >
+                  {savingAlert && (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  )}
+                  {savingAlert ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
