@@ -23,10 +23,7 @@ const patientSchema = z.object({
     .regex(/^\d{11}$/, "Telefone deve conter apenas números no formato DDD+9+número")
     .transform(v => v.replace(/\D/g, "")),
   email: z.string().email("E-mail inválido"),
-  address: z.string().min(10, "Endereço deve ter pelo menos 10 caracteres"),
   birthdate: z.string().min(1, "Data de nascimento é obrigatória"),
-  identity_document: z.string().optional(),
-  insurance_document: z.string().optional(),
   value: z.coerce.number().min(0.01, { message: "O valor deve ser maior que 0!" }),
   nome_responsavel: z.string().optional(),
   telefone_responsavel: z.string()
@@ -51,6 +48,7 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
   const [showComplementaryData, setShowComplementaryData] = useState(false);
+  const [identityPdfFile, setIdentityPdfFile] = useState<File | null>(null);
   const valueId = useId();
 
   const formMethods = useForm<PatientFormData>({
@@ -60,10 +58,7 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
       cpf: patient?.cpf || "",
       phone: patient?.phone || "",
       email: patient?.email || "",
-      address: patient?.address || "",
       birthdate: patient?.birthdate || "",
-      identity_document: patient?.identityDocument || "",
-      insurance_document: patient?.insuranceDocument || "",
       value: 200.0,
       nome_responsavel: "",
       telefone_responsavel: "",
@@ -100,6 +95,35 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
     setValue("value", numericValue);
   };
 
+  // Função para lidar com a seleção do arquivo PDF da identidade
+  const handleIdentityPdfSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validar se é PDF
+      if (file.type !== 'application/pdf') {
+        toast({
+          title: "Erro",
+          description: "Por favor, selecione apenas arquivos PDF.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Validar tamanho (10MB)
+      const maxSize = 10 * 1024 * 1024; // 10MB em bytes
+      if (file.size > maxSize) {
+        toast({
+          title: "Erro",
+          description: "Arquivo muito grande. Tamanho máximo: 10MB",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      setIdentityPdfFile(file);
+    }
+  };
+
   // Máscaras para formatação
   const validateCPF = (cpf: string) => {
     // Regex para validar CPF no formato 000.000.000-00
@@ -112,6 +136,16 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
       toast({
         title: "Erro",
         description: "CPF inválido. Verifique os dados informados.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validar se há PDF quando necessário
+    if (!isEdit && !identityPdfFile) {
+      toast({
+        title: "Erro",
+        description: "Documento de identidade (PDF) é obrigatório para novos cadastros.",
         variant: "destructive",
       });
       return;
@@ -130,6 +164,9 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
         ? "https://webhook.essenciasaudeintegrada.com.br/webhook/patients_edit"
         : "https://webhook.essenciasaudeintegrada.com.br/webhook/create-patient";
 
+      console.log('Enviando dados do paciente:', requestData);
+      console.log('Arquivo PDF selecionado:', identityPdfFile);
+
       const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -140,10 +177,60 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
 
       if (response.ok) {
         const result = await response.json();
+        console.log('Resposta da API create-patient:', result);
+        
+        // Primeiro submit: Criar/atualizar paciente
         toast({
           title: "Sucesso",
           description: isEdit ? "Paciente atualizado com sucesso." : "Paciente cadastrado com sucesso.",
         });
+
+        // Segundo submit: Enviar documento PDF (apenas para novos cadastros)
+        if (identityPdfFile && !isEdit) {
+          try {
+            console.log('Enviando PDF para insert_documento_pessoal');
+            
+            const formData = new FormData();
+            formData.append('documento', identityPdfFile);
+            formData.append('nome', data.name);
+
+            console.log('FormData preparado:', {
+              documento: identityPdfFile.name,
+              nome: data.name
+            });
+
+            const pdfResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/insert_documento_pessoal', {
+              method: 'POST',
+              body: formData
+            });
+
+            console.log('Resposta da API insert_documento_pessoal:', pdfResponse.status);
+
+            if (pdfResponse.ok) {
+              const pdfResult = await pdfResponse.json();
+              console.log('Resultado do envio do PDF:', pdfResult);
+              toast({
+                title: "Sucesso",
+                description: "Documento de identidade enviado com sucesso.",
+              });
+            } else {
+              const errorText = await pdfResponse.text();
+              console.error('Erro ao enviar documento pessoal:', pdfResponse.status, errorText);
+              toast({
+                title: "Aviso",
+                description: "Paciente cadastrado, mas houve erro ao enviar documento de identidade.",
+                variant: "destructive"
+              });
+            }
+          } catch (pdfError) {
+            console.error('Erro ao enviar documento pessoal:', pdfError);
+            toast({
+              title: "Aviso",
+              description: "Paciente cadastrado, mas houve erro ao enviar documento de identidade.",
+              variant: "destructive"
+            });
+          }
+        }
 
         if (onSave) {
           // Criar um objeto Patient com o ID retornado pela API
@@ -153,11 +240,8 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
             cpf: data.cpf,
             phone: data.phone,
             email: data.email,
-            address: data.address,
             birthdate: data.birthdate,
             active: true,
-            identityDocument: data.identity_document,
-            insuranceDocument: data.insurance_document,
             nome_responsavel: data.nome_responsavel,
             telefone_responsavel: data.telefone_responsavel,
           };
@@ -240,18 +324,6 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
         />
 
         <InputDynamic
-          name="address"
-          label="Endereço"
-          control={control}
-          placeholder="Rua, número, bairro - Cidade/UF"
-          required
-          disabled={isLoading}
-          errors={errors}
-          className="md:col-span-2"
-          onClear={() => setValue("address", "")}
-        />
-
-        <InputDynamic
           name="birthdate"
           label="Data de Nascimento"
           control={control}
@@ -262,26 +334,28 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
           onClear={() => setValue("birthdate", "")}
         />
 
-        <InputDynamic
-          name="identity_document"
-          label="Documento de Identidade"
-          control={control}
-          placeholder="RG, CNH, etc."
-          disabled={isLoading}
-          errors={errors}
-          onClear={() => setValue("identity_document", "")}
-        />
-
-        <InputDynamic
-          name="insurance_document"
-          label="Carteirinha do Convênio"
-          control={control}
-          placeholder="Número da carteirinha"
-          disabled={isLoading}
-          errors={errors}
-          className="md:col-span-2"
-          onClear={() => setValue("insurance_document", "")}
-        />
+        {/* Campo de upload de PDF da identidade */}
+        <div className="md:col-span-2">
+          <label className="text-sm font-medium text-gray-700 mb-2 block">
+            Documento de Identidade (PDF) *
+          </label>
+          <input
+            type="file"
+            accept=".pdf"
+            onChange={handleIdentityPdfSelect}
+            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            disabled={isLoading}
+            required={!isEdit}
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Tamanho máximo: 10MB
+          </p>
+          {identityPdfFile && (
+            <p className="text-sm text-green-600 mt-1">
+              ✓ Arquivo selecionado: {identityPdfFile.name}
+            </p>
+          )}
+        </div>
 
         {/* Botão para mostrar dados complementares */}
         <div className="md:col-span-2 flex justify-center">

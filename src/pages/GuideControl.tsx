@@ -164,11 +164,20 @@ const GuideControl = () => {
   const [uploadType, setUploadType] = useState<'autorizada' | 'assinada' | 'assinada_psicologo' | null>(null);
   const [selectedCompletedMonth, setSelectedCompletedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
   const [downloadingAll, setDownloadingAll] = useState(false);
+  const [downloadingEverything, setDownloadingEverything] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({
     total: 0,
     completed: 0,
     failed: 0,
     remaining: 0
+  });
+  const [downloadEverythingProgress, setDownloadEverythingProgress] = useState({
+    total: 0,
+    completed: 0,
+    failed: 0,
+    remaining: 0,
+    currentStep: '',
+    currentGuide: ''
   });
 
   // Verificação de permissões do usuário
@@ -1196,6 +1205,208 @@ const GuideControl = () => {
   const handleDownloadAllAssinadas = () => handleDownloadAllGuidesByType('assinada');
   const handleDownloadAllAssinadasPsicologo = () => handleDownloadAllGuidesByType('assinada_psicologo');
 
+  // Função para baixar tudo (3 requests por guia)
+  const handleDownloadEverything = async () => {
+    // Filtrar apenas guias com guia assinada pelo psicólogo
+    const guidesToDownload = completedGuides.filter(g => g.existe_guia_assinada_psicologo === 1);
+    
+    if (guidesToDownload.length === 0) {
+      toast.info('Nenhuma guia assinada pelo psicólogo encontrada para download');
+      return;
+    }
+
+    setDownloadingEverything(true);
+    
+    // Calcular total de requests (3 por guia)
+    const totalRequests = guidesToDownload.length * 3;
+    
+    setDownloadEverythingProgress({
+      total: totalRequests,
+      completed: 0,
+      failed: 0,
+      remaining: totalRequests,
+      currentStep: 'Iniciando downloads...',
+      currentGuide: ''
+    });
+
+    let completed = 0;
+    let failed = 0;
+
+    try {
+      for (let i = 0; i < guidesToDownload.length; i++) {
+        const guide = guidesToDownload[i];
+        
+        setDownloadEverythingProgress(prev => ({
+          ...prev,
+          currentGuide: guide.name,
+          currentStep: `Processando guia ${i + 1} de ${guidesToDownload.length}`
+        }));
+
+        // Request 1: Guia assinada pelo psicólogo
+        try {
+          setDownloadEverythingProgress(prev => ({
+            ...prev,
+            currentStep: `Baixando guia assinada pelo psicólogo - ${guide.name}`
+          }));
+
+          const response1 = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/get_guia_completed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              numero_prestador: guide.numero_prestador,
+              command: 'Guia-assinada-psicologo'
+            })
+          });
+
+          if (response1.ok) {
+            const blob1 = await response1.blob();
+            const url1 = window.URL.createObjectURL(blob1);
+            const link1 = document.createElement('a');
+            link1.href = url1;
+            // Usar nome original do arquivo se disponível, senão usar nome padrão
+            const contentDisposition = response1.headers.get('Content-Disposition');
+            const filename1 = contentDisposition 
+              ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') 
+              : `Guia-Assinada-Psicologo-${guide.name}-${guide.numero_prestador}.pdf`;
+            link1.download = filename1;
+            document.body.appendChild(link1);
+            link1.click();
+            document.body.removeChild(link1);
+            window.URL.revokeObjectURL(url1);
+            completed++;
+          } else {
+            failed++;
+          }
+        } catch (error) {
+          console.error('Erro ao baixar guia assinada pelo psicólogo:', error);
+          failed++;
+        }
+
+        setDownloadEverythingProgress(prev => ({
+          ...prev,
+          completed: completed,
+          failed: failed,
+          remaining: totalRequests - completed - failed
+        }));
+
+        // Request 2: Documento pessoal
+        try {
+          setDownloadEverythingProgress(prev => ({
+            ...prev,
+            currentStep: `Baixando documento pessoal - ${guide.name}`
+          }));
+
+          const response2 = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/documento_pessoal', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              nome: guide.name
+            })
+          });
+
+          if (response2.ok) {
+            const blob2 = await response2.blob();
+            const url2 = window.URL.createObjectURL(blob2);
+            const link2 = document.createElement('a');
+            link2.href = url2;
+            // Usar nome original do arquivo se disponível, senão usar nome padrão
+            const contentDisposition2 = response2.headers.get('Content-Disposition');
+            const filename2 = contentDisposition2 
+              ? contentDisposition2.split('filename=')[1]?.replace(/"/g, '') 
+              : `Documento-Pessoal-${guide.name}.pdf`;
+            link2.download = filename2;
+            document.body.appendChild(link2);
+            link2.click();
+            document.body.removeChild(link2);
+            window.URL.revokeObjectURL(url2);
+            completed++;
+          } else {
+            failed++;
+          }
+        } catch (error) {
+          console.error('Erro ao baixar documento pessoal:', error);
+          failed++;
+        }
+
+        setDownloadEverythingProgress(prev => ({
+          ...prev,
+          completed: completed,
+          failed: failed,
+          remaining: totalRequests - completed - failed
+        }));
+
+        // Request 3: Relatório
+        try {
+          setDownloadEverythingProgress(prev => ({
+            ...prev,
+            currentStep: `Baixando relatório - ${guide.name}`
+          }));
+
+          const response3 = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/relatorio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              nome: guide.name,
+              titulo: 'RELATORIO PSICOLOGICO',
+              cid: 'F-41',
+              plano: 'PMDF'
+            })
+          });
+
+          if (response3.ok) {
+            const blob3 = await response3.blob();
+            const url3 = window.URL.createObjectURL(blob3);
+            const link3 = document.createElement('a');
+            link3.href = url3;
+            // Usar nome original do arquivo se disponível, senão usar nome padrão
+            const contentDisposition3 = response3.headers.get('Content-Disposition');
+            const filename3 = contentDisposition3 
+              ? contentDisposition3.split('filename=')[1]?.replace(/"/g, '') 
+              : `Relatorio-Psicologico-${guide.name}.pdf`;
+            link3.download = filename3;
+            document.body.appendChild(link3);
+            link3.click();
+            document.body.removeChild(link3);
+            window.URL.revokeObjectURL(url3);
+            completed++;
+          } else {
+            failed++;
+          }
+        } catch (error) {
+          console.error('Erro ao baixar relatório:', error);
+          failed++;
+        }
+
+        setDownloadEverythingProgress(prev => ({
+          ...prev,
+          completed: completed,
+          failed: failed,
+          remaining: totalRequests - completed - failed
+        }));
+
+        // Pequeno delay entre guias para não sobrecarregar
+        if (i < guidesToDownload.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      setDownloadingEverything(false);
+      
+      // Mostrar resultado final
+      if (failed === 0) {
+        toast.success(`Download concluído! ${completed} arquivos baixados com sucesso.`);
+      } else if (completed === 0) {
+        toast.error(`Falha no download! ${failed} arquivos falharam.`);
+      } else {
+        toast.warning(`Download parcial! ${completed} arquivos baixados, ${failed} falharam.`);
+      }
+    } catch (error) {
+      console.error('Erro geral no download:', error);
+      toast.error('Erro durante o download. Tente novamente.');
+      setDownloadingEverything(false);
+    }
+  };
+
 
   if (loading) {
     return (
@@ -1735,6 +1946,25 @@ const GuideControl = () => {
                       </>
                     )}
                   </Button>
+                  <Button 
+                    onClick={handleDownloadEverything} 
+                    variant="default" 
+                    size="sm"
+                    disabled={downloadingEverything || downloadingAll || completedGuides.filter(g => g.existe_guia_assinada_psicologo === 1).length === 0}
+                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    {downloadingEverything ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        Baixando tudo...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4" />
+                        Baixar tudo
+                      </>
+                    )}
+                  </Button>
                   <Button onClick={getCompletedGuidesForCurrentMonth} variant="outline" size="sm">
                     <RefreshCw className="h-4 w-4 mr-2" />
                     Atualizar
@@ -1787,6 +2017,37 @@ const GuideControl = () => {
                     <span>✅ Concluídas: {downloadProgress.completed}</span>
                     <span>❌ Falharam: {downloadProgress.failed}</span>
                     <span>⏳ Restantes: {downloadProgress.remaining}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Indicador de progresso do download tudo */}
+              {downloadingEverything && (
+                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-medium text-green-900">Baixando tudo...</h4>
+                    <span className="text-sm text-green-700">
+                      {downloadEverythingProgress.completed + downloadEverythingProgress.failed} / {downloadEverythingProgress.total}
+                    </span>
+                  </div>
+                  <div className="w-full bg-green-200 rounded-full h-2 mb-2">
+                    <div 
+                      className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                      style={{ 
+                        width: `${((downloadEverythingProgress.completed + downloadEverythingProgress.failed) / downloadEverythingProgress.total) * 100}%` 
+                      }}
+                    ></div>
+                  </div>
+                  <div className="mb-2">
+                    <p className="text-xs text-green-700 font-medium">{downloadEverythingProgress.currentStep}</p>
+                    {downloadEverythingProgress.currentGuide && (
+                      <p className="text-xs text-green-600">Paciente: {downloadEverythingProgress.currentGuide}</p>
+                    )}
+                  </div>
+                  <div className="flex justify-between text-xs text-green-700">
+                    <span>✅ Concluídas: {downloadEverythingProgress.completed}</span>
+                    <span>❌ Falharam: {downloadEverythingProgress.failed}</span>
+                    <span>⏳ Restantes: {downloadEverythingProgress.remaining}</span>
                   </div>
                 </div>
               )}
