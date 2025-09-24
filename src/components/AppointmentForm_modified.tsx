@@ -17,7 +17,6 @@ import { Upload, RefreshCw } from "lucide-react";
 import { ComboboxDynamic } from "./ComboboxDynamic";
 import { appointmentSchema, AppointmentFormData } from "@/zod/appointmentSchema"; // Ajuste o caminho
 import { InputDynamic } from "./inputDin";
-import AppointmentProgressAlert from "./AppointmentProgressAlert";
 
 interface AppointmentFormProps {
   selectedDate: Date;
@@ -52,10 +51,6 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
 
   // Estados para upload de PDF
   const [pdfFile, setPdfFile] = useState<File | null>(null);
-
-  // Estados para feedback visual do agendamento
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showProgressAlert, setShowProgressAlert] = useState(false);
 
   const formMethods: UseFormReturn<AppointmentFormData> = useForm<AppointmentFormData>({
     resolver: zodResolver(appointmentSchema),
@@ -476,8 +471,6 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
     }
 
     setIsLoading(true);
-    setIsSubmitting(true);
-    setShowProgressAlert(true);
     let successCount = 0;
     let errorCount = 0;
 
@@ -559,6 +552,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
               formData.append('documento', pdfFile);
               formData.append('numero_prestador', data.numeroPrestador);
               formData.append('command', 'Guia-autorizada');
+              formData.append('nome_patient', patients.find(p => p.id === data.patientId)?.name || '');
 
               const pdfResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/insert_guia_completed', {
                 method: 'POST',
@@ -591,9 +585,6 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
           ? `${successCount} agendamento(s) criado(s) com sucesso. ${errorCount} falha(s).`
           : `${successCount} agendamento(s) criado(s) com sucesso!`;
         
-        // Esconder alerta de progresso
-        setShowProgressAlert(false);
-        
         toast({ 
           title: "Sucesso", 
           description: message,
@@ -610,11 +601,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
         if (onAppointmentCreated) {
           onAppointmentCreated();
         }
-        
-        // Fechar o modal após 2 segundos
-        setTimeout(() => {
-          onClose();
-        }, 2000);
+        onClose();
       } else {
         toast({ 
           title: "Erro", 
@@ -631,8 +618,6 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
       });
     } finally {
       setIsLoading(false);
-      setIsSubmitting(false);
-      setShowProgressAlert(false);
     }
   };
 
@@ -1080,8 +1065,8 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
         <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
           Cancelar
         </Button>
-        <Button type="submit" disabled={isLoading || selectedDates.length === 0 || isSubmitting}>
-          {isSubmitting ? "Agendando..." : selectedDates.length > 1 ? `Agendar ${selectedDates.length} consultas` : "Agendar"}
+        <Button type="submit" disabled={isLoading || selectedDates.length === 0}>
+          {selectedDates.length > 1 ? `Agendar ${selectedDates.length} consultas` : "Agendar"}
         </Button>
       </div>
 
@@ -1094,12 +1079,6 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
           <PatientForm onSave={handlePatientAdded} onCancel={() => setIsPatientFormOpen(false)} />
         </DialogContent>
       </Dialog>
-      
-      {/* Alerta de progresso */}
-      <AppointmentProgressAlert 
-        isVisible={showProgressAlert}
-        message="Solicitando agendamento..."
-      />
     </form>
   );
 };

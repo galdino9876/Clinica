@@ -27,6 +27,7 @@ import { format, parseISO, startOfWeek, endOfWeek, eachDayOfInterval, difference
 import { ptBR } from "date-fns/locale";
 import { toast, Toaster } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import GuideStatsChart from "@/components/GuideStatsChart";
 
 interface Appointment {
   id: number;
@@ -66,7 +67,10 @@ interface CompletedGuide {
   id: number;
   id_patient: number;
   numero_prestador: string;
-  existe_pdf_assinado: number;
+  existe_pdf_assinado: number; // Manter para compatibilidade
+  existe_guia_autorizada: number;
+  existe_guia_assinada: number;
+  existe_guia_assinada_psicologo: number;
   date_1: string | null;
   date_2: string | null;
   date_3: string | null;
@@ -157,6 +161,7 @@ const GuideControl = () => {
   const [selectedGuideForUpload, setSelectedGuideForUpload] = useState<CompletedGuide | null>(null);
   const [uploadFile, setUploadFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [uploadType, setUploadType] = useState<'autorizada' | 'assinada' | 'assinada_psicologo' | null>(null);
   const [selectedCompletedMonth, setSelectedCompletedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
   const [downloadingAll, setDownloadingAll] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState({
@@ -857,9 +862,10 @@ const GuideControl = () => {
     }
   };
 
-  const handleUploadGuide = (guide: CompletedGuide) => {
+  const handleUploadGuide = (guide: CompletedGuide, type: 'autorizada' | 'assinada' | 'assinada_psicologo') => {
     setSelectedGuideForUpload(guide);
     setUploadFile(null);
+    setUploadType(type);
     setIsUploadModalOpen(true);
   };
 
@@ -884,7 +890,7 @@ const GuideControl = () => {
   };
 
   const handleSubmitUpload = async () => {
-    if (!selectedGuideForUpload || !uploadFile) {
+    if (!selectedGuideForUpload || !uploadFile || !uploadType) {
       toast.error('Selecione um arquivo para upload');
       return;
     }
@@ -897,6 +903,21 @@ const GuideControl = () => {
       formData.append('id_patient', selectedGuideForUpload.id_patient.toString());
       formData.append('nome_patient', selectedGuideForUpload.name);
       formData.append('numero_prestador', selectedGuideForUpload.numero_prestador);
+      
+      // Adicionar command baseado no tipo de upload
+      let command = '';
+      switch (uploadType) {
+        case 'autorizada':
+          command = 'Guia-autorizada';
+          break;
+        case 'assinada':
+          command = 'Guia-assinada';
+          break;
+        case 'assinada_psicologo':
+          command = 'Guia-assinada-psicologo';
+          break;
+      }
+      formData.append('command', command);
 
       const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/insert_guia_completed', {
         method: 'POST',
@@ -907,10 +928,14 @@ const GuideControl = () => {
         throw new Error(`Erro no upload: ${response.status}`);
       }
 
-      toast.success('Guia importada com sucesso!');
+      toast.success(`Guia ${uploadType === 'autorizada' ? 'autorizada' : 
+                            uploadType === 'assinada' ? 'assinada' : 
+                            uploadType === 'assinada_psicologo' ? 'assinada pelo psicólogo' : 
+                            ''} importada com sucesso!`);
       setIsUploadModalOpen(false);
       setSelectedGuideForUpload(null);
       setUploadFile(null);
+      setUploadType(null);
       // Recarregar dados para atualizar o status
       getCompletedGuidesForCurrentMonth();
     } catch (error) {
@@ -921,8 +946,22 @@ const GuideControl = () => {
     }
   };
 
-  const handleDownloadGuide = async (guide: CompletedGuide) => {
+  const handleDownloadGuide = async (guide: CompletedGuide, type: 'autorizada' | 'assinada' | 'assinada_psicologo') => {
     try {
+      // Determinar command baseado no tipo
+      let command = '';
+      switch (type) {
+        case 'autorizada':
+          command = 'Guia-autorizada';
+          break;
+        case 'assinada':
+          command = 'Guia-assinada';
+          break;
+        case 'assinada_psicologo':
+          command = 'Guia-assinada-psicologo';
+          break;
+      }
+
       const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/get_guia_completed', {
         method: 'POST',
         headers: {
@@ -931,7 +970,8 @@ const GuideControl = () => {
         body: JSON.stringify({
           id_patient: guide.id_patient,
           nome_patient: guide.name,
-          numero_prestador: guide.numero_prestador
+          numero_prestador: guide.numero_prestador,
+          command: command
         })
       });
 
@@ -1012,29 +1052,52 @@ const GuideControl = () => {
     }
   };
 
-  const handleDownloadAllSignedGuides = async () => {
-    // Filtrar apenas guias com PDF assinado
-    const signedGuides = completedGuides.filter(guide => guide.existe_pdf_assinado === 1);
+  const handleDownloadAllGuidesByType = async (type: 'autorizada' | 'assinada' | 'assinada_psicologo') => {
+    // Determinar campo e command baseado no tipo
+    let fieldName = '';
+    let command = '';
+    let typeLabel = '';
     
-    if (signedGuides.length === 0) {
-      toast.info('Nenhuma guia assinada encontrada para download');
+    switch (type) {
+      case 'autorizada':
+        fieldName = 'existe_guia_autorizada';
+        command = 'Guia-autorizada';
+        typeLabel = 'autorizada';
+        break;
+      case 'assinada':
+        fieldName = 'existe_guia_assinada';
+        command = 'Guia-assinada';
+        typeLabel = 'assinada';
+        break;
+      case 'assinada_psicologo':
+        fieldName = 'existe_guia_assinada_psicologo';
+        command = 'Guia-assinada-psicologo';
+        typeLabel = 'assinada pelo psicólogo';
+        break;
+    }
+
+    // Filtrar apenas guias com o tipo específico
+    const guidesToDownload = completedGuides.filter(guide => guide[fieldName as keyof CompletedGuide] === 1);
+    
+    if (guidesToDownload.length === 0) {
+      toast.info(`Nenhuma guia ${typeLabel} encontrada para download`);
       return;
     }
 
     setDownloadingAll(true);
     setDownloadProgress({
-      total: signedGuides.length,
+      total: guidesToDownload.length,
       completed: 0,
       failed: 0,
-      remaining: signedGuides.length
+      remaining: guidesToDownload.length
     });
 
     let completed = 0;
     let failed = 0;
 
     // Processar cada guia sequencialmente para evitar sobrecarga
-    for (let i = 0; i < signedGuides.length; i++) {
-      const guide = signedGuides[i];
+    for (let i = 0; i < guidesToDownload.length; i++) {
+      const guide = guidesToDownload[i];
       
       try {
         const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/get_guia_completed', {
@@ -1045,7 +1108,8 @@ const GuideControl = () => {
           body: JSON.stringify({
             id_patient: guide.id_patient,
             nome_patient: guide.name,
-            numero_prestador: guide.numero_prestador
+            numero_prestador: guide.numero_prestador,
+            command: command
           })
         });
 
@@ -1064,7 +1128,7 @@ const GuideControl = () => {
             const fileExtension = fileData.data['File Extension:'] || 'pdf';
             const fileSize = fileData.data['File Size:'] || 'N/A';
             
-            console.log(`Download ${i + 1}/${signedGuides.length}: ${fileName}.${fileExtension} (${fileSize})`);
+            console.log(`Download ${i + 1}/${guidesToDownload.length}: ${fileName}.${fileExtension} (${fileSize})`);
             
             // TODO: Implementar download real quando a estrutura do arquivo for conhecida
             // Por enquanto, apenas simular o download
@@ -1082,7 +1146,7 @@ const GuideControl = () => {
           link.href = url;
           
           // Nome do arquivo baseado no paciente e prestador
-          const fileName = `Guia-${guide.name}-${guide.numero_prestador}.pdf`;
+          const fileName = `Guia-${guide.name}-${guide.numero_prestador}-${typeLabel}.pdf`;
           link.download = fileName;
           
           // Trigger do download
@@ -1101,16 +1165,16 @@ const GuideControl = () => {
       }
 
       // Atualizar progresso
-      const remaining = signedGuides.length - (completed + failed);
+      const remaining = guidesToDownload.length - (completed + failed);
       setDownloadProgress({
-        total: signedGuides.length,
+        total: guidesToDownload.length,
         completed,
         failed,
         remaining
       });
 
       // Pequeno delay entre downloads para não sobrecarregar
-      if (i < signedGuides.length - 1) {
+      if (i < guidesToDownload.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 500));
       }
     }
@@ -1119,13 +1183,18 @@ const GuideControl = () => {
     
     // Mostrar resultado final
     if (failed === 0) {
-      toast.success(`Download concluído! ${completed} guias baixadas com sucesso.`);
+      toast.success(`Download concluído! ${completed} guias ${typeLabel} baixadas com sucesso.`);
     } else if (completed === 0) {
-      toast.error(`Falha no download! ${failed} guias falharam.`);
+      toast.error(`Falha no download! ${failed} guias ${typeLabel} falharam.`);
     } else {
-      toast.warning(`Download parcial! ${completed} guias baixadas, ${failed} falharam.`);
+      toast.warning(`Download parcial! ${completed} guias ${typeLabel} baixadas, ${failed} falharam.`);
     }
   };
+
+  // Funções específicas para cada tipo de download em massa
+  const handleDownloadAllAutorizadas = () => handleDownloadAllGuidesByType('autorizada');
+  const handleDownloadAllAssinadas = () => handleDownloadAllGuidesByType('assinada');
+  const handleDownloadAllAssinadasPsicologo = () => handleDownloadAllGuidesByType('assinada_psicologo');
 
 
   if (loading) {
@@ -1597,19 +1666,42 @@ const GuideControl = () => {
 
         {/* Conteúdo da aba Guias Concluídas */}
         {activeTab === 'completed' && (
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <FileCheck className="h-5 w-5" />
-                  Guias Concluídas - {format(parseISO(selectedCompletedMonth + '-01'), 'MMMM yyyy', { locale: ptBR })}
-                </CardTitle>
-                <div className="flex gap-2">
+          <>
+            {/* Gráfico de Estatísticas */}
+            <GuideStatsChart completedGuides={completedGuides} />
+            
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <FileCheck className="h-5 w-5" />
+                    Guias Concluídas - {format(parseISO(selectedCompletedMonth + '-01'), 'MMMM yyyy', { locale: ptBR })}
+                  </CardTitle>
+                  <div className="flex gap-2">
                   <Button 
-                    onClick={handleDownloadAllSignedGuides} 
+                    onClick={handleDownloadAllAutorizadas} 
                     variant="outline" 
                     size="sm"
-                    disabled={downloadingAll || completedGuides.filter(g => g.existe_pdf_assinado === 1).length === 0}
+                    disabled={downloadingAll || completedGuides.filter(g => g.existe_guia_autorizada === 1).length === 0}
+                    className="flex items-center gap-2"
+                  >
+                    {downloadingAll ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        Baixando...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4" />
+                        Baixar Guias Autorizadas
+                      </>
+                    )}
+                  </Button>
+                  <Button 
+                    onClick={handleDownloadAllAssinadas} 
+                    variant="outline" 
+                    size="sm"
+                    disabled={downloadingAll || completedGuides.filter(g => g.existe_guia_assinada === 1).length === 0}
                     className="flex items-center gap-2"
                   >
                     {downloadingAll ? (
@@ -1621,6 +1713,25 @@ const GuideControl = () => {
                       <>
                         <Download className="h-4 w-4" />
                         Baixar Guias Assinadas
+                      </>
+                    )}
+                  </Button>
+                  <Button 
+                    onClick={handleDownloadAllAssinadasPsicologo} 
+                    variant="outline" 
+                    size="sm"
+                    disabled={downloadingAll || completedGuides.filter(g => g.existe_guia_assinada_psicologo === 1).length === 0}
+                    className="flex items-center gap-2"
+                  >
+                    {downloadingAll ? (
+                      <>
+                        <RefreshCw className="h-4 w-4 animate-spin" />
+                        Baixando...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="h-4 w-4" />
+                        Baixar Guias Assinadas pelo Psicólogo
                       </>
                     )}
                   </Button>
@@ -1760,10 +1871,32 @@ const GuideControl = () => {
                                   </div>
                                   
                                   <div className="flex flex-col gap-2">
-                                    {guide.existe_pdf_assinado === 1 ? (
+                                    {/* Botão Guia Autorizada */}
+                                    {guide.existe_guia_autorizada === 1 ? (
                                       <Button
                                         size="sm"
-                                        onClick={() => handleDownloadGuide(guide)}
+                                        onClick={() => handleDownloadGuide(guide, 'autorizada')}
+                                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+                                      >
+                                        <Download className="h-4 w-4" />
+                                        Baixar Guia Autorizada
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        onClick={() => handleUploadGuide(guide, 'autorizada')}
+                                        className="flex items-center gap-2"
+                                      >
+                                        <Upload className="h-4 w-4" />
+                                        Importar Guia Autorizada
+                                      </Button>
+                                    )}
+
+                                    {/* Botão Guia Assinada */}
+                                    {guide.existe_guia_assinada === 1 ? (
+                                      <Button
+                                        size="sm"
+                                        onClick={() => handleDownloadGuide(guide, 'assinada')}
                                         className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
                                       >
                                         <Download className="h-4 w-4" />
@@ -1772,11 +1905,32 @@ const GuideControl = () => {
                                     ) : (
                                       <Button
                                         size="sm"
-                                        onClick={() => handleUploadGuide(guide)}
+                                        onClick={() => handleUploadGuide(guide, 'assinada')}
                                         className="flex items-center gap-2"
                                       >
                                         <Upload className="h-4 w-4" />
                                         Importar Guia Assinada
+                                      </Button>
+                                    )}
+
+                                    {/* Botão Guia Assinada pelo Psicólogo */}
+                                    {guide.existe_guia_assinada_psicologo === 1 ? (
+                                      <Button
+                                        size="sm"
+                                        onClick={() => handleDownloadGuide(guide, 'assinada_psicologo')}
+                                        className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
+                                      >
+                                        <Download className="h-4 w-4" />
+                                        Baixar Guia Assinada pelo Psicólogo
+                                      </Button>
+                                    ) : (
+                                      <Button
+                                        size="sm"
+                                        onClick={() => handleUploadGuide(guide, 'assinada_psicologo')}
+                                        className="flex items-center gap-2"
+                                      >
+                                        <Upload className="h-4 w-4" />
+                                        Importar Guia Assinada pelo Psicólogo
                                       </Button>
                                     )}
                                   </div>
@@ -1792,6 +1946,7 @@ const GuideControl = () => {
               )}
             </CardContent>
           </Card>
+          </>
         )}
 
         {/* Modal para Adicionar Guias */}
@@ -2202,7 +2357,12 @@ const GuideControl = () => {
         }}>
           <DialogContent className="max-w-md">
             <DialogHeader>
-              <DialogTitle>Importar Guia Assinada</DialogTitle>
+              <DialogTitle>
+                Importar {uploadType === 'autorizada' ? 'Guia Autorizada' : 
+                         uploadType === 'assinada' ? 'Guia Assinada' : 
+                         uploadType === 'assinada_psicologo' ? 'Guia Assinada pelo Psicólogo' : 
+                         'Guia'}
+              </DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               {selectedGuideForUpload && (
