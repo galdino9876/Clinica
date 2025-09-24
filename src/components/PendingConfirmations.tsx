@@ -152,9 +152,8 @@ const PendingConfirmations = () => {
     <div className="space-y-4 max-w-full">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-2xl font-bold">Confirmações de Agendamentos</h1>
           {nextBusinessDay && (
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-sm text-gray-600">
               Exibindo agendamentos pendentes para: <span className="font-medium">{formatDateForDisplay(nextBusinessDay)}</span>
             </p>
           )}

@@ -92,6 +92,12 @@ interface PatientSessionInfo {
   status: 'ok' | 'warning' | 'urgent' | 'no_guides' | 'incomplete';
   monthly_guide_status: 'ok' | 'pending';
   needs_next_month_guide: boolean;
+  // Novos campos para análise de padrões semanais
+  weekly_pattern?: 'weekly' | null;
+  suggested_dates: string[];
+  missing_appointments: string[];
+  missing_guides: string[];
+  expected_dates: string[];
 }
 
 interface DashboardStats {
@@ -243,6 +249,115 @@ const GuideControl = () => {
     setStats(newStats);
   };
 
+  // Função para detectar padrões semanais e sugerir datas faltantes
+  const detectWeeklyPatternAndSuggestDates = (appointmentDates: string[], guideDates: string[], month: number, year: number) => {
+    if (appointmentDates.length === 0) return { pattern: null, suggestedDates: [], missingAppointments: [], missingGuides: [] };
+
+    // Converter para objetos Date e ordenar
+    const sortedAppointments = appointmentDates
+      .map(date => ({ date, dateObj: parseISO(date) }))
+      .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
+
+    let isWeeklyPattern = false;
+    let expectedDates: string[] = [];
+
+    if (appointmentDates.length === 1) {
+      // Para casos com apenas 1 agendamento, verificar se há espaço para mais semanas no mês
+      const firstDate = sortedAppointments[0].dateObj;
+      const monthEnd = new Date(year, month, 0); // Último dia do mês
+      
+      // Calcular quantas semanas cabem no mês a partir da primeira data
+      const weeksFromFirstDate = Math.floor((monthEnd.getTime() - firstDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
+      
+      // Se há pelo menos 1 semana disponível após a primeira data, assumir padrão semanal
+      if (weeksFromFirstDate >= 1) {
+        isWeeklyPattern = true;
+        
+        // Gerar datas semanais a partir da primeira data até o final do mês
+        const currentDate = new Date(firstDate);
+        
+        while (currentDate <= monthEnd) {
+          const dateStr = format(currentDate, 'yyyy-MM-dd');
+          const [dateYear, dateMonth] = dateStr.split('-').map(Number);
+          
+          if (dateYear === year && dateMonth === month) {
+            expectedDates.push(dateStr);
+          }
+          
+          currentDate.setDate(currentDate.getDate() + 7);
+        }
+      }
+    } else {
+      // Para casos com 2+ agendamentos, verificar padrão semanal
+      const intervals = [];
+      for (let i = 1; i < sortedAppointments.length; i++) {
+        const diffDays = differenceInDays(sortedAppointments[i].dateObj, sortedAppointments[i-1].dateObj);
+        intervals.push(diffDays);
+      }
+
+      // Verificar se há padrão semanal consistente (intervalos de 7 dias)
+      isWeeklyPattern = intervals.every(interval => interval === 7);
+      
+      if (isWeeklyPattern) {
+        // Calcular datas esperadas baseadas no padrão semanal
+        const firstDate = sortedAppointments[0].dateObj;
+        
+        // Gerar todas as datas semanais do mês baseadas no padrão
+        const currentDate = new Date(firstDate);
+        const monthEnd = new Date(year, month, 0); // Último dia do mês
+        
+        while (currentDate <= monthEnd) {
+          const dateStr = format(currentDate, 'yyyy-MM-dd');
+          const [dateYear, dateMonth] = dateStr.split('-').map(Number);
+          
+          if (dateYear === year && dateMonth === month) {
+            expectedDates.push(dateStr);
+          }
+          
+          currentDate.setDate(currentDate.getDate() + 7);
+        }
+      }
+    }
+
+    if (!isWeeklyPattern) return { pattern: null, suggestedDates: [], missingAppointments: [], missingGuides: [] };
+
+    // Identificar agendamentos faltantes
+    const missingAppointments = expectedDates.filter(expectedDate => 
+      !appointmentDates.includes(expectedDate)
+    );
+
+    // Identificar guias faltantes
+    const missingGuides = appointmentDates.filter(appointmentDate => 
+      !guideDates.includes(appointmentDate)
+    );
+
+    // Sugerir próximas datas baseadas no padrão
+    const suggestedDates = [];
+    if (expectedDates.length > 0) {
+      const lastExpectedDate = parseISO(expectedDates[expectedDates.length - 1]);
+      for (let i = 1; i <= 4; i++) { // Sugerir próximas 4 semanas
+        const nextDate = addDays(lastExpectedDate, 7 * i);
+        const nextDateStr = format(nextDate, 'yyyy-MM-dd');
+        const [nextYear, nextMonth] = nextDateStr.split('-').map(Number);
+        
+        // Incluir apenas se for do mês atual ou próximo
+        if ((nextYear === year && nextMonth === month) || 
+            (nextYear === year && nextMonth === month + 1) ||
+            (month === 12 && nextYear === year + 1 && nextMonth === 1)) {
+          suggestedDates.push(nextDateStr);
+        }
+      }
+    }
+
+    return {
+      pattern: isWeeklyPattern ? 'weekly' : null,
+      suggestedDates,
+      missingAppointments,
+      missingGuides,
+      expectedDates
+    };
+  };
+
   const calculatePatientSessions = () => {
     const patientMap = new Map<number, PatientSessionInfo>();
     
@@ -273,7 +388,12 @@ const GuideControl = () => {
           weeks_until_expiry: null,
           status: 'ok',
           monthly_guide_status: 'pending',
-          needs_next_month_guide: false
+          needs_next_month_guide: false,
+          weekly_pattern: null,
+          suggested_dates: [],
+          missing_appointments: [],
+          missing_guides: [],
+          expected_dates: []
         });
       }
 
@@ -323,6 +443,20 @@ const GuideControl = () => {
       patient.appointment_dates.sort();
       patient.guide_dates.sort();
       patient.monthly_appointments.sort();
+
+      // Analisar padrões semanais e sugerir datas
+      const patternAnalysis = detectWeeklyPatternAndSuggestDates(
+        patient.monthly_appointments, 
+        patient.guide_dates, 
+        month, 
+        year
+      );
+      
+      patient.weekly_pattern = patternAnalysis.pattern;
+      patient.suggested_dates = patternAnalysis.suggestedDates;
+      patient.missing_appointments = patternAnalysis.missingAppointments;
+      patient.missing_guides = patternAnalysis.missingGuides;
+      patient.expected_dates = patternAnalysis.expectedDates;
 
       // Verificar se tem agendamentos do mês selecionado
       if (patient.monthly_appointments.length === 0) {
@@ -416,6 +550,14 @@ const GuideControl = () => {
     
     // Buscar guias do paciente
     await fetchPatientGuides(patientId);
+    
+    // Auto-sugerir datas baseadas no padrão semanal
+    const patient = patientSessions.find(p => p.patient_id === patientId);
+    if (patient && patient.weekly_pattern === 'weekly' && patient.suggested_dates.length > 0) {
+      // Sugerir até 5 datas das sugestões automáticas
+      const suggestedDates = patient.suggested_dates.slice(0, 5);
+      setSelectedDates(suggestedDates);
+    }
   };
 
   const fetchPatientGuides = async (patientId: number) => {
@@ -1245,7 +1387,13 @@ const GuideControl = () => {
                   .map((patient) => (
                   <div
                     key={patient.patient_id}
-                    className="flex items-center justify-between p-6 border rounded-lg hover:bg-gray-50 transition-colors"
+                    className={`flex items-center justify-between p-6 border rounded-lg transition-colors ${
+                      patient.status === 'ok' 
+                        ? 'bg-green-50 hover:bg-green-100 border-green-200' 
+                        : patient.status === 'urgent' 
+                          ? 'bg-red-50 hover:bg-red-100 border-red-200'
+                          : 'hover:bg-gray-50'
+                    }`}
                   >
                     <div className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-8">
                       {/* Coluna 1: Nome do paciente */}
@@ -1273,17 +1421,38 @@ const GuideControl = () => {
                             </span>
                             <div className="flex gap-1 whitespace-nowrap min-w-0 overflow-hidden">
                               {patient.monthly_appointments.length > 0 
-                                ? patient.monthly_appointments.map(date => {
-                                    const status = patient.appointment_statuses?.get(date) || 'unknown';
-                                    return (
-                                      <span
-                                        key={date}
-                                        className={`px-1.5 py-0.5 rounded text-xs border whitespace-nowrap ${getAppointmentStatusColor(status)}`}
-                                      >
-                                        {format(parseISO(date), 'dd/MM', { locale: ptBR })}
-                                      </span>
-                                    );
-                                  })
+                                ? (() => {
+                                    // Combinar agendamentos existentes com sugestões de agendamentos faltantes
+                                    const allAppointmentDates = [...patient.monthly_appointments];
+                                    
+                                    // Adicionar agendamentos faltantes detectados pelo padrão semanal
+                                    if (patient.weekly_pattern === 'weekly' && patient.missing_appointments.length > 0) {
+                                      allAppointmentDates.push(...patient.missing_appointments);
+                                    }
+                                    
+                                    // Ordenar todas as datas
+                                    const sortedDates = allAppointmentDates.sort();
+                                    
+                                    return sortedDates.map(date => {
+                                      const isMissingAppointment = patient.missing_appointments.includes(date);
+                                      const status = patient.appointment_statuses?.get(date) || 'unknown';
+                                      
+                                      return (
+                                        <span
+                                          key={date}
+                                          className={`px-1.5 py-0.5 rounded text-xs border whitespace-nowrap ${
+                                            isMissingAppointment 
+                                              ? 'bg-orange-100 text-orange-800 border-orange-300'
+                                              : getAppointmentStatusColor(status)
+                                          }`}
+                                          title={isMissingAppointment ? 'Falta agendamento semanal' : ''}
+                                        >
+                                          {format(parseISO(date), 'dd/MM', { locale: ptBR })}
+                                          {isMissingAppointment && ' - FALTA AGENDAMENTO'}
+                                        </span>
+                                      );
+                                    });
+                                  })()
                                 : <span className="text-sm text-gray-700">Nenhum agendamento</span>
                               }
                             </div>
@@ -1295,12 +1464,34 @@ const GuideControl = () => {
                             </span>
                             <div className="flex gap-1 whitespace-nowrap min-w-0 overflow-hidden">
                               {(() => {
-                                // Combinar todas as datas (guias existentes + agendamentos) e ordenar cronologicamente
+                                // Combinar todas as datas (agendamentos + agendamentos faltantes + guias) e ordenar cronologicamente
                                 const allDates = [...patient.monthly_appointments];
+                                
+                                // Adicionar agendamentos faltantes se houver padrão semanal
+                                if (patient.weekly_pattern === 'weekly' && patient.missing_appointments.length > 0) {
+                                  allDates.push(...patient.missing_appointments);
+                                }
+                                
+                                // Adicionar todas as datas das guias do mês (mesmo sem agendamentos)
+                                const monthlyGuideDates = patient.guide_dates.filter(date => {
+                                  const [guideYear, guideMonth] = date.split('-').map(Number);
+                                  const [currentYear, currentMonth] = selectedMonth.split('-').map(Number);
+                                  return guideYear === currentYear && guideMonth === currentMonth;
+                                });
+                                
+                                monthlyGuideDates.forEach(guideDate => {
+                                  if (!allDates.includes(guideDate)) {
+                                    allDates.push(guideDate);
+                                  }
+                                });
+                                
                                 const sortedDates = allDates.sort();
                                 
                                 return sortedDates.map(date => {
                                   const hasGuide = patient.guide_dates.includes(date);
+                                  const hasAppointment = patient.monthly_appointments.includes(date);
+                                  const isMissingAppointment = patient.missing_appointments.includes(date);
+                                  
                                   return (
                                     <span
                                       key={date}
@@ -1309,11 +1500,23 @@ const GuideControl = () => {
                                           ? 'bg-green-100 text-green-800 border-green-300'
                                           : 'bg-red-100 text-red-800 border-red-300'
                                       }`}
-                                      title={hasGuide ? 'Guia autorizada' : 'Precisa solicitar guia para esta data'}
+                                      title={
+                                        hasGuide 
+                                          ? 'Guia autorizada' 
+                                          : isMissingAppointment 
+                                            ? 'Sugestão: Falta guia para esta data (baseada no padrão semanal)'
+                                            : hasAppointment
+                                              ? 'Sugestão: Falta guia para este agendamento'
+                                              : 'Sugestão: Falta guia para esta data'
+                                      }
                                     >
                                       {hasGuide 
                                         ? format(parseISO(date), 'dd/MM', { locale: ptBR })
-                                        : `(${format(parseISO(date), 'dd/MM', { locale: ptBR })})`
+                                        : isMissingAppointment
+                                          ? `${format(parseISO(date), 'dd/MM', { locale: ptBR })} - FALTA GUIA`
+                                          : hasAppointment
+                                            ? `(${format(parseISO(date), 'dd/MM', { locale: ptBR })}) - FALTA GUIA`
+                                            : `(${format(parseISO(date), 'dd/MM', { locale: ptBR })}) - FALTA GUIA`
                                       }
                                     </span>
                                   );
@@ -1323,8 +1526,8 @@ const GuideControl = () => {
                           </div>
                         </div>
                         
-                        {/* Legenda simples */}
-                        {patient.monthly_appointments.some(appDate => !patient.guide_dates.includes(appDate)) && (
+                        {/* Legenda para casos sem padrão semanal */}
+                        {patient.weekly_pattern !== 'weekly' && patient.monthly_appointments.some(appDate => !patient.guide_dates.includes(appDate)) && (
                           <div className="mt-2 text-xs text-red-600">
                             <span className="font-medium">📋 Legenda:</span> Falta solicitar guia para: {patient.monthly_appointments
                               .filter(appDate => !patient.guide_dates.includes(appDate))
@@ -1332,6 +1535,7 @@ const GuideControl = () => {
                               .join(', ')}
                           </div>
                         )}
+                        
                         
                       </div>
                       
@@ -1612,6 +1816,37 @@ const GuideControl = () => {
                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                 />
               </div>
+
+              {/* Sugestões automáticas baseadas no padrão semanal */}
+              {selectedPatientForGuide && (() => {
+                const patient = patientSessions.find(p => p.patient_id === selectedPatientForGuide);
+                return patient && patient.weekly_pattern === 'weekly' && patient.suggested_dates.length > 0 ? (
+                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm font-medium text-blue-800">💡 Sugestões Automáticas</span>
+                      <span className="text-xs text-blue-600">(Padrão semanal detectado)</span>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {patient.suggested_dates.slice(0, 5).map((date, index) => (
+                        <span
+                          key={date}
+                          className={`px-2 py-1 rounded text-xs border cursor-pointer transition-colors ${
+                            selectedDates.includes(date)
+                              ? 'bg-blue-500 text-white border-blue-500'
+                              : 'bg-blue-100 text-blue-800 border-blue-300 hover:bg-blue-200'
+                          }`}
+                          onClick={() => handleDateSelect(date)}
+                        >
+                          {format(parseISO(date), 'dd/MM/yyyy', { locale: ptBR })}
+                        </span>
+                      ))}
+                    </div>
+                    <p className="text-xs text-blue-600 mt-1">
+                      Clique nas datas sugeridas para selecioná-las automaticamente
+                    </p>
+                  </div>
+                ) : null;
+              })()}
 
               <div>
                 <label className="text-sm font-medium mb-2 block">

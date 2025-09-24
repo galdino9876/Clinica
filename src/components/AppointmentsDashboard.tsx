@@ -169,9 +169,34 @@ const AppointmentsDashboard = () => {
                   </div>
                 ))}
                 {dashboardData.today.pending.length > 3 && (
-                  <p className="text-xs text-gray-500 text-center">
-                    +{dashboardData.today.pending.length - 3} mais pendentes
-                  </p>
+                  <HoverCard>
+                    <HoverCardTrigger asChild>
+                      <p className="text-xs text-gray-500 text-center cursor-default">
+                        +{dashboardData.today.pending.length - 3} mais pendentes
+                      </p>
+                    </HoverCardTrigger>
+                    <HoverCardContent className="w-80">
+                      <div className="space-y-2">
+                        {dashboardData.today.pending.slice(3).map((appointment) => (
+                          <div key={appointment.id} className="flex items-center justify-between text-sm">
+                            <div className="flex flex-col">
+                              <span className="font-medium text-gray-800">{appointment.patient_name}</span>
+                              <span className="text-[11px] text-gray-600">{appointment.psychologist_name}</span>
+                              <div className="flex items-center gap-2 text-xs text-gray-600">
+                                <span>{appointment.start_time}</span>
+                                <span className="text-[10px] text-gray-500">
+                                  ({appointment.appointment_type === 'online' ? 'online' : 'presencial'})
+                                </span>
+                              </div>
+                            </div>
+                            <div>
+                              {getStatusBadge(appointment.status)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </HoverCardContent>
+                  </HoverCard>
                 )}
               </div>
             </div>
@@ -298,9 +323,34 @@ const AppointmentsDashboard = () => {
                   </div>
                 ))}
                 {dashboardData.tomorrow.pending.length > 3 && (
-                  <p className="text-xs text-gray-500 text-center">
-                    +{dashboardData.tomorrow.pending.length - 3} mais pendentes
-                  </p>
+                  <HoverCard>
+                    <HoverCardTrigger asChild>
+                      <p className="text-xs text-gray-500 text-center cursor-default">
+                        +{dashboardData.tomorrow.pending.length - 3} mais pendentes
+                      </p>
+                    </HoverCardTrigger>
+                    <HoverCardContent className="w-80">
+                      <div className="space-y-2">
+                        {dashboardData.tomorrow.pending.slice(3).map((appointment) => (
+                          <div key={appointment.id} className="flex items-center justify-between text-sm">
+                            <div className="flex flex-col">
+                              <span className="font-medium text-gray-800">{appointment.patient_name}</span>
+                              <span className="text-[11px] text-gray-600">{appointment.psychologist_name}</span>
+                              <div className="flex items-center gap-2 text-xs text-gray-600">
+                                <span>{appointment.start_time}</span>
+                                <span className="text-[10px] text-gray-500">
+                                  ({appointment.appointment_type === 'online' ? 'online' : 'presencial'})
+                                </span>
+                              </div>
+                            </div>
+                            <div>
+                              {getStatusBadge(appointment.status)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </HoverCardContent>
+                  </HoverCard>
                 )}
               </div>
             </div>
