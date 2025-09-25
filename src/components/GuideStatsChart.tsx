@@ -23,12 +23,24 @@ interface GuideStatsChartProps {
 }
 
 const GuideStatsChart: React.FC<GuideStatsChartProps> = ({ completedGuides }) => {
-  // Calcular estatísticas
+  // Filtrar apenas registros com numero_prestador (guias válidas)
+  const validGuides = completedGuides.filter(g => g.numero_prestador !== null);
+  
+  // Criar um Set para contar guias únicas baseadas no numero_prestador
+  const uniqueGuides = new Set(validGuides.map(g => g.numero_prestador));
+  
+  // Calcular estatísticas baseadas em guias únicas
   const stats = {
-    autorizadas: completedGuides.filter(g => g.existe_guia_autorizada === 1).length,
-    assinadas: completedGuides.filter(g => g.existe_guia_assinada === 1).length,
-    assinadas_psicologo: completedGuides.filter(g => g.existe_guia_assinada_psicologo === 1).length,
-    total: completedGuides.length
+    autorizadas: Array.from(uniqueGuides).filter(numeroPrestador => 
+      validGuides.some(g => g.numero_prestador === numeroPrestador && g.existe_guia_autorizada === 1)
+    ).length,
+    assinadas: Array.from(uniqueGuides).filter(numeroPrestador => 
+      validGuides.some(g => g.numero_prestador === numeroPrestador && g.existe_guia_assinada === 1)
+    ).length,
+    assinadas_psicologo: Array.from(uniqueGuides).filter(numeroPrestador => 
+      validGuides.some(g => g.numero_prestador === numeroPrestador && g.existe_guia_assinada_psicologo === 1)
+    ).length,
+    total: uniqueGuides.size // Contar guias únicas pelo numero_prestador
   };
 
   return (

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+﻿import React, { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,26 +29,24 @@ import { toast, Toaster } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 import GuideStatsChart from "@/components/GuideStatsChart";
 
-interface Appointment {
-  id: number;
+interface UnifiedData {
+  appointment_id: number;
   patient_id: number;
-  patient_name: string;
-  psychologist_id: number;
-  psychologist_name: string;
-  room_id: number | null;
   date: string;
-  start_time: string;
-  end_time: string;
   status: "pending" | "confirmed" | "completed" | "cancelled";
   payment_method: "private" | "insurance";
   insurance_type: string | null;
-  insurance_token: string | null;
-  value: string;
-  appointment_type: "presential" | "online";
-  is_recurring: number;
-  recurrence_type: string | null;
-  created_at: string;
-  updated_at: string | null;
+  patient_name: string;
+  guia_id: number | null;
+  numero_prestador: string | null;
+  date_1: string | null;
+  date_2: string | null;
+  date_3: string | null;
+  date_4: string | null;
+  date_5: string | null;
+  existe_guia_autorizada: number;
+  existe_guia_assinada: number;
+  existe_guia_assinada_psicologo: number;
 }
 
 interface GuideData {
@@ -117,10 +115,8 @@ interface DashboardStats {
 
 const GuideControl = () => {
   const { user } = useAuth();
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [guideData, setGuideData] = useState<GuideData[]>([]);
+  const [unifiedData, setUnifiedData] = useState<UnifiedData[]>([]);
   const [patientSessions, setPatientSessions] = useState<PatientSessionInfo[]>([]);
-  const [filteredAppointments, setFilteredAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isAddGuideModalOpen, setIsAddGuideModalOpen] = useState(false);
@@ -192,7 +188,7 @@ const GuideControl = () => {
 
   useEffect(() => {
     calculatePatientSessions();
-  }, [appointments, guideData, selectedMonth]);
+  }, [unifiedData, selectedMonth]);
 
   useEffect(() => {
     if (activeTab === 'completed') {
@@ -206,32 +202,22 @@ const GuideControl = () => {
       setLoading(true);
       setError(null);
       
-      // Buscar agendamentos (GET) e guias (POST) em paralelo
-      const [appointmentsResponse, guidesResponse] = await Promise.all([
-        fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/appointmens'),
-        fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/return_date_guias', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({})
-        })
-      ]);
+      // Buscar dados unificados (appointments + guias)
+      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/return_date_guias', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({})
+      });
       
-      if (!appointmentsResponse.ok) {
-        throw new Error(`Erro ao buscar agendamentos: ${appointmentsResponse.status}`);
+      if (!response.ok) {
+        throw new Error(`Erro ao buscar dados: ${response.status}`);
       }
       
-      if (!guidesResponse.ok) {
-        throw new Error(`Erro ao buscar guias: ${guidesResponse.status}`);
-      }
-      
-      const appointmentsData: Appointment[] = await appointmentsResponse.json();
-      const guidesData: GuideData[] = await guidesResponse.json();
-      
-      setAppointments(appointmentsData);
-      setGuideData(guidesData);
-      calculateStats(appointmentsData);
+      const data: UnifiedData[] = await response.json();
+      setUnifiedData(data);
+      calculateStats(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
       console.error('Erro ao buscar dados:', err);
@@ -240,7 +226,7 @@ const GuideControl = () => {
     }
   };
 
-  const calculateStats = (data: Appointment[]) => {
+  const calculateStats = (data: UnifiedData[]) => {
     const today = format(new Date(), 'yyyy-MM-dd');
     const tomorrow = format(new Date(Date.now() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
     
@@ -381,18 +367,17 @@ const GuideControl = () => {
     const selectedMonthEnd = new Date(year, month, 0); // Último dia do mês
     const nextMonthStart = new Date(year, month, 1);
 
-
-    // Agrupar agendamentos por paciente (todos os status)
-    appointments.forEach(appointment => {
-      const patientId = appointment.patient_id;
+    // Processar dados unificados
+    unifiedData.forEach(data => {
+      const patientId = data.patient_id;
       
       if (!patientMap.has(patientId)) {
         patientMap.set(patientId, {
           patient_id: patientId,
-          patient_name: appointment.patient_name,
-          psychologist_name: appointment.psychologist_name,
-          payment_method: appointment.payment_method,
-          insurance_type: appointment.insurance_type,
+          patient_name: data.patient_name,
+          psychologist_name: '', // Não disponível nos dados unificados
+          payment_method: data.payment_method,
+          insurance_type: data.insurance_type,
           total_appointments: 0,
           monthly_appointments: [],
           guide_dates: [],
@@ -413,30 +398,24 @@ const GuideControl = () => {
 
       const patient = patientMap.get(patientId)!;
       patient.total_appointments++;
-      patient.appointment_dates.push(appointment.date);
+      patient.appointment_dates.push(data.date);
       
-      // Filtrar agendamentos do mês selecionado usando comparação de strings
-      const appointmentDateStr = appointment.date; // formato: "2025-09-01"
+      // Filtrar agendamentos do mês selecionado
+      const appointmentDateStr = data.date;
       const appointmentYear = parseInt(appointmentDateStr.split('-')[0]);
       const appointmentMonth = parseInt(appointmentDateStr.split('-')[1]);
       
-      
       if (appointmentYear === year && appointmentMonth === month) {
-        patient.monthly_appointments.push(appointment.date);
-        // Armazenar também o status do agendamento para colorização
+        patient.monthly_appointments.push(data.date);
         if (!patient.appointment_statuses) {
           patient.appointment_statuses = new Map();
         }
-        patient.appointment_statuses.set(appointment.date, appointment.status);
+        patient.appointment_statuses.set(data.date, data.status);
       }
-    });
 
-    // Adicionar dados das guias
-    guideData.forEach(guide => {
-      const patientId = guide.id_patient;
-      if (patientMap.has(patientId)) {
-        const patient = patientMap.get(patientId)!;
-        const allGuideDates = [guide.date_1, guide.date_2, guide.date_3, guide.date_4, guide.date_5]
+      // Processar dados das guias se existirem
+      if (data.guia_id) {
+        const allGuideDates = [data.date_1, data.date_2, data.date_3, data.date_4, data.date_5]
           .filter(date => date !== null) as string[];
         
         // Filtrar apenas as datas do mês selecionado
@@ -564,40 +543,40 @@ const GuideControl = () => {
     
     // Buscar guias do paciente
     await fetchPatientGuides(patientId);
-    
-    // Auto-sugerir datas baseadas no padrão semanal
-    const patient = patientSessions.find(p => p.patient_id === patientId);
-    if (patient && patient.weekly_pattern === 'weekly' && patient.suggested_dates.length > 0) {
-      // Sugerir até 5 datas das sugestões automáticas
-      const suggestedDates = patient.suggested_dates.slice(0, 5);
-      setSelectedDates(suggestedDates);
-    }
   };
 
   const fetchPatientGuides = async (patientId: number) => {
     try {
       setLoadingGuides(true);
-      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/return_data_guias', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ id_patient: patientId })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erro ao buscar guias: ${response.status}`);
-      }
-
-      const guidesData: GuideData[] = await response.json();
       
-      // Mostrar todas as guias do paciente, sem filtragem por mês
-      // Ordenar da mais recente para a mais antiga
-      const sortedGuides = guidesData.sort((a, b) => {
+      // Filtrar guias do paciente dos dados unificados e remover duplicatas
+      const uniqueGuides = new Map<number, any>();
+      
+      unifiedData
+        .filter(data => data.patient_id === patientId && data.guia_id)
+        .forEach(data => {
+          // Usar guia_id como chave para evitar duplicatas
+          if (!uniqueGuides.has(data.guia_id!)) {
+            uniqueGuides.set(data.guia_id!, {
+              id: data.guia_id!,
+              id_patient: data.patient_id,
+              numero_prestador: data.numero_prestador || '',
+              date_1: data.date_1,
+              date_2: data.date_2,
+              date_3: data.date_3,
+              date_4: data.date_4,
+              date_5: data.date_5
+            });
+          }
+        });
+      
+      // Converter Map para array e ordenar da mais recente para a mais antiga
+      const sortedGuides = Array.from(uniqueGuides.values()).sort((a, b) => {
         const dateA = new Date(a.date_1 || '');
         const dateB = new Date(b.date_1 || '');
         return dateB.getTime() - dateA.getTime();
       });
+      
       setPatientGuides(sortedGuides);
     } catch (error) {
       console.error('Erro ao buscar guias do paciente:', error);
@@ -787,7 +766,7 @@ const GuideControl = () => {
   };
 
   const getAppointmentStatusForDate = (date: string, patientId: number) => {
-    const appointment = appointments.find(app => 
+    const appointment = unifiedData.find(app => 
       app.patient_id === patientId && app.date === date
     );
     return appointment?.status || 'unknown';
@@ -2232,37 +2211,6 @@ const GuideControl = () => {
                   className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
                 />
               </div>
-
-              {/* Sugestões automáticas baseadas no padrão semanal */}
-              {selectedPatientForGuide && (() => {
-                const patient = patientSessions.find(p => p.patient_id === selectedPatientForGuide);
-                return patient && patient.weekly_pattern === 'weekly' && patient.suggested_dates.length > 0 ? (
-                  <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm font-medium text-blue-800">💡 Sugestões Automáticas</span>
-                      <span className="text-xs text-blue-600">(Padrão semanal detectado)</span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {patient.suggested_dates.slice(0, 5).map((date, index) => (
-                        <span
-                          key={date}
-                          className={`px-2 py-1 rounded text-xs border cursor-pointer transition-colors ${
-                            selectedDates.includes(date)
-                              ? 'bg-blue-500 text-white border-blue-500'
-                              : 'bg-blue-100 text-blue-800 border-blue-300 hover:bg-blue-200'
-                          }`}
-                          onClick={() => handleDateSelect(date)}
-                        >
-                          {format(parseISO(date), 'dd/MM/yyyy', { locale: ptBR })}
-                        </span>
-                      ))}
-                    </div>
-                    <p className="text-xs text-blue-600 mt-1">
-                      Clique nas datas sugeridas para selecioná-las automaticamente
-                    </p>
-                  </div>
-                ) : null;
-              })()}
 
               <div>
                 <label className="text-sm font-medium mb-2 block">
