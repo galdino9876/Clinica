@@ -824,7 +824,24 @@ const GuideControl = () => {
         throw new Error(`Erro ao buscar guias: ${response.status}`);
       }
 
-      const allGuides: CompletedGuide[] = await response.json();
+      const apiData = await response.json();
+      
+      // Mapear os dados da API para a interface CompletedGuide
+      const allGuides: CompletedGuide[] = apiData.map((item: any) => ({
+        id: item.guia_id || item.appointment_id,
+        id_patient: item.patient_id,
+        numero_prestador: item.numero_prestador?.toString() || '',
+        existe_pdf_assinado: 0, // Manter para compatibilidade
+        existe_guia_autorizada: item.existe_guia_autorizada || 0,
+        existe_guia_assinada: item.existe_guia_assinada || 0,
+        existe_guia_assinada_psicologo: item.existe_guia_assinada_psicologo || 0,
+        date_1: item.date_1,
+        date_2: item.date_2,
+        date_3: item.date_3,
+        date_4: item.date_4,
+        date_5: item.date_5,
+        name: item.patient_name || ''
+      }));
       
       // Filtrar guias do mês selecionado
       const [selectedYear, selectedMonth] = selectedCompletedMonth.split('-').map(Number);
@@ -2051,54 +2068,67 @@ const GuideControl = () => {
               ) : (
                 <div className="space-y-4">
                   {(() => {
-                    // Agrupar guias por paciente e número de prestador
+                    // Agrupar guias por nome do paciente
                     const groupedGuides = completedGuides.reduce((acc, guide) => {
-                      const key = `${guide.id_patient}-${guide.name}`;
+                      const key = guide.name;
                       if (!acc[key]) {
                         acc[key] = {
-                          patient: { id: guide.id_patient, name: guide.name },
-                          guides: []
+                          patientName: guide.name,
+                          prestadores: new Map()
                         };
                       }
-                      acc[key].guides.push(guide);
+                      
+                      // Agrupar por número de prestador dentro do paciente
+                      const prestadorKey = guide.numero_prestador;
+                      if (!acc[key].prestadores.has(prestadorKey)) {
+                        acc[key].prestadores.set(prestadorKey, {
+                          numero_prestador: guide.numero_prestador,
+                          guides: []
+                        });
+                      }
+                      acc[key].prestadores.get(prestadorKey)!.guides.push(guide);
+                      
                       return acc;
-                    }, {} as Record<string, { patient: { id: number; name: string }; guides: CompletedGuide[] }>);
+                    }, {} as Record<string, { patientName: string; prestadores: Map<string, { numero_prestador: string; guides: CompletedGuide[] }> }>);
 
                     return Object.values(groupedGuides).map((group, groupIndex) => (
                       <div
-                        key={`${group.patient.id}-${groupIndex}`}
+                        key={`${group.patientName}-${groupIndex}`}
                         className="border rounded-lg hover:bg-gray-50 transition-colors"
                       >
                         <div className="p-6">
-                          <div className="flex items-center gap-4 mb-4">
-                            <div>
-                              <p className="font-medium text-gray-900">{group.patient.name}</p>
-                              <p className="text-sm text-gray-600">ID: {group.patient.id}</p>
-                            </div>
+                          {/* Nome do Paciente */}
+                          <div className="mb-4">
+                            <p className="text-sm font-medium text-gray-700 mb-1">Nome do Paciente:</p>
+                            <p className="text-lg font-semibold text-gray-900">{group.patientName}</p>
                           </div>
                           
-                          <div className="space-y-3">
-                            {group.guides.map((guide, guideIndex) => {
-                              const guideDates = [guide.date_1, guide.date_2, guide.date_3, guide.date_4, guide.date_5]
-                                .filter(date => date !== null) as string[];
+                          {/* Lista de Prestadores */}
+                          <div className="space-y-4">
+                            {Array.from(group.prestadores.values()).map((prestador, prestadorIndex) => {
+                              // Pegar as datas únicas para este prestador
+                              const allDates = new Set<string>();
+                              prestador.guides.forEach(guide => {
+                                [guide.date_1, guide.date_2, guide.date_3, guide.date_4, guide.date_5]
+                                  .filter(date => date !== null)
+                                  .forEach(date => allDates.add(date!));
+                              });
+                              const uniqueDates = Array.from(allDates).sort();
                               
                               return (
-                                <div
-                                  key={guide.id}
-                                  className="flex items-center justify-between p-4 bg-gray-50 rounded-md"
-                                >
-                                  <div className="flex-1">
-                                    <div className="flex items-center gap-4 mb-2">
-                                      <div>
-                                        <p className="text-sm font-medium text-gray-700">Número do Prestador:</p>
-                                        <p className="text-sm text-gray-600">{guide.numero_prestador}</p>
-                                      </div>
+                                <div key={`${prestador.numero_prestador}-${prestadorIndex}`} className="border-l-4 border-blue-200 pl-4">
+                                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-center">
+                                    {/* Número do Prestador */}
+                                    <div>
+                                      <p className="text-sm font-medium text-gray-700 mb-1">Número do Prestador:</p>
+                                      <p className="text-lg font-semibold text-gray-900">{prestador.numero_prestador}</p>
                                     </div>
                                     
-                                    <div className="flex items-center gap-2">
-                                      <span className="text-sm font-medium text-gray-700">Datas das guias:</span>
-                                      <div className="flex gap-2">
-                                        {guideDates.map((date, dateIndex) => (
+                                    {/* Datas das Guias */}
+                                    <div>
+                                      <p className="text-sm font-medium text-gray-700 mb-1">Datas:</p>
+                                      <div className="flex gap-1 flex-wrap">
+                                        {uniqueDates.map((date, dateIndex) => (
                                           <span
                                             key={dateIndex}
                                             className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded border border-green-300"
@@ -2108,71 +2138,87 @@ const GuideControl = () => {
                                         ))}
                                       </div>
                                     </div>
-                                  </div>
-                                  
-                                  <div className="flex flex-col gap-2">
-                                    {/* Botão Guia Autorizada */}
-                                    {guide.existe_guia_autorizada === 1 ? (
-                                      <Button
-                                        size="sm"
-                                        onClick={() => handleDownloadGuide(guide, 'autorizada')}
-                                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
-                                      >
-                                        <Download className="h-4 w-4" />
-                                        Baixar Guia Autorizada
-                                      </Button>
-                                    ) : (
-                                      <Button
-                                        size="sm"
-                                        onClick={() => handleUploadGuide(guide, 'autorizada')}
-                                        className="flex items-center gap-2"
-                                      >
-                                        <Upload className="h-4 w-4" />
-                                        Importar Guia Autorizada
-                                      </Button>
-                                    )}
+                                    
+                                    {/* Botões de ação para este prestador */}
+                                    <div className="flex flex-col gap-2 justify-end">
+                                      {prestador.guides.some(guide => guide.existe_guia_autorizada === 1) ? (
+                                        <Button
+                                          size="sm"
+                                          onClick={() => {
+                                            const guideWithDoc = prestador.guides.find(guide => guide.existe_guia_autorizada === 1);
+                                            if (guideWithDoc) handleDownloadGuide(guideWithDoc, 'autorizada');
+                                          }}
+                                          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 w-fit ml-auto"
+                                        >
+                                          <Download className="h-4 w-4" />
+                                          Baixar Guia Autorizada
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          size="sm"
+                                          onClick={() => {
+                                            const firstGuide = prestador.guides[0];
+                                            if (firstGuide) handleUploadGuide(firstGuide, 'autorizada');
+                                          }}
+                                          className="flex items-center gap-2 w-fit ml-auto"
+                                        >
+                                          <Upload className="h-4 w-4" />
+                                          Importar Guia Autorizada
+                                        </Button>
+                                      )}
 
-                                    {/* Botão Guia Assinada */}
-                                    {guide.existe_guia_assinada === 1 ? (
-                                      <Button
-                                        size="sm"
-                                        onClick={() => handleDownloadGuide(guide, 'assinada')}
-                                        className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
-                                      >
-                                        <Download className="h-4 w-4" />
-                                        Baixar Guia Assinada
-                                      </Button>
-                                    ) : (
-                                      <Button
-                                        size="sm"
-                                        onClick={() => handleUploadGuide(guide, 'assinada')}
-                                        className="flex items-center gap-2"
-                                      >
-                                        <Upload className="h-4 w-4" />
-                                        Importar Guia Assinada
-                                      </Button>
-                                    )}
+                                      {prestador.guides.some(guide => guide.existe_guia_assinada === 1) ? (
+                                        <Button
+                                          size="sm"
+                                          onClick={() => {
+                                            const guideWithDoc = prestador.guides.find(guide => guide.existe_guia_assinada === 1);
+                                            if (guideWithDoc) handleDownloadGuide(guideWithDoc, 'assinada');
+                                          }}
+                                          className="flex items-center gap-2 bg-green-600 hover:bg-green-700 w-fit ml-auto"
+                                        >
+                                          <Download className="h-4 w-4" />
+                                          Baixar Guia Assinada
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          size="sm"
+                                          onClick={() => {
+                                            const firstGuide = prestador.guides[0];
+                                            if (firstGuide) handleUploadGuide(firstGuide, 'assinada');
+                                          }}
+                                          className="flex items-center gap-2 w-fit ml-auto"
+                                        >
+                                          <Upload className="h-4 w-4" />
+                                          Importar Guia Assinada
+                                        </Button>
+                                      )}
 
-                                    {/* Botão Guia Assinada pelo Psicólogo */}
-                                    {guide.existe_guia_assinada_psicologo === 1 ? (
-                                      <Button
-                                        size="sm"
-                                        onClick={() => handleDownloadGuide(guide, 'assinada_psicologo')}
-                                        className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700"
-                                      >
-                                        <Download className="h-4 w-4" />
-                                        Baixar Guia Assinada pelo Psicólogo
-                                      </Button>
-                                    ) : (
-                                      <Button
-                                        size="sm"
-                                        onClick={() => handleUploadGuide(guide, 'assinada_psicologo')}
-                                        className="flex items-center gap-2"
-                                      >
-                                        <Upload className="h-4 w-4" />
-                                        Importar Guia Assinada pelo Psicólogo
-                                      </Button>
-                                    )}
+                                      {prestador.guides.some(guide => guide.existe_guia_assinada_psicologo === 1) ? (
+                                        <Button
+                                          size="sm"
+                                          onClick={() => {
+                                            const guideWithDoc = prestador.guides.find(guide => guide.existe_guia_assinada_psicologo === 1);
+                                            if (guideWithDoc) handleDownloadGuide(guideWithDoc, 'assinada_psicologo');
+                                          }}
+                                          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 w-fit ml-auto"
+                                        >
+                                          <Download className="h-4 w-4" />
+                                          Baixar Guia Assinada pelo Psicólogo
+                                        </Button>
+                                      ) : (
+                                        <Button
+                                          size="sm"
+                                          onClick={() => {
+                                            const firstGuide = prestador.guides[0];
+                                            if (firstGuide) handleUploadGuide(firstGuide, 'assinada_psicologo');
+                                          }}
+                                          className="flex items-center gap-2 w-fit ml-auto"
+                                        >
+                                          <Upload className="h-4 w-4" />
+                                          Importar Guia Assinada pelo Psicólogo
+                                        </Button>
+                                      )}
+                                    </div>
                                   </div>
                                 </div>
                               );
