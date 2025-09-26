@@ -406,7 +406,10 @@ const GuideControl = () => {
       const appointmentMonth = parseInt(appointmentDateStr.split('-')[1]);
       
       if (appointmentYear === year && appointmentMonth === month) {
-        patient.monthly_appointments.push(data.date);
+        // Evitar duplicação de agendamentos
+        if (!patient.monthly_appointments.includes(data.date)) {
+          patient.monthly_appointments.push(data.date);
+        }
         if (!patient.appointment_statuses) {
           patient.appointment_statuses = new Map();
         }
@@ -424,8 +427,10 @@ const GuideControl = () => {
           return guideYear === year && guideMonth === month;
         });
         
-        // Acumular as datas das guias (não sobrescrever)
-        patient.guide_dates = [...patient.guide_dates, ...monthlyGuideDates];
+        // Acumular as datas das guias (não sobrescrever) e remover duplicatas
+        const existingDates = new Set(patient.guide_dates);
+        monthlyGuideDates.forEach(date => existingDates.add(date));
+        patient.guide_dates = Array.from(existingDates);
         patient.last_guide_date = monthlyGuideDates[monthlyGuideDates.length - 1] || patient.last_guide_date;
       }
     });
