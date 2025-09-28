@@ -32,7 +32,7 @@ import GuideStatsChart from "@/components/GuideStatsChart";
 interface UnifiedData {
   appointment_id: number;
   patient_id: number;
-  date: string;
+  date: string | null;
   status: "pending" | "confirmed" | "completed" | "cancelled";
   payment_method: "private" | "insurance";
   insurance_type: string | null;
@@ -47,6 +47,8 @@ interface UnifiedData {
   existe_guia_autorizada: number;
   existe_guia_assinada: number;
   existe_guia_assinada_psicologo: number;
+  faturado: number;
+  date_faturado: string | null;
 }
 
 interface GuideData {
@@ -75,6 +77,8 @@ interface CompletedGuide {
   date_4: string | null;
   date_5: string | null;
   name: string;
+  faturado: number;
+  date_faturado: string | null;
 }
 
 interface PatientSessionInfo {
@@ -235,15 +239,18 @@ const GuideControl = () => {
     const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
     const weekDates = weekDays.map(day => format(day, 'yyyy-MM-dd'));
 
+    // Filtrar apenas agendamentos com datas válidas
+    const validAppointments = data.filter(app => app.date !== null);
+
     const newStats: DashboardStats = {
-      total: data.length,
-      pending: data.filter(app => app.status === "pending").length,
-      confirmed: data.filter(app => app.status === "confirmed").length,
-      completed: data.filter(app => app.status === "completed").length,
-      cancelled: data.filter(app => app.status === "cancelled").length,
-      thisWeek: data.filter(app => weekDates.includes(app.date)).length,
-      today: data.filter(app => app.date === today).length,
-      tomorrow: data.filter(app => app.date === tomorrow).length
+      total: validAppointments.length,
+      pending: validAppointments.filter(app => app.status === "pending").length,
+      confirmed: validAppointments.filter(app => app.status === "confirmed").length,
+      completed: validAppointments.filter(app => app.status === "completed").length,
+      cancelled: validAppointments.filter(app => app.status === "cancelled").length,
+      thisWeek: validAppointments.filter(app => weekDates.includes(app.date)).length,
+      today: validAppointments.filter(app => app.date === today).length,
+      tomorrow: validAppointments.filter(app => app.date === tomorrow).length
     };
 
     setStats(newStats);
@@ -398,10 +405,12 @@ const GuideControl = () => {
 
       const patient = patientMap.get(patientId)!;
       patient.total_appointments++;
-      patient.appointment_dates.push(data.date);
       
       // Filtrar agendamentos do mês selecionado
       const appointmentDateStr = data.date;
+      if (!appointmentDateStr) return; // Pular se a data for null/undefined
+      
+      patient.appointment_dates.push(data.date);
       const appointmentYear = parseInt(appointmentDateStr.split('-')[0]);
       const appointmentMonth = parseInt(appointmentDateStr.split('-')[1]);
       
@@ -423,6 +432,7 @@ const GuideControl = () => {
         
         // Filtrar apenas as datas do mês selecionado
         const monthlyGuideDates = allGuideDates.filter(date => {
+          if (!date) return false; // Pular se a data for null/undefined
           const [guideYear, guideMonth] = date.split('-').map(Number);
           return guideYear === year && guideMonth === month;
         });
@@ -467,12 +477,14 @@ const GuideControl = () => {
 
       // Verificar se tem guias para o mês selecionado
       const monthlyGuideDates = patient.guide_dates.filter(date => {
+        if (!date) return false; // Pular se a data for null/undefined
         const [guideYear, guideMonth] = date.split('-').map(Number);
         return guideYear === year && guideMonth === month;
       });
 
       // Verificar se tem guias para o mês seguinte
       const nextMonthGuideDates = patient.guide_dates.filter(date => {
+        if (!date) return false; // Pular se a data for null/undefined
         const [guideYear, guideMonth] = date.split('-').map(Number);
         const nextMonth = month === 12 ? 1 : month + 1;
         const nextYear = month === 12 ? year + 1 : year;
@@ -845,7 +857,9 @@ const GuideControl = () => {
         date_3: item.date_3,
         date_4: item.date_4,
         date_5: item.date_5,
-        name: item.patient_name || ''
+        name: item.patient_name || '',
+        faturado: item.faturado || 0,
+        date_faturado: item.date_faturado || null
       }));
       
       // Filtrar guias do mês selecionado
@@ -857,6 +871,7 @@ const GuideControl = () => {
           .filter(date => date !== null) as string[];
         
         return guideDates.some(date => {
+          if (!date) return false; // Pular se a data for null/undefined
           const [year, month] = date.split('-').map(Number);
           return year === selectedYear && month === selectedMonth;
         });
@@ -1208,11 +1223,13 @@ const GuideControl = () => {
 
   // Função para baixar tudo (3 requests por guia)
   const handleDownloadEverything = async () => {
-    // Filtrar apenas guias com guia assinada pelo psicólogo
-    const guidesToDownload = completedGuides.filter(g => g.existe_guia_assinada_psicologo === 1);
+    // Filtrar apenas guias com guia assinada pelo psicólogo E que não estão faturadas
+    const guidesToDownload = completedGuides.filter(g => 
+      g.existe_guia_assinada_psicologo === 1 && g.faturado === 0
+    );
     
     if (guidesToDownload.length === 0) {
-      toast.info('Nenhuma guia assinada pelo psicólogo encontrada para download');
+      toast.info('Nenhuma guia assinada pelo psicólogo não faturada encontrada para download');
       return;
     }
 
@@ -1405,6 +1422,40 @@ const GuideControl = () => {
       console.error('Erro geral no download:', error);
       toast.error('Erro durante o download. Tente novamente.');
       setDownloadingEverything(false);
+    }
+  };
+
+  // Função para marcar como faturado
+  const handleMarkAsFaturado = async (numero_prestador: string) => {
+    try {
+      // Salvar a posição atual do scroll
+      const currentScrollPosition = window.scrollY;
+      
+      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/insert_state_faturament', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          numero_prestador: numero_prestador
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro ao marcar como faturado: ${response.status}`);
+      }
+
+      toast.success('Guia marcada como faturada com sucesso!');
+      
+      // Recarregar os dados
+      await getCompletedGuidesForCurrentMonth();
+      
+      // Restaurar a posição do scroll após um pequeno delay para garantir que o DOM foi atualizado
+      setTimeout(() => {
+        window.scrollTo(0, currentScrollPosition);
+      }, 100);
+      
+    } catch (error) {
+      console.error('Erro ao marcar como faturado:', error);
+      toast.error('Erro ao marcar como faturado. Tente novamente.');
     }
   };
 
@@ -1755,6 +1806,7 @@ const GuideControl = () => {
                                 
                                 // Adicionar todas as datas das guias do mês (mesmo sem agendamentos)
                                 const monthlyGuideDates = patient.guide_dates.filter(date => {
+                                  if (!date) return false; // Pular se a data for null/undefined
                                   const [guideYear, guideMonth] = date.split('-').map(Number);
                                   const [currentYear, currentMonth] = selectedMonth.split('-').map(Number);
                                   return guideYear === currentYear && guideMonth === currentMonth;
@@ -1951,7 +2003,7 @@ const GuideControl = () => {
                     onClick={handleDownloadEverything} 
                     variant="default" 
                     size="sm"
-                    disabled={downloadingEverything || downloadingAll || completedGuides.filter(g => g.existe_guia_assinada_psicologo === 1).length === 0}
+                    disabled={downloadingEverything || downloadingAll || completedGuides.filter(g => g.existe_guia_assinada_psicologo === 1 && g.faturado === 0).length === 0}
                     className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
                   >
                     {downloadingEverything ? (
@@ -2120,9 +2172,13 @@ const GuideControl = () => {
                               });
                               const uniqueDates = Array.from(allDates).sort();
                               
+                              // Verificar se alguma guia deste prestador está faturada
+                              const isFaturado = prestador.guides.some(guide => guide.faturado === 1);
+                              const faturadoGuide = prestador.guides.find(guide => guide.faturado === 1);
+                              
                               return (
                                 <div key={`${prestador.numero_prestador}-${prestadorIndex}`} className="border-l-4 border-blue-200 pl-4">
-                                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-center">
+                                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-center">
                                     {/* Número do Prestador */}
                                     <div>
                                       <p className="text-sm font-medium text-gray-700 mb-1">Número do Prestador:</p>
@@ -2146,81 +2202,138 @@ const GuideControl = () => {
                                     
                                     {/* Botões de ação para este prestador */}
                                     <div className="flex flex-col gap-2 justify-end">
-                                      {prestador.guides.some(guide => guide.existe_guia_autorizada === 1) ? (
-                                        <Button
-                                          size="sm"
-                                          onClick={() => {
-                                            const guideWithDoc = prestador.guides.find(guide => guide.existe_guia_autorizada === 1);
-                                            if (guideWithDoc) handleDownloadGuide(guideWithDoc, 'autorizada');
-                                          }}
-                                          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 w-fit ml-auto"
-                                        >
-                                          <Download className="h-4 w-4" />
-                                          Baixar Guia Autorizada
-                                        </Button>
+                                      {isFaturado ? (
+                                        // Quando faturado, mostrar apenas o botão de download da guia assinada pelo psicólogo
+                                        prestador.guides.some(guide => guide.existe_guia_assinada_psicologo === 1) ? (
+                                          <Button
+                                            size="sm"
+                                            onClick={() => {
+                                              const guideWithDoc = prestador.guides.find(guide => guide.existe_guia_assinada_psicologo === 1);
+                                              if (guideWithDoc) handleDownloadGuide(guideWithDoc, 'assinada_psicologo');
+                                            }}
+                                            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 w-fit ml-auto"
+                                          >
+                                            <Download className="h-4 w-4" />
+                                            Baixar Guia Assinada pelo Psicólogo
+                                          </Button>
+                                        ) : (
+                                          <Button
+                                            size="sm"
+                                            onClick={() => {
+                                              const firstGuide = prestador.guides[0];
+                                              if (firstGuide) handleUploadGuide(firstGuide, 'assinada_psicologo');
+                                            }}
+                                            className="flex items-center gap-2 w-fit ml-auto"
+                                          >
+                                            <Upload className="h-4 w-4" />
+                                            Importar Guia Assinada pelo Psicólogo
+                                          </Button>
+                                        )
                                       ) : (
-                                        <Button
-                                          size="sm"
-                                          onClick={() => {
-                                            const firstGuide = prestador.guides[0];
-                                            if (firstGuide) handleUploadGuide(firstGuide, 'autorizada');
-                                          }}
-                                          className="flex items-center gap-2 w-fit ml-auto"
-                                        >
-                                          <Upload className="h-4 w-4" />
-                                          Importar Guia Autorizada
-                                        </Button>
-                                      )}
+                                        // Quando não faturado, mostrar os 3 botões normalmente
+                                        <>
+                                          {prestador.guides.some(guide => guide.existe_guia_autorizada === 1) ? (
+                                            <Button
+                                              size="sm"
+                                              onClick={() => {
+                                                const guideWithDoc = prestador.guides.find(guide => guide.existe_guia_autorizada === 1);
+                                                if (guideWithDoc) handleDownloadGuide(guideWithDoc, 'autorizada');
+                                              }}
+                                              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 w-fit ml-auto"
+                                            >
+                                              <Download className="h-4 w-4" />
+                                              Baixar Guia Autorizada
+                                            </Button>
+                                          ) : (
+                                            <Button
+                                              size="sm"
+                                              onClick={() => {
+                                                const firstGuide = prestador.guides[0];
+                                                if (firstGuide) handleUploadGuide(firstGuide, 'autorizada');
+                                              }}
+                                              className="flex items-center gap-2 w-fit ml-auto"
+                                            >
+                                              <Upload className="h-4 w-4" />
+                                              Importar Guia Autorizada
+                                            </Button>
+                                          )}
 
-                                      {prestador.guides.some(guide => guide.existe_guia_assinada === 1) ? (
-                                        <Button
-                                          size="sm"
-                                          onClick={() => {
-                                            const guideWithDoc = prestador.guides.find(guide => guide.existe_guia_assinada === 1);
-                                            if (guideWithDoc) handleDownloadGuide(guideWithDoc, 'assinada');
-                                          }}
-                                          className="flex items-center gap-2 bg-green-600 hover:bg-green-700 w-fit ml-auto"
-                                        >
-                                          <Download className="h-4 w-4" />
-                                          Baixar Guia Assinada
-                                        </Button>
-                                      ) : (
-                                        <Button
-                                          size="sm"
-                                          onClick={() => {
-                                            const firstGuide = prestador.guides[0];
-                                            if (firstGuide) handleUploadGuide(firstGuide, 'assinada');
-                                          }}
-                                          className="flex items-center gap-2 w-fit ml-auto"
-                                        >
-                                          <Upload className="h-4 w-4" />
-                                          Importar Guia Assinada
-                                        </Button>
-                                      )}
+                                          {prestador.guides.some(guide => guide.existe_guia_assinada === 1) ? (
+                                            <Button
+                                              size="sm"
+                                              onClick={() => {
+                                                const guideWithDoc = prestador.guides.find(guide => guide.existe_guia_assinada === 1);
+                                                if (guideWithDoc) handleDownloadGuide(guideWithDoc, 'assinada');
+                                              }}
+                                              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 w-fit ml-auto"
+                                            >
+                                              <Download className="h-4 w-4" />
+                                              Baixar Guia Assinada
+                                            </Button>
+                                          ) : (
+                                            <Button
+                                              size="sm"
+                                              onClick={() => {
+                                                const firstGuide = prestador.guides[0];
+                                                if (firstGuide) handleUploadGuide(firstGuide, 'assinada');
+                                              }}
+                                              className="flex items-center gap-2 w-fit ml-auto"
+                                            >
+                                              <Upload className="h-4 w-4" />
+                                              Importar Guia Assinada
+                                            </Button>
+                                          )}
 
-                                      {prestador.guides.some(guide => guide.existe_guia_assinada_psicologo === 1) ? (
-                                        <Button
-                                          size="sm"
-                                          onClick={() => {
-                                            const guideWithDoc = prestador.guides.find(guide => guide.existe_guia_assinada_psicologo === 1);
-                                            if (guideWithDoc) handleDownloadGuide(guideWithDoc, 'assinada_psicologo');
-                                          }}
-                                          className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 w-fit ml-auto"
-                                        >
-                                          <Download className="h-4 w-4" />
-                                          Baixar Guia Assinada pelo Psicólogo
-                                        </Button>
+                                          {prestador.guides.some(guide => guide.existe_guia_assinada_psicologo === 1) ? (
+                                            <Button
+                                              size="sm"
+                                              onClick={() => {
+                                                const guideWithDoc = prestador.guides.find(guide => guide.existe_guia_assinada_psicologo === 1);
+                                                if (guideWithDoc) handleDownloadGuide(guideWithDoc, 'assinada_psicologo');
+                                              }}
+                                              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 w-fit ml-auto"
+                                            >
+                                              <Download className="h-4 w-4" />
+                                              Baixar Guia Assinada pelo Psicólogo
+                                            </Button>
+                                          ) : (
+                                            <Button
+                                              size="sm"
+                                              onClick={() => {
+                                                const firstGuide = prestador.guides[0];
+                                                if (firstGuide) handleUploadGuide(firstGuide, 'assinada_psicologo');
+                                              }}
+                                              className="flex items-center gap-2 w-fit ml-auto"
+                                            >
+                                              <Upload className="h-4 w-4" />
+                                              Importar Guia Assinada pelo Psicólogo
+                                            </Button>
+                                          )}
+                                        </>
+                                      )}
+                                    </div>
+
+                                    {/* Coluna específica para status de faturamento */}
+                                    <div className="flex flex-col items-center justify-center">
+                                      {isFaturado ? (
+                                        // Quando faturado, mostrar status FATURADO e data
+                                        <div className="text-center">
+                                          <div className="text-2xl font-bold text-green-600 mb-1">FATURADO</div>
+                                          {faturadoGuide?.date_faturado && (
+                                            <div className="text-sm text-gray-600">
+                                              Faturado em: {format(parseISO(faturadoGuide.date_faturado), 'dd/MM/yyyy', { locale: ptBR })}
+                                            </div>
+                                          )}
+                                        </div>
                                       ) : (
+                                        // Quando não faturado, mostrar botão FATURADO
                                         <Button
                                           size="sm"
-                                          onClick={() => {
-                                            const firstGuide = prestador.guides[0];
-                                            if (firstGuide) handleUploadGuide(firstGuide, 'assinada_psicologo');
-                                          }}
-                                          className="flex items-center gap-2 w-fit ml-auto"
+                                          variant="outline"
+                                          onClick={() => handleMarkAsFaturado(prestador.numero_prestador)}
+                                          className="text-xs px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 border-gray-300"
                                         >
-                                          <Upload className="h-4 w-4" />
-                                          Importar Guia Assinada pelo Psicólogo
+                                          FATURAR
                                         </Button>
                                       )}
                                     </div>
