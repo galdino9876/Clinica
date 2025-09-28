@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileCheck, FileText, UserCheck } from 'lucide-react';
+import { FileCheck, FileText, UserCheck, Receipt } from 'lucide-react';
 
 interface CompletedGuide {
   id: number;
@@ -16,6 +16,9 @@ interface CompletedGuide {
   date_4: string | null;
   date_5: string | null;
   name: string;
+  faturado: number;
+  date_faturado: string | null;
+  appointment_type: string;
 }
 
 interface GuideStatsChartProps {
@@ -40,11 +43,14 @@ const GuideStatsChart: React.FC<GuideStatsChartProps> = ({ completedGuides }) =>
     assinadas_psicologo: Array.from(uniqueGuides).filter(numeroPrestador => 
       validGuides.some(g => g.numero_prestador === numeroPrestador && g.existe_guia_assinada_psicologo === 1)
     ).length,
+    faturadas: Array.from(uniqueGuides).filter(numeroPrestador => 
+      validGuides.some(g => g.numero_prestador === numeroPrestador && g.faturado === 1)
+    ).length,
     total: uniqueGuides.size // Contar guias únicas pelo numero_prestador
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
       {/* Guias Autorizadas */}
       <Card className="bg-blue-50 border-blue-200">
         <CardHeader className="pb-2">
@@ -89,6 +95,22 @@ const GuideStatsChart: React.FC<GuideStatsChartProps> = ({ completedGuides }) =>
           <div className="text-2xl font-bold text-purple-900">{stats.assinadas_psicologo}</div>
           <p className="text-xs text-purple-600">
             {stats.total > 0 ? `${Math.round((stats.assinadas_psicologo / stats.total) * 100)}% do total` : '0% do total'}
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Guias Faturadas */}
+      <Card className="bg-orange-50 border-orange-200">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm font-medium text-orange-800 flex items-center gap-2">
+            <Receipt className="h-4 w-4" />
+            Guias Faturadas
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-0">
+          <div className="text-2xl font-bold text-orange-900">{stats.faturadas}</div>
+          <p className="text-xs text-orange-600">
+            {stats.total > 0 ? `${Math.round((stats.faturadas / stats.total) * 100)}% do total` : '0% do total'}
           </p>
         </CardContent>
       </Card>

@@ -79,6 +79,7 @@ interface CompletedGuide {
   name: string;
   faturado: number;
   date_faturado: string | null;
+  appointment_type: string;
 }
 
 interface PatientSessionInfo {
@@ -859,7 +860,8 @@ const GuideControl = () => {
         date_5: item.date_5,
         name: item.patient_name || '',
         faturado: item.faturado || 0,
-        date_faturado: item.date_faturado || null
+        date_faturado: item.date_faturado || null,
+        appointment_type: item.appointment_type || 'presencial'
       }));
       
       // Filtrar guias do mês selecionado
@@ -1221,7 +1223,7 @@ const GuideControl = () => {
   const handleDownloadAllAssinadas = () => handleDownloadAllGuidesByType('assinada');
   const handleDownloadAllAssinadasPsicologo = () => handleDownloadAllGuidesByType('assinada_psicologo');
 
-  // Função para baixar tudo (3 requests por guia)
+  // Função para baixar tudo (3 requests por numero_prestador único)
   const handleDownloadEverything = async () => {
     // Filtrar apenas guias com guia assinada pelo psicólogo E que não estão faturadas
     const guidesToDownload = completedGuides.filter(g => 
@@ -1233,10 +1235,20 @@ const GuideControl = () => {
       return;
     }
 
+    // Agrupar por numero_prestador único para evitar requisições duplicadas
+    const uniquePrestadores = new Map<string, CompletedGuide>();
+    guidesToDownload.forEach(guide => {
+      if (!uniquePrestadores.has(guide.numero_prestador)) {
+        uniquePrestadores.set(guide.numero_prestador, guide);
+      }
+    });
+
+    const uniqueGuides = Array.from(uniquePrestadores.values());
+
     setDownloadingEverything(true);
     
-    // Calcular total de requests (3 por guia)
-    const totalRequests = guidesToDownload.length * 3;
+    // Calcular total de requests (3 por numero_prestador único)
+    const totalRequests = uniqueGuides.length * 3;
     
     setDownloadEverythingProgress({
       total: totalRequests,
@@ -1251,13 +1263,13 @@ const GuideControl = () => {
     let failed = 0;
 
     try {
-      for (let i = 0; i < guidesToDownload.length; i++) {
-        const guide = guidesToDownload[i];
+      for (let i = 0; i < uniqueGuides.length; i++) {
+        const guide = uniqueGuides[i];
         
         setDownloadEverythingProgress(prev => ({
           ...prev,
           currentGuide: guide.name,
-          currentStep: `Processando guia ${i + 1} de ${guidesToDownload.length}`
+          currentStep: `Processando prestador ${i + 1} de ${uniqueGuides.length}`
         }));
 
         // Request 1: Guia assinada pelo psicólogo
@@ -1402,8 +1414,8 @@ const GuideControl = () => {
           remaining: totalRequests - completed - failed
         }));
 
-        // Pequeno delay entre guias para não sobrecarregar
-        if (i < guidesToDownload.length - 1) {
+        // Pequeno delay entre prestadores para não sobrecarregar
+        if (i < uniqueGuides.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
@@ -2157,7 +2169,11 @@ const GuideControl = () => {
                           {/* Nome do Paciente */}
                           <div className="mb-4">
                             <p className="text-sm font-medium text-gray-700 mb-1">Nome do Paciente:</p>
-                            <p className="text-lg font-semibold text-gray-900">{group.patientName}</p>
+                            <p className="text-lg font-semibold text-gray-900">
+                              {group.patientName} - <span className={`font-medium ${Array.from(group.prestadores.values())[0]?.guides[0]?.appointment_type === 'online' ? 'text-blue-600' : 'text-green-600'}`}>
+                                {Array.from(group.prestadores.values())[0]?.guides[0]?.appointment_type === 'online' ? 'Online' : 'Presencial'}
+                              </span>
+                            </p>
                           </div>
                           
                           {/* Lista de Prestadores */}
