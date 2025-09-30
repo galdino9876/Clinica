@@ -266,29 +266,29 @@ const Index = () => {
       let hasAppointmentsInLastWeek = false;
       let nextMonthAppointmentsCount = 0;
       
-      if (lastWeekNow) {
-        // Verificar se o paciente tem agendamentos na última semana do mês atual
-        const lastWeekAppointments = Array.from(monthAppointmentsDays).filter(day => 
-          getWeekOfMonth(year, monthIndex, day) === totalWeeks
-        );
-        hasAppointmentsInLastWeek = lastWeekAppointments.length > 0;
-        
-        // Verificar agendamentos para o próximo mês
-        const nextMonthAppointments = parseCsvDatesToMonthMap(
-          item.appointment_datas,
-          nextMonthYear,
-          nextMonthIndex
-        );
-        nextMonthAppointmentsCount = nextMonthAppointments.size;
-        
-        // Verificar especificamente a primeira semana do próximo mês
-        const nextMonthFirstWeekAppointments = Array.from(nextMonthAppointments).filter(day => 
-          getWeekOfMonth(nextMonthYear, nextMonthIndex, day) === 1
-        );
-        
-        // Alerta se tem agendamentos na última semana mas não tem para o próximo mês
-        needsNextMonthScheduling = hasAppointmentsInLastWeek && nextMonthAppointmentsCount === 0;
-      }
+      // Verificar se o paciente tem agendamentos na última semana do mês atual
+      const lastWeekAppointments = Array.from(monthAppointmentsDays).filter(day => 
+        getWeekOfMonth(year, monthIndex, day) === totalWeeks
+      );
+      hasAppointmentsInLastWeek = lastWeekAppointments.length > 0;
+      
+      // Verificar agendamentos para o próximo mês
+      const nextMonthAppointments = parseCsvDatesToMonthMap(
+        item.appointment_datas,
+        nextMonthYear,
+        nextMonthIndex
+      );
+      nextMonthAppointmentsCount = nextMonthAppointments.size;
+      
+      // Verificar especificamente a primeira semana do próximo mês
+      const nextMonthFirstWeekAppointments = Array.from(nextMonthAppointments).filter(day => 
+        getWeekOfMonth(nextMonthYear, nextMonthIndex, day) === 1
+      );
+      
+      // Alerta se tem agendamentos na última semana mas não tem para o próximo mês
+      // OU se tem agendamentos no mês atual mas não tem para o próximo mês
+      needsNextMonthScheduling = (hasAppointmentsInLastWeek && nextMonthAppointmentsCount === 0) ||
+        (hasAppointmentsThisMonth && nextMonthAppointmentsCount === 0);
 
       // 3. Verificar se há agendamentos apenas para algumas semanas mas faltam para outras
       const appointmentWeeksArray = Array.from(appointmentWeeks).sort((a, b) => a - b);
@@ -360,53 +360,47 @@ const Index = () => {
           const appointmentsMatch = appointmentsArray.length === controlsArray.length && 
             appointmentsArray.every((date, index) => date === controlsArray[index]);
           
-          if (appointmentsMatch) {
-            // Continuar para verificar se faltam mais agendamentos
-          }
+          // 1. Detectar guias faltantes para agendamentos existentes
+          const missingGuideDates = appointmentsArray.filter(date => 
+            !monthControlDays.has(date)
+          );
           
-          // Sempre verificar se faltam agendamentos/guias (independente de estarem sincronizados)
-          {
-            // 1. Detectar guias faltantes para agendamentos existentes
-            const missingGuideDates = appointmentsArray.filter(date => 
-              !monthControlDays.has(date)
-            );
+          // 2. Detectar agendamentos faltantes baseados no padrão semanal
+          // SÓ detectar agendamentos faltantes se há guias correspondentes
+          let missingAppointmentDates: number[] = [];
+          
+          if (hasControlsThisMonth && appointmentsArray.length >= 1) {
+            let interval = 7; // Padrão semanal por padrão
             
-            // 2. Detectar agendamentos faltantes baseados no padrão semanal
-            let missingAppointmentDates: number[] = [];
-            
-            if (appointmentsArray.length >= 1) {
-              let interval = 7; // Padrão semanal por padrão
-              
-              if (appointmentsArray.length >= 2) {
-                // Calcular intervalo entre agendamentos
-                const intervals = [];
-                for (let i = 1; i < appointmentsArray.length; i++) {
-                  intervals.push(appointmentsArray[i] - appointmentsArray[i - 1]);
-                }
-                
-                // Encontrar o intervalo mais comum (padrão semanal)
-                const intervalCounts = intervals.reduce((acc, interval) => {
-                  acc[interval] = (acc[interval] || 0) + 1;
-                  return acc;
-                }, {} as Record<number, number>);
-                
-                const mostCommonInterval = parseInt(Object.keys(intervalCounts).reduce((a, b) =>
-                  intervalCounts[parseInt(a)] > intervalCounts[parseInt(b)] ? a : b
-                ));
-                
-                interval = mostCommonInterval;
+            if (appointmentsArray.length >= 2) {
+              // Calcular intervalo entre agendamentos
+              const intervals = [];
+              for (let i = 1; i < appointmentsArray.length; i++) {
+                intervals.push(appointmentsArray[i] - appointmentsArray[i - 1]);
               }
               
-              // Se o intervalo é 7 dias (semanal) ou é um agendamento único, calcular datas faltantes
-              if (interval === 7 || appointmentsArray.length === 1) {
-                const lastAppointment = appointmentsArray[appointmentsArray.length - 1];
-                const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-                
-                // Calcular próximas datas baseadas no padrão semanal
-                for (let date = lastAppointment + 7; date <= daysInMonth; date += 7) {
-                  if (!monthAppointmentsDays.has(date)) {
-                    missingAppointmentDates.push(date);
-                  }
+              // Encontrar o intervalo mais comum (padrão semanal)
+              const intervalCounts = intervals.reduce((acc, interval) => {
+                acc[interval] = (acc[interval] || 0) + 1;
+                return acc;
+              }, {} as Record<number, number>);
+              
+              const mostCommonInterval = parseInt(Object.keys(intervalCounts).reduce((a, b) =>
+                intervalCounts[parseInt(a)] > intervalCounts[parseInt(b)] ? a : b
+              ));
+              
+              interval = mostCommonInterval;
+            }
+              
+            // Se o intervalo é 7 dias (semanal) ou é um agendamento único, calcular datas faltantes
+            if (interval === 7 || appointmentsArray.length === 1) {
+              const lastAppointment = appointmentsArray[appointmentsArray.length - 1];
+              const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+              
+              // Calcular próximas datas baseadas no padrão semanal
+              for (let date = lastAppointment + 7; date <= daysInMonth; date += 7) {
+                if (!monthAppointmentsDays.has(date)) {
+                  missingAppointmentDates.push(date);
                 }
               }
             }
@@ -417,7 +411,8 @@ const Index = () => {
               needsMoreAppointmentsForWeeklyPattern = true;
             }
             
-            if (missingAppointmentDates.length > 0) {
+            // SÓ detectar agendamentos faltantes se há guias correspondentes
+            if (missingAppointmentDates.length > 0 && hasControlsThisMonth) {
               missingDatesForCompleteMonth = missingAppointmentDates;
               needsMoreAppointmentsForCompleteMonth = true;
             }
@@ -473,6 +468,17 @@ const Index = () => {
 
       // 6. Pacientes sem guia para este mês (caso geral)
       const noGuides = hasAppointmentsThisMonth && !hasControlsThisMonth;
+      
+      // 7. Pacientes que têm agendamentos mas faltam guias para algumas datas
+      const hasPartialGuides = hasAppointmentsThisMonth && hasControlsThisMonth && 
+        monthAppointmentsDays.size > monthControlDays.size;
+      
+      // 8. Pacientes que têm agendamentos e guias sincronizados mas não têm agendamentos futuros
+      const needsFutureAppointments = hasAppointmentsThisMonth && hasControlsThisMonth && 
+        monthAppointmentsDays.size === monthControlDays.size && nextMonthAppointmentsCount === 0;
+      
+      // 9. Pacientes sem nenhuma data de agendamento
+      const hasNoAppointments = !hasAppointmentsThisMonth && !hasControlsThisMonth;
 
       const result = {
         patient_id: item.patient_id,
@@ -490,6 +496,9 @@ const Index = () => {
         missingDatesForCompleteMonth: missingDatesForCompleteMonth.sort((a, b) => a - b),
         missingDatesForGuides: missingDatesForGuides.sort((a, b) => a - b),
         noGuides,
+        hasPartialGuides,
+        needsFutureAppointments,
+        hasNoAppointments,
         needsNextMonthScheduling,
         hasAppointmentsInLastWeek,
         nextMonthAppointmentsCount,
@@ -505,7 +514,8 @@ const Index = () => {
     // Show all patients with alerts (active and disabled)
     .filter((a) => {
       try {
-        const hasAlerts = a.appointmentWeeks.length > 0 && (
+        // Verificar se há algum tipo de alerta, independente de ter agendamentos no mês atual
+        const hasAlerts = (
           (a.appointmentsWithoutGuides && a.appointmentsWithoutGuides.length > 0) || 
           (a.weeksWithAppointmentsButNoGuides && a.weeksWithAppointmentsButNoGuides.length > 0) ||
           (a.missingWeeksForGuides && a.missingWeeksForGuides.length > 0) ||
@@ -514,11 +524,18 @@ const Index = () => {
           (a.missingDatesForCompleteMonth && a.missingDatesForCompleteMonth.length > 0) ||
           (a.missingDatesForGuides && a.missingDatesForGuides.length > 0) ||
           a.noGuides || 
+          a.hasPartialGuides ||
+          a.needsFutureAppointments ||
+          a.hasNoAppointments ||
           a.needsNextMonthScheduling || 
           a.needsGuidesForLaterWeeks ||
           a.needsMoreAppointmentsForWeeklyPattern ||
           a.needsMoreAppointmentsForCompleteMonth ||
-          a.needsMoreGuidesForRestOfMonth
+          a.needsMoreGuidesForRestOfMonth ||
+          // Incluir pacientes que têm agendamentos no mês atual mas sem guias
+          (a.appointmentWeeks.length > 0 && a.controlWeeks.length === 0) ||
+          // Incluir pacientes que têm agendamentos mas faltam guias para algumas datas
+          (a.appointmentWeeks.length > 0 && a.controlWeeks.length > 0 && a.controlWeeks.length < a.appointmentWeeks.length)
         );
         
         
@@ -609,6 +626,8 @@ const Index = () => {
                             (a.appointmentsWithoutGuides && a.appointmentsWithoutGuides.length > 0) ||
                             a.noGuides || 
                             a.needsMoreGuidesForRestOfMonth || 
+                            a.needsFutureAppointments ||
+                            a.hasNoAppointments ||
                             a.needsNextMonthScheduling
                           );
                           
@@ -664,6 +683,18 @@ const Index = () => {
                                       alertColor = "bg-gray-50 border-gray-200";
                                       alertMessage = `Alerta desabilitado`;
                                       alertIcon = <AlertTriangle className="h-4 w-4 text-gray-600" />;
+                                    } else if (a.hasNoAppointments) {
+                                      // Alerta vermelho: paciente sem agendamentos
+                                      alertType = "noAppointments";
+                                      alertColor = "bg-red-100 border-red-400";
+                                      alertMessage = `Paciente não possui agendamentos`;
+                                      alertIcon = <User className="h-4 w-4 text-red-700" />;
+                                    } else if (a.needsFutureAppointments) {
+                                      // Alerta laranja: precisa agendamento para próximo mês (caso sincronizado)
+                                      alertType = "nextMonth";
+                                      alertColor = "bg-orange-100 border-orange-400";
+                                      alertMessage = `Precisa agendamento para próximo mês`;
+                                      alertIcon = <Calendar className="h-4 w-4 text-orange-700" />;
                                     } else if (a.needsNextMonthScheduling && a.hasAppointmentsInLastWeek) {
                                       // Alerta laranja: precisa agendamento para próximo mês
                                       alertType = "nextMonth";
@@ -709,6 +740,7 @@ const Index = () => {
                                           <div className="flex flex-col gap-1">
                                             <span className={`text-xs font-medium ${
                                               alertType === "disabled" ? "text-gray-700" :
+                                              alertType === "noAppointments" ? "text-red-800" :
                                               alertType === "nextMonth" ? "text-orange-800" :
                                               alertType === "appointments" ? "text-blue-800" :
                                               alertType === "guides" ? "text-green-800" :
@@ -726,6 +758,14 @@ const Index = () => {
                                                     Motivo: {alertItem.motivo}
                                                   </span>
                                                 </div>
+                                              )}
+                                              
+                                              {alertType === "noAppointments" && (
+                                                <div className="flex flex-wrap gap-1">
+                                                  <span className="px-2 py-1 bg-red-200 text-red-900 rounded text-xs font-medium">
+                                                    👤 Sem agendamentos
+                                  </span>
+                                </div>
                                               )}
                                               
                                               {alertType === "nextMonth" && (
@@ -847,6 +887,18 @@ const Index = () => {
                                       alertColor = "bg-gray-50 border-gray-200";
                                       alertMessage = `Alerta desabilitado`;
                                       alertIcon = <AlertTriangle className="h-4 w-4 text-gray-600" />;
+                                    } else if (a.hasNoAppointments) {
+                                      // Alerta vermelho: paciente sem agendamentos
+                                      alertType = "noAppointments";
+                                      alertColor = "bg-red-100 border-red-400";
+                                      alertMessage = `Paciente não possui agendamentos`;
+                                      alertIcon = <User className="h-4 w-4 text-red-700" />;
+                                    } else if (a.needsFutureAppointments) {
+                                      // Alerta laranja: precisa agendamento para próximo mês (caso sincronizado)
+                                      alertType = "nextMonth";
+                                      alertColor = "bg-orange-100 border-orange-400";
+                                      alertMessage = `Precisa agendamento para próximo mês`;
+                                      alertIcon = <Calendar className="h-4 w-4 text-orange-700" />;
                                     } else if (a.needsNextMonthScheduling && a.hasAppointmentsInLastWeek) {
                                       // Alerta laranja: precisa agendamento para próximo mês
                                       alertType = "nextMonth";
@@ -892,6 +944,7 @@ const Index = () => {
                                           <div className="flex flex-col gap-1">
                                             <span className={`text-xs font-medium ${
                                               alertType === "disabled" ? "text-gray-700" :
+                                              alertType === "noAppointments" ? "text-red-800" :
                                               alertType === "nextMonth" ? "text-orange-800" :
                                               alertType === "appointments" ? "text-blue-800" :
                                               alertType === "guides" ? "text-green-800" :
@@ -909,6 +962,14 @@ const Index = () => {
                                                     Motivo: {alertItem.motivo}
                                                   </span>
                                                 </div>
+                                              )}
+                                              
+                                              {alertType === "noAppointments" && (
+                                                <div className="flex flex-wrap gap-1">
+                                                  <span className="px-2 py-1 bg-red-200 text-red-900 rounded text-xs font-medium">
+                                                    👤 Sem agendamentos
+                                  </span>
+                                </div>
                                               )}
                                               
                                               {alertType === "nextMonth" && (
