@@ -92,7 +92,6 @@ const calculateExpectedDates = (appointmentDates: number[], year: number, monthI
     
     return expectedDates;
   } catch (error) {
-    console.error('Error in calculateExpectedDates:', error);
     return [];
   }
 };
@@ -106,7 +105,6 @@ const formatDateForDisplay = (day: number, year: number, monthIndex: number) => 
     const month = monthIndex + 1;
     return `${day.toString().padStart(2, '0')}/${month.toString().padStart(2, '0')}`;
   } catch (error) {
-    console.error('Error in formatDateForDisplay:', error);
     return day?.toString() || 'N/A';
   }
 };
@@ -182,7 +180,6 @@ const Index = () => {
 
   // Função para abrir modal de edição
   const handleEditAlert = (alert: AlertWebhookItem) => {
-    console.log("Abrindo modal de edição para alerta:", alert);
     setEditingAlert(alert);
     setEditExibir(alert.exibir !== 0);
     setEditMotivo(alert.motivo || "");
@@ -196,16 +193,11 @@ const Index = () => {
     try {
       setSavingAlert(true);
       
-      console.log("editingAlert:", editingAlert);
-      console.log("editingAlert.patient_id:", editingAlert.patient_id);
-      
       const requestBody = {
         patient_id: editingAlert.patient_id,
         exibir: editExibir ? "1" : "0",
         motivo: editMotivo
       };
-      
-      console.log("Enviando dados para API:", requestBody);
       
       const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/alter_alerta", {
         method: "POST",
@@ -232,7 +224,6 @@ const Index = () => {
       // Mostrar feedback de sucesso
       alert("Alerta atualizado com sucesso!");
     } catch (error) {
-      console.error("Erro ao salvar alerta:", error);
       alert("Erro ao salvar alterações. Tente novamente.");
     } finally {
       setSavingAlert(false);
@@ -245,19 +236,6 @@ const Index = () => {
     const nextMonthIndex = (monthIndex + 1) % 12;
     const nextMonthYear = monthIndex === 11 ? year + 1 : year;
 
-    console.log('🔍 Debug Alert System:', {
-      year,
-      monthIndex,
-      totalWeeks,
-      lastWeekNow,
-      alertItemsCount: alertItems.length,
-      alertItems: alertItems.map(item => ({
-        id: item.patient_id,
-        nome: item.paciente_nome,
-        appointment_datas: item.appointment_datas,
-        controle_datas: item.controle_datas
-      }))
-    });
 
     return alertItems.map((item) => {
       const monthAppointmentsDays = parseCsvDatesToMonthMap(item.appointment_datas, year, monthIndex);
@@ -271,15 +249,6 @@ const Index = () => {
         Array.from(monthControlDays).map((d) => getWeekOfMonth(year, monthIndex, d))
       );
 
-      console.log(`🔍 Patient ${item.paciente_nome}:`, {
-        appointment_datas: item.appointment_datas,
-        controle_datas: item.controle_datas,
-        monthAppointmentsDays: Array.from(monthAppointmentsDays),
-        monthControlDays: Array.from(monthControlDays),
-        appointmentWeeks: Array.from(appointmentWeeks),
-        controlWeeks: Array.from(controlWeeks),
-        totalWeeks
-      });
 
       const hasAppointmentsThisMonth = appointmentWeeks.size > 0;
       const hasControlsThisMonth = controlWeeks.size > 0;
@@ -392,7 +361,6 @@ const Index = () => {
             appointmentsArray.every((date, index) => date === controlsArray[index]);
           
           if (appointmentsMatch) {
-            console.log(`✅ ${item.paciente_nome}: Agendamentos e guias estão sincronizados para as datas existentes`);
             // Continuar para verificar se faltam mais agendamentos
           }
           
@@ -443,16 +411,6 @@ const Index = () => {
               }
             }
             
-            console.log(`🔍 Analysis for ${item.paciente_nome}:`, {
-              appointmentDates: appointmentsArray,
-              controlDates: controlsArray,
-              missingGuideDates,
-              missingAppointmentDates,
-              appointmentsMatch,
-              lastAppointment: appointmentsArray[appointmentsArray.length - 1],
-              daysInMonth: new Date(year, monthIndex + 1, 0).getDate(),
-              interval: appointmentsArray.length >= 2 ? 'calculated' : 7
-            });
             
             if (missingGuideDates.length > 0) {
               missingDatesForGuides = missingGuideDates;
@@ -465,7 +423,7 @@ const Index = () => {
             }
           }
         } catch (error) {
-          console.error('Error in smart date detection:', error);
+          // Error in smart date detection
         }
       }
 
@@ -541,21 +499,6 @@ const Index = () => {
         needsMoreGuidesForRestOfMonth,
       };
 
-      console.log(`🔍 Result for ${item.paciente_nome}:`, {
-        hasAppointmentsThisMonth,
-        hasControlsThisMonth,
-        appointmentsWithoutGuides: result.appointmentsWithoutGuides,
-        weeksWithAppointmentsButNoGuides: result.weeksWithAppointmentsButNoGuides,
-        missingWeeksForGuides: result.missingWeeksForGuides,
-        missingWeeksForAppointments: result.missingWeeksForAppointments,
-        missingWeeksForCompleteMonth: result.missingWeeksForCompleteMonth,
-        noGuides: result.noGuides,
-        needsNextMonthScheduling: result.needsNextMonthScheduling,
-        needsGuidesForLaterWeeks: result.needsGuidesForLaterWeeks,
-        needsMoreAppointmentsForWeeklyPattern: result.needsMoreAppointmentsForWeeklyPattern,
-        needsMoreAppointmentsForCompleteMonth: result.needsMoreAppointmentsForCompleteMonth,
-        needsMoreGuidesForRestOfMonth: result.needsMoreGuidesForRestOfMonth
-      });
 
       return result;
     })
@@ -578,19 +521,9 @@ const Index = () => {
           a.needsMoreGuidesForRestOfMonth
         );
         
-        console.log(`🔍 Filter result for ${a.paciente_nome}:`, {
-          hasAlerts,
-          appointmentWeeks: a.appointmentWeeks,
-          hasAppointmentWeeks: a.appointmentWeeks.length > 0,
-          missingDatesForCompleteMonth: a.missingDatesForCompleteMonth,
-          missingDatesForGuides: a.missingDatesForGuides,
-          needsMoreAppointmentsForWeeklyPattern: a.needsMoreAppointmentsForWeeklyPattern,
-          needsMoreAppointmentsForCompleteMonth: a.needsMoreAppointmentsForCompleteMonth
-        });
         
         return hasAlerts;
       } catch (error) {
-        console.error('Error in filter:', error);
         return false;
       }
     })
@@ -705,11 +638,6 @@ const Index = () => {
                                     const alertItem = alertItems.find(item => item.patient_id === a.patient_id);
                                     const isDisabled = alertItem?.exibir === 0;
                                     
-                                    console.log("Debug alertItem:", {
-                                      patient_id: a.patient_id,
-                                      alertItem: alertItem,
-                                      alertItemId: alertItem?.patient_id
-                                    });
                                     // Agendamentos faltantes
                                     const missingAppointments = a.missingDatesForCompleteMonth || [];
                                     

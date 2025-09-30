@@ -183,9 +183,6 @@ const useAppointmentData = (user: any) => {
       const normalizedAppointments = (Array.isArray(appointmentsData) ? appointmentsData : appointmentsData.data || [])
         .filter(apt => apt && apt.id) // Filtrar dados inválidos
         .map(apt => {
-          // Log para debug - verificar estrutura dos dados
-          // console.log('Dados do agendamento recebidos:', apt);
-
           return {
             ...apt,
             // Garantir que end_time seja sempre o campo correto para horário de término
@@ -206,11 +203,6 @@ const useAppointmentData = (user: any) => {
       const uniqueIds = new Set(appointmentIds);
 
       if (appointmentIds.length !== uniqueIds.size) {
-        // console.warn('⚠️ DUPLICAÇÃO DETECTADA nos agendamentos!');
-        // console.warn('Total de agendamentos:', appointmentIds.length);
-        // console.warn('IDs únicos:', uniqueIds.size);
-        // console.warn('IDs duplicados:', appointmentIds.filter((id, index) => appointmentIds.indexOf(id) !== index));
-
         // Remover duplicatas mantendo apenas o primeiro de cada ID
         const seenIds = new Set();
         const deduplicatedAppointments = normalizedAppointments.filter(apt => {
@@ -221,13 +213,9 @@ const useAppointmentData = (user: any) => {
           return true;
         });
 
-        // console.log('Agendamentos após remoção de duplicatas:', deduplicatedAppointments);
         normalizedAppointments.length = 0;
         normalizedAppointments.push(...deduplicatedAppointments);
       }
-
-      // console.log('Agendamentos normalizados:', normalizedAppointments);
-      // console.log('IDs dos agendamentos:', normalizedAppointments.map(apt => apt.id));
 
       setData({
         appointments: normalizedAppointments,
@@ -280,8 +268,6 @@ const useDateUtils = () => {
 
   const formatDisplayDate = useCallback((dateString: string): string => {
     try {
-      // console.log('formatDisplayDate - input dateString:', dateString);
-
       // Tentar diferentes formatos de data
       let date: Date;
 
@@ -298,11 +284,8 @@ const useDateUtils = () => {
 
       // Verificar se a data é válida
       if (isNaN(date.getTime())) {
-        console.error('Data inválida:', dateString);
         return 'Data inválida';
       }
-
-      // console.log('formatDisplayDate - parsed date:', date);
 
       const formattedDate = date.toLocaleDateString('pt-BR', {
         weekday: 'long',
@@ -311,11 +294,9 @@ const useDateUtils = () => {
         day: 'numeric'
       });
 
-      // console.log('formatDisplayDate - formatted result:', formattedDate);
       return formattedDate;
 
     } catch (error) {
-      console.error('Erro ao formatar data:', error, 'dateString:', dateString);
       return 'Erro na formatação da data';
     }
   }, []);
@@ -352,23 +333,17 @@ const useDayStatus = (appointments: Appointment[], workingHours: WorkingHour[]) 
     const occupiedSlots = dayAppointments.length;
     const confirmedAppointments = dayAppointments.filter(apt => apt.status === 'confirmed');
 
-    // Debug: Log para verificar os valores
-    // console.log(`Dia ${day}: totalSlots=${totalSlots}, occupiedSlots=${occupiedSlots}, confirmed=${confirmedAppointments.length}`);
-
     // Se todos os horários estão agendados
     if (occupiedSlots >= totalSlots && totalSlots > 0) {
       // Se todos os agendamentos estão confirmados = VERDE (Confirmados)
       if (confirmedAppointments.length === occupiedSlots && occupiedSlots > 0) {
-        // console.log(`Dia ${day}: Status CONFIRMADO (verde)`);
         return { status: 'confirmed', color: '' };
       } else {
         // Se nem todos estão confirmados = VERMELHO (Totalmente agendado)
-        // console.log(`Dia ${day}: Status TOTALMENTE AGENDADO (vermelho)`);
         return { status: 'full', color: '' };
       }
     } else if (dayWorkingHours.length > 0 && totalSlots > 0) {
       // Se há horários disponíveis = AZUL (Disponibilidade)
-      // console.log(`Dia ${day}: Status DISPONÍVEL (azul)`);
       return { status: 'available', color: '' };
     }
 
@@ -465,7 +440,10 @@ const TimeSlot = ({
   onStatusChange,
   onAttendanceCompleted,
   availablePsychologists,
-  onEditAppointment
+  onEditAppointment,
+  toast,
+  formatDisplayDate,
+  onRescheduleSuccess
 }: {
   slot: TimeSlot;
   getPatientName: (id: string) => string;
@@ -476,6 +454,9 @@ const TimeSlot = ({
   onAttendanceCompleted: (appointment: Appointment) => void;
   availablePsychologists: Array<{ id: string, name: string, workingHours: WorkingHour[] }>;
   onEditAppointment: (appointment: Appointment) => void;
+  toast: any;
+  formatDisplayDate: (dateString: string) => string;
+  onRescheduleSuccess: () => Promise<void>;
 }) => (
   <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
     <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 border-b border-gray-200">
@@ -499,6 +480,9 @@ const TimeSlot = ({
               onStatusChange={onStatusChange}
               onAttendanceCompleted={onAttendanceCompleted}
               onEditAppointment={onEditAppointment}
+              toast={toast}
+              formatDisplayDate={formatDisplayDate}
+              onRescheduleSuccess={onRescheduleSuccess}
             />
           ))}
 
@@ -630,7 +614,10 @@ const AppointmentCard = React.memo(({
   userRole,
   onStatusChange,
   onAttendanceCompleted,
-  onEditAppointment
+  onEditAppointment,
+  toast,
+  formatDisplayDate,
+  onRescheduleSuccess
 }: {
   appointment: Appointment;
   getPatientName: (id: string) => string;
@@ -640,6 +627,9 @@ const AppointmentCard = React.memo(({
   onStatusChange: (appointmentId: string, action: 'confirmar' | 'cancelar') => Promise<void>;
   onAttendanceCompleted: (appointment: Appointment) => void;
   onEditAppointment: (appointment: Appointment) => void;
+  toast: any;
+  formatDisplayDate: (dateString: string) => string;
+  onRescheduleSuccess: () => Promise<void>;
 }) => {
   const [isUpdating, setIsUpdating] = useState(false);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -648,28 +638,18 @@ const AppointmentCard = React.memo(({
   const [newStartTime, setNewStartTime] = useState<string>('');
   const [newEndTime, setNewEndTime] = useState<string>('');
 
-  // Log para debug - verificar status recebido
-  // console.log('AppointmentCard - appointment status:', appointment.status);
-  // console.log('AppointmentCard - appointment object:', appointment);
-
   const getStatusColor = useCallback((status: string) => {
-    // console.log('getStatusColor - status:', status);
     const color = STATUS_COLORS[status as keyof typeof STATUS_COLORS] || 'bg-gray-500';
-    // console.log('getStatusColor - color:', color);
     return color;
   }, []);
 
   const getStatusLabel = useCallback((status: string) => {
-    // console.log('getStatusLabel - status:', status);
     const label = STATUS_LABELS[status as keyof typeof STATUS_LABELS] || status;
-    // console.log('getStatusLabel - label:', label);
     return label;
   }, []);
 
   const getStatusBadgeColor = useCallback((status: string) => {
-    // console.log('getStatusBadgeColor - status:', status);
     const badgeColor = STATUS_BADGE_COLORS[status as keyof typeof STATUS_BADGE_COLORS] || 'bg-gray-100 text-gray-800';
-    // console.log('getStatusBadgeColor - badgeColor:', badgeColor);
     return badgeColor;
   }, []);
 
@@ -679,7 +659,7 @@ const AppointmentCard = React.memo(({
     try {
       await onStatusChange(appointment.id, 'confirmar');
     } catch (error) {
-      console.error('Erro ao confirmar agendamento:', error);
+      // Erro ao confirmar agendamento
     } finally {
       setIsUpdating(false);
     }
@@ -699,6 +679,13 @@ const AppointmentCard = React.memo(({
   const handleRescheduleSubmit = async () => {
     if (!selectedNewDate || !newStartTime || !newEndTime || isUpdating) return;
     
+    // Mostrar toast de "aguarde"
+    toast({
+      title: "Reagendamento solicitado",
+      description: "Aguarde enquanto processamos sua solicitação...",
+      variant: "default",
+    });
+    
     setIsUpdating(true);
     try {
       const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/edit_appoitments', {
@@ -708,7 +695,8 @@ const AppointmentCard = React.memo(({
         },
         body: JSON.stringify({
           appointment_id: appointment.id,
-          date: selectedNewDate.toISOString().split('T')[0], // Formato YYYY-MM-DD
+          data_now: appointment.date, // Data atual do agendamento
+          data_new: selectedNewDate.toISOString().split('T')[0], // Nova data no formato YYYY-MM-DD
           start_time: newStartTime,
           end_time: newEndTime
         }),
@@ -718,17 +706,33 @@ const AppointmentCard = React.memo(({
         throw new Error(`Erro ao reagendar: ${response.status}`);
       }
 
-      // Fechar modal e mostrar sucesso
+      // Aguardar a resposta da API
+      const responseData = await response.json();
+
+      // Fechar modal de reagendamento
       setShowRescheduleDialog(false);
       setSelectedNewDate(null);
       setNewStartTime('');
       setNewEndTime('');
       
-      // Aqui você pode adicionar um toast de sucesso se quiser
-      console.log('Agendamento reagendado com sucesso');
+      // Chamar callback para atualizar a página e reabrir modal
+      await onRescheduleSuccess();
+      
+      // Mostrar toast de sucesso
+      toast({
+        title: "Reagendamento realizado com sucesso!",
+        description: `Agendamento foi reagendado para ${formatDisplayDate(selectedNewDate.toISOString().split('T')[0])} às ${newStartTime}.`,
+        variant: "default",
+      });
       
     } catch (error) {
-      console.error('Erro ao reagendar agendamento:', error);
+      
+      // Mostrar toast de erro
+      toast({
+        title: "Erro ao reagendar",
+        description: "Ocorreu um erro ao tentar reagendar. Tente novamente.",
+        variant: "destructive",
+      });
     } finally {
       setIsUpdating(false);
     }
@@ -740,7 +744,7 @@ const AppointmentCard = React.memo(({
     try {
       await onStatusChange(appointment.id, 'cancelar');
     } catch (error) {
-      console.error('Erro ao cancelar agendamento:', error);
+      // Erro ao cancelar agendamento
     } finally {
       setIsUpdating(false);
       setShowCancelDialog(false);
@@ -860,7 +864,9 @@ const AppointmentCard = React.memo(({
                     Valor
                   </span>
                   <p className="text-lg font-bold text-emerald-600">
-                    {appointment.value?.toFixed(2) || "0.00"}
+                    {typeof appointment.value === 'number' 
+                      ? appointment.value.toFixed(2) 
+                      : parseFloat(appointment.value || '0').toFixed(2)}
                   </p>
                 </div>
               </div>
@@ -977,7 +983,11 @@ const AppointmentCard = React.memo(({
           </AlertDialog>
 
           {/* Dialog de reagendamento */}
-          <AlertDialog open={showRescheduleDialog} onOpenChange={setShowRescheduleDialog}>
+          <AlertDialog open={showRescheduleDialog} onOpenChange={(open) => {
+            if (!isUpdating) {
+              setShowRescheduleDialog(open);
+            }
+          }}>
             <AlertDialogContent className="max-w-lg">
               <AlertDialogHeader>
                 <AlertDialogTitle>Reagendar Agendamento</AlertDialogTitle>
@@ -1207,11 +1217,6 @@ const AppointmentCalendar = () => {
         value: Math.max(0, parseFloat(String(apt.value || apt.price || 0)) || 0)
       }));
 
-      // Debug: verificar se há duplicação nos dados
-      // console.log('Agendamentos filtrados para a data:', dateString);
-      // console.log('Total de agendamentos:', dayAppointments.length);
-      // console.log('IDs dos agendamentos:', dayAppointments.map(apt => apt.id));
-      // console.log('Horários dos agendamentos:', dayAppointments.map(apt => apt.start_time));
 
       const dayWorkingHours = workingHours.filter(wh => wh.day_of_week === clickedDate.getDay());
 
@@ -1259,7 +1264,7 @@ const AppointmentCalendar = () => {
                   }
                 }
               } catch (error) {
-                console.error(`Erro ao buscar horários do psicólogo ${psych.id}:`, error);
+                // Erro ao buscar horários do psicólogo
               }
               return null;
             })
@@ -1270,11 +1275,10 @@ const AppointmentCalendar = () => {
           setAvailablePsychologists(availablePsychs);
         }
       } catch (err) {
-        console.error('Erro ao buscar psicólogos:', err);
         setAvailablePsychologists([]);
       }
     } catch (err) {
-      console.error('Erro ao buscar detalhes da data:', err);
+      // Erro ao buscar detalhes da data
     } finally {
       setLoadingDetails(false);
     }
@@ -1352,7 +1356,6 @@ const AppointmentCalendar = () => {
       }
 
     } catch (error) {
-      console.error(`Erro ao ${action} agendamento:`, error);
       throw error; // Re-throw para o componente filho tratar
     }
   }, [refetch, selectedDateDetails]);
@@ -1412,7 +1415,6 @@ const AppointmentCalendar = () => {
       });
 
     } catch (error) {
-      console.error('Erro ao salvar observações:', error);
       toast({
         title: "Erro ao salvar observações",
         description: "Erro ao salvar observações. Tente novamente.",
@@ -1483,8 +1485,6 @@ const AppointmentCalendar = () => {
         throw new Error('Erro ao enviar dados para o webhook');
       }
     } catch (error) {
-      console.error('Erro ao salvar edição:', error);
-
       // Mostrar toast de erro no canto inferior direito
       toast({
         title: "Erro ao salvar edição",
@@ -1499,6 +1499,11 @@ const AppointmentCalendar = () => {
     setEditPlano((appointment as any).insurance_type || 'Particular');
     setEditValor(appointment.value?.toString() || '0');
     setIsEditModalOpen(true);
+  }, []);
+
+  const handleRescheduleSuccess = useCallback(async () => {
+    // Simplesmente recarregar a página para garantir que todos os dados sejam atualizados
+    window.location.reload();
   }, []);
 
   // Renderizar calendário memoizado
@@ -1774,6 +1779,9 @@ const AppointmentCalendar = () => {
                         onAttendanceCompleted={handleAttendanceCompleted}
                         availablePsychologists={availablePsychologists}
                         onEditAppointment={handleEditAppointment}
+                        toast={toast}
+                        formatDisplayDate={formatDisplayDate}
+                        onRescheduleSuccess={handleRescheduleSuccess}
                       />
                     ))}
                   </div>
