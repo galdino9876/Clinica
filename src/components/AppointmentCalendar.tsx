@@ -27,13 +27,15 @@ interface Appointment {
   patient_id: string;
   psychologist_id: string;
   room_id?: string;
-  status: 'pending' | 'confirmed' | 'canceled';
+  status: 'pending' | 'confirmed' | 'canceled' | 'completed';
   value?: number;
   // Campos alternativos que podem vir da API
   endTime?: string;
   startTime?: string;
   time?: string;
   price?: number;
+  // Campo da guia
+  guia?: string | null;
 }
 
 interface WorkingHour {
@@ -653,6 +655,10 @@ const AppointmentCard = React.memo(({
     return badgeColor;
   }, []);
 
+  const getGuiaColor = useCallback((guia?: string | null) => {
+    return guia ? 'text-gray-800' : 'text-red-600';
+  }, []);
+
   const handleConfirm = async () => {
     if (isUpdating) return;
     setIsUpdating(true);
@@ -1063,23 +1069,29 @@ const AppointmentCard = React.memo(({
 
         {/* Botão Editar no canto superior direito */}
         {userRole && userRole !== "psychologist" && (
-          <button
-            onClick={handleEdit}
-            disabled={isUpdating}
-            className="text-sm text-purple-600 hover:text-purple-800 disabled:text-gray-400 px-2 py-1 rounded-md transition-colors duration-200 focus:outline-none focus:ring-1 focus:ring-purple-400 disabled:cursor-not-allowed"
-            aria-label={`Editar agendamento de ${getPatientName(
-              appointment.patient_id
-            )}`}
-          >
-            {isUpdating ? (
-              <div className="flex items-center">
-                <Loader2 className="animate-spin h-3 w-3 mr-1" />
-                Editando...
-              </div>
-            ) : (
-              "Editar"
-            )}
-          </button>
+          <div className="flex flex-col items-end gap-2">
+            {/* Exibir guia acima do botão Editar independente do status */}
+            <div className={`text-xs font-medium ${getGuiaColor((appointment as any).guia)}`}>
+              {((appointment as any).guia) ? `GUIA: ${(appointment as any).guia}` : 'Falta Guia'}
+            </div>
+            <button
+              onClick={handleEdit}
+              disabled={isUpdating}
+              className="text-sm text-purple-600 hover:text-purple-800 disabled:text-gray-400 px-2 py-1 rounded-md transition-colors duration-200 focus:outline-none focus:ring-1 focus:ring-purple-400 disabled:cursor-not-allowed"
+              aria-label={`Editar agendamento de ${getPatientName(
+                appointment.patient_id
+              )}`}
+            >
+              {isUpdating ? (
+                <div className="flex items-center">
+                  <Loader2 className="animate-spin h-3 w-3 mr-1" />
+                  Editando...
+                </div>
+              ) : (
+                "Editar"
+              )}
+            </button>
+          </div>
         )}
       </div>
     </div>
