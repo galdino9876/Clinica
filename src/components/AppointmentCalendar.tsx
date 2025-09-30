@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import AppointmentForm from "./AppointmentForm";
 import { useToast } from "@/components/ui/use-toast";
+import { isPsychologist } from "@/utils/roleUtils";
 
 // Tipos para melhorar a tipagem
 interface Appointment {
@@ -139,7 +140,10 @@ const useAppointmentData = (user: any) => {
       setError(null);
 
       const baseUrl = 'https://webhook.essenciasaudeintegrada.com.br/webhook';
-      const psychologistId = user?.role === 'psychologist' ? user.id : null;
+      
+      // Verificar se é psicólogo de forma mais robusta
+      const isUserPsychologist = isPsychologist(user?.role);
+      const psychologistId = isUserPsychologist ? user.id : null;
 
       // URLs baseadas no role do usuário
       const urls = {
@@ -1246,7 +1250,7 @@ const AppointmentCalendar = () => {
           let psychologists = psychologistsData.filter((user: any) => user.role === 'psychologist');
 
           // Se o usuário logado for psychologist, mostrar apenas ele mesmo
-          if (user?.role === 'psychologist') {
+          if (isPsychologist(user?.role)) {
             psychologists = psychologists.filter((psych: any) => psych.id === user.id);
           }
           // Se for admin ou receptionist, mostrar todos os psicólogos

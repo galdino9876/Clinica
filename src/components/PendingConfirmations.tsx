@@ -64,7 +64,12 @@ const PendingConfirmations = () => {
         (app) => app.status === "pending" && app.date === targetDate
       );
       
-      setAppointments(filteredAppointments);
+      // Remover duplicatas baseado no ID para evitar chaves duplicadas
+      const uniqueAppointments = filteredAppointments.filter((appointment, index, self) => 
+        index === self.findIndex(app => app.id === appointment.id)
+      );
+      
+      setAppointments(uniqueAppointments);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
       console.error('Erro ao buscar appointments:', err);
@@ -214,8 +219,8 @@ const PendingConfirmations = () => {
             </div>
             
             <div className="space-y-1">
-              {appointments.map((appointment) => (
-                <div key={appointment.id} className="flex items-center px-4 py-2 bg-gray-50 rounded text-sm hover:bg-gray-100 transition-colors">
+              {appointments.map((appointment, index) => (
+                <div key={`${appointment.id}-${index}`} className="flex items-center px-4 py-2 bg-gray-50 rounded text-sm hover:bg-gray-100 transition-colors">
                   <div className="flex items-center gap-2 flex-1 min-w-0">
                     <User className="h-4 w-4 text-gray-500 flex-shrink-0" />
                     <span className="font-medium truncate">{appointment.patient_name}</span>

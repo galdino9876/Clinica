@@ -143,11 +143,24 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
   const getUserByEmail = async (email: string): Promise<User | undefined> => {
     try {
-      const response = await fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/usersEmail/${email}`);
-      if (!response.ok) throw new Error("Usuário não encontrado");
+      // Usar a API correta que retorna todos os usuários
+      const response = await fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/users`);
+      if (!response.ok) throw new Error("Erro ao buscar usuários");
       const data = await response.json();
-      // Garante que retorna o objeto correto, mesmo que venha como array
-      const user = Array.isArray(data) ? data[0] : data;
+      
+      // Verificar se a resposta é um array de usuários
+      if (!Array.isArray(data)) {
+        return undefined;
+      }
+      
+      // Procurar o usuário pelo email
+      const user = data.find((u: any) => 
+        u.email === email || 
+        u.email?.toLowerCase() === email.toLowerCase() ||
+        u.username === email ||
+        u.username?.toLowerCase() === email.toLowerCase()
+      );
+      
       return user;
     } catch (error) {
       console.error("Erro ao buscar usuário por email:", error);

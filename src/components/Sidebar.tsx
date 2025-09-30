@@ -4,6 +4,7 @@ import { Calendar, Users, BarChart3, LogOut, User, Key, X, ClipboardList } from 
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
 import ChangePasswordModal from "./ChangePasswordModal";
+import { isPsychologist, isAdmin, isReceptionist } from "@/utils/roleUtils";
 
 interface SidebarProps {
   onClose?: () => void;
@@ -27,28 +28,33 @@ const Sidebar = ({ onClose }: SidebarProps) => {
       { to: "/", label: "Agenda", icon: <Calendar className="mr-2 h-5 w-5" /> },
     ];
 
-    if (user?.role === "admin" || user?.role === "receptionist") {
+    // Verificar roles de forma mais robusta
+    const userIsAdmin = isAdmin(user?.role);
+    const userIsReceptionist = isReceptionist(user?.role);
+    const userIsPsychologist = isPsychologist(user?.role);
+
+    if (userIsAdmin || userIsReceptionist) {
       baseItems.push(
         { to: "/patients", label: "Pacientes", icon: <Users className="mr-2 h-5 w-5" /> },
         { to: "/users", label: "Usuários", icon: <User className="mr-2 h-5 w-5" /> }
       );
     }
 
-    if (user?.role === "psychologist") {
+    if (userIsPsychologist) {
       baseItems.push(
         { to: "/patients", label: "Meus Pacientes", icon: <Users className="mr-2 h-5 w-5" /> }
       );
     }
 
     // Adiciona a página de confirmações para usuários que não são psicólogos
-    if (user?.role !== "psychologist") {
+    if (!userIsPsychologist) {
       baseItems.push(
         { to: "/confirmations", label: "Confirmações", icon: <User className="mr-2 h-5 w-5" /> }
       );
     }
 
     // Adiciona controle de guias para admin e recepcionistas
-    if (user?.role === "admin" || user?.role === "receptionist") {
+    if (userIsAdmin || userIsReceptionist) {
       baseItems.push(
         { to: "/guide-control", label: "Controle de Guias", icon: <ClipboardList className="mr-2 h-5 w-5" /> }
       );

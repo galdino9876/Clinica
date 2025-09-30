@@ -149,8 +149,8 @@ const AppointmentsDashboard = () => {
                 Pendentes de Confirmação
               </h4>
               <div className="space-y-2">
-                {dashboardData.today.pending.slice(0, 3).map((appointment) => (
-                  <div key={appointment.id} className="flex items-center justify-between p-2 bg-red-50 rounded text-sm">
+                {dashboardData.today.pending.slice(0, 3).map((appointment, index) => (
+                  <div key={`today-pending-${appointment.id}-${index}`} className="flex items-center justify-between p-2 bg-red-50 rounded text-sm">
                     <div className="flex items-center gap-2">
                       <Users className="h-3 w-3 text-gray-500" />
                       <div className="flex flex-col">
@@ -177,8 +177,8 @@ const AppointmentsDashboard = () => {
                     </HoverCardTrigger>
                     <HoverCardContent className="w-80">
                       <div className="space-y-2">
-                        {dashboardData.today.pending.slice(3).map((appointment) => (
-                          <div key={appointment.id} className="flex items-center justify-between text-sm">
+                        {dashboardData.today.pending.slice(3).map((appointment, index) => (
+                          <div key={`today-pending-extra-${appointment.id}-${index}`} className="flex items-center justify-between text-sm">
                             <div className="flex flex-col">
                               <span className="font-medium text-gray-800">{appointment.patient_name}</span>
                               <span className="text-[11px] text-gray-600">{appointment.psychologist_name}</span>
@@ -210,8 +210,8 @@ const AppointmentsDashboard = () => {
                 Confirmados
               </h4>
               <div className="space-y-2">
-                {dashboardData.today.confirmed.slice(0, 3).map((appointment) => (
-                  <div key={appointment.id} className="flex items-center justify-between p-2 bg-green-50 rounded text-sm">
+                {dashboardData.today.confirmed.slice(0, 3).map((appointment, index) => (
+                  <div key={`appointment-${appointment.id}-${index}`} className="flex items-center justify-between p-2 bg-green-50 rounded text-sm">
                     <div className="flex items-center gap-2">
                       <Users className="h-3 w-3 text-gray-500" />
                       <div className="flex flex-col">
@@ -238,8 +238,8 @@ const AppointmentsDashboard = () => {
                     </HoverCardTrigger>
                     <HoverCardContent className="w-80">
                       <div className="space-y-2">
-                        {dashboardData.today.confirmed.slice(3).map((appointment) => (
-                          <div key={appointment.id} className="flex items-center justify-between text-sm">
+                        {dashboardData.today.confirmed.slice(3).map((appointment, index) => (
+                          <div key={`appointment-${appointment.id}-${index}`} className="flex items-center justify-between text-sm">
                             <div className="flex flex-col">
                               <span className="font-medium text-gray-800">{appointment.patient_name}</span>
                               <span className="text-[11px] text-gray-600">{appointment.psychologist_name}</span>
@@ -303,8 +303,8 @@ const AppointmentsDashboard = () => {
                 Pendentes de Confirmação
               </h4>
               <div className="space-y-2">
-                {dashboardData.tomorrow.pending.slice(0, 3).map((appointment) => (
-                  <div key={appointment.id} className="flex items-center justify-between p-2 bg-red-50 rounded text-sm">
+                {dashboardData.tomorrow.pending.slice(0, 3).map((appointment, index) => (
+                  <div key={`appointment-${appointment.id}-${index}`} className="flex items-center justify-between p-2 bg-red-50 rounded text-sm">
                     <div className="flex items-center gap-2">
                       <Users className="h-3 w-3 text-gray-500" />
                       <div className="flex flex-col">
@@ -331,8 +331,8 @@ const AppointmentsDashboard = () => {
                     </HoverCardTrigger>
                     <HoverCardContent className="w-80">
                       <div className="space-y-2">
-                        {dashboardData.tomorrow.pending.slice(3).map((appointment) => (
-                          <div key={appointment.id} className="flex items-center justify-between text-sm">
+                        {dashboardData.tomorrow.pending.slice(3).map((appointment, index) => (
+                          <div key={`appointment-${appointment.id}-${index}`} className="flex items-center justify-between text-sm">
                             <div className="flex flex-col">
                               <span className="font-medium text-gray-800">{appointment.patient_name}</span>
                               <span className="text-[11px] text-gray-600">{appointment.psychologist_name}</span>
@@ -364,8 +364,8 @@ const AppointmentsDashboard = () => {
                 Confirmados
               </h4>
               <div className="space-y-2">
-                {dashboardData.tomorrow.confirmed.slice(0, 3).map((appointment) => (
-                  <div key={appointment.id} className="flex items-center justify-between p-2 bg-green-50 rounded text-sm">
+                {dashboardData.tomorrow.confirmed.slice(0, 3).map((appointment, index) => (
+                  <div key={`appointment-${appointment.id}-${index}`} className="flex items-center justify-between p-2 bg-green-50 rounded text-sm">
                     <div className="flex items-center gap-2">
                       <Users className="h-3 w-3 text-gray-500" />
                       <div className="flex flex-col">
@@ -392,8 +392,8 @@ const AppointmentsDashboard = () => {
                     </HoverCardTrigger>
                     <HoverCardContent className="w-80">
                       <div className="space-y-2">
-                        {dashboardData.tomorrow.confirmed.slice(3).map((appointment) => (
-                          <div key={appointment.id} className="flex items-center justify-between text-sm">
+                        {dashboardData.tomorrow.confirmed.slice(3).map((appointment, index) => (
+                          <div key={`appointment-${appointment.id}-${index}`} className="flex items-center justify-between text-sm">
                             <div className="flex flex-col">
                               <span className="font-medium text-gray-800">{appointment.patient_name}</span>
                               <span className="text-[11px] text-gray-600">{appointment.psychologist_name}</span>
