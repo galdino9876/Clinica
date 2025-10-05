@@ -1,177 +1,69 @@
-﻿import React, { useState, useEffect } from "react";
-import Layout from "@/components/Layout";
+﻿import React, { useState, useEffect } from 'react';
+import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { format } from 'date-fns';
+import GuideModal from '@/components/GuideModal';
 import { 
+  User, 
   Calendar, 
-  Clock, 
-  Users, 
+  FileText, 
+  AlertTriangle, 
   CheckCircle, 
-  AlertCircle, 
-  TrendingUp,
-  RefreshCw,
-  Filter,
-  Download,
-  Eye,
   Plus,
-  AlertTriangle,
-  FileText,
-  Edit,
-  CalendarDays,
+  RefreshCw,
   Upload,
-  FileCheck
+  DollarSign,
+  Trash2
 } from "lucide-react";
-import { format, parseISO, startOfWeek, endOfWeek, eachDayOfInterval, differenceInDays, addDays } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { toast, Toaster } from "sonner";
-import { useAuth } from "@/context/AuthContext";
-import GuideStatsChart from "@/components/GuideStatsChart";
 
-interface UnifiedData {
-  appointment_id: number;
-  patient_id: number;
-  date: string | null;
-  status: "pending" | "confirmed" | "completed" | "cancelled";
-  payment_method: "private" | "insurance";
-  insurance_type: string | null;
-  patient_name: string;
-  guia_id: number | null;
-  numero_prestador: string | null;
-  date_1: string | null;
-  date_2: string | null;
-  date_3: string | null;
-  date_4: string | null;
-  date_5: string | null;
+interface PrestadorData {
+  numero_prestador: number;
+  datas: string[];
   existe_guia_autorizada: number;
   existe_guia_assinada: number;
   existe_guia_assinada_psicologo: number;
-  faturado: number;
   date_faturado: string | null;
+  faturado: number;
 }
 
 interface GuideData {
-  id: number;
-  id_patient: number;
-  numero_prestador: string;
-  date_1: string | null;
-  date_2: string | null;
-  date_3: string | null;
-  date_4: string | null;
-  date_5: string | null;
-  name?: string;
+  data: string;
+  agendamento: string;
+  guia: string;
+  numero_prestador: number | string | null;
 }
 
-interface CompletedGuide {
-  id: number;
-  id_patient: number;
-  numero_prestador: string;
-  existe_pdf_assinado: number; // Manter para compatibilidade
-  existe_guia_autorizada: number;
-  existe_guia_assinada: number;
-  existe_guia_assinada_psicologo: number;
-  date_1: string | null;
-  date_2: string | null;
-  date_3: string | null;
-  date_4: string | null;
-  date_5: string | null;
-  name: string;
-  faturado: number;
-  date_faturado: string | null;
-  appointment_type: string;
-}
-
-interface PatientSessionInfo {
+interface PatientData {
   patient_id: number;
-  patient_name: string;
-  psychologist_name: string;
-  payment_method: "private" | "insurance";
+  paciente_nome: string;
+  appointment_id: number | null;
+  status: "pending" | "confirmed" | "completed" | "cancelled" | null;
+  payment_method: "private" | "insurance" | null;
   insurance_type: string | null;
-  total_appointments: number;
-  monthly_appointments: string[];
-  guide_dates: string[];
-  appointment_dates: string[];
-  appointment_statuses?: Map<string, string>;
-  last_guide_date: string | null;
-  needs_new_guide: boolean;
-  weeks_until_expiry: number | null;
-  status: 'ok' | 'warning' | 'urgent' | 'no_guides' | 'incomplete';
-  monthly_guide_status: 'ok' | 'pending';
-  needs_next_month_guide: boolean;
-  // Novos campos para análise de padrões semanais
-  weekly_pattern?: 'weekly' | null;
-  suggested_dates: string[];
-  missing_appointments: string[];
-  missing_guides: string[];
-  expected_dates: string[];
+  appointment_type: "presential" | "online" | null;
+  existe_guia_autorizada: number | null;
+  existe_guia_assinada: number | null;
+  existe_guia_assinada_psicologo: number | null;
+  date_faturado: string | null;
+  faturado: number | null;
+  mensagem?: string;
+  date_apointments?: string; // String com datas separadas por vírgula
+  prestadores: string; // JSON string que precisa ser parseado
+  datas?: GuideData[]; // Array de datas com status de agendamento e guia
 }
 
-interface DashboardStats {
-  total: number;
-  pending: number;
-  confirmed: number;
-  completed: number;
-  cancelled: number;
-  thisWeek: number;
-  today: number;
-  tomorrow: number;
-}
-
-const GuideControl = () => {
-  const { user } = useAuth();
-  const [unifiedData, setUnifiedData] = useState<UnifiedData[]>([]);
-  const [patientSessions, setPatientSessions] = useState<PatientSessionInfo[]>([]);
-  const [loading, setLoading] = useState(true);
+const GuideControl: React.FC = () => {
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isAddGuideModalOpen, setIsAddGuideModalOpen] = useState(false);
-  const [selectedPatientForGuide, setSelectedPatientForGuide] = useState<number | null>(null);
-  const [selectedDates, setSelectedDates] = useState<string[]>([]);
-  const [prestadorNumber, setPrestadorNumber] = useState<string>("");
-  const [patientGuides, setPatientGuides] = useState<GuideData[]>([]);
-  const [loadingGuides, setLoadingGuides] = useState(false);
-  const [editingGuide, setEditingGuide] = useState<GuideData | null>(null);
-  const [editFormData, setEditFormData] = useState({
-    numero_prestador: '',
-    date_1: '',
-    date_2: '',
-    date_3: '',
-    date_4: '',
-    date_5: ''
-  });
-  const [editSelectedDates, setEditSelectedDates] = useState<string[]>([]);
-  const [editCalendarMonth, setEditCalendarMonth] = useState(new Date());
-  const [addGuideCalendarMonth, setAddGuideCalendarMonth] = useState(new Date());
-  const [showExistingGuides, setShowExistingGuides] = useState(false);
-  const [stats, setStats] = useState<DashboardStats>({
-    total: 0,
-    pending: 0,
-    confirmed: 0,
-    completed: 0,
-    cancelled: 0,
-    thisWeek: 0,
-    today: 0,
-    tomorrow: 0
-  });
-  const [selectedMonth, setSelectedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
-  const [activeFilter, setActiveFilter] = useState<'all' | 'urgent' | 'no_guides' | 'incomplete'>('all');
-  const [activeTab, setActiveTab] = useState<'control' | 'completed'>('control');
-  const [completedGuides, setCompletedGuides] = useState<CompletedGuide[]>([]);
-  const [loadingCompletedGuides, setLoadingCompletedGuides] = useState(false);
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
-  const [selectedGuideForUpload, setSelectedGuideForUpload] = useState<CompletedGuide | null>(null);
-  const [uploadFile, setUploadFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [uploadType, setUploadType] = useState<'autorizada' | 'assinada' | 'assinada_psicologo' | null>(null);
-  const [selectedCompletedMonth, setSelectedCompletedMonth] = useState<string>(format(new Date(), 'yyyy-MM'));
-  const [downloadingAll, setDownloadingAll] = useState(false);
+  const [patientsData, setPatientsData] = useState<PatientData[]>([]);
+  const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
+  const [selectedPatient, setSelectedPatient] = useState<PatientData | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [prestadorToDelete, setPrestadorToDelete] = useState<number | null>(null);
+  const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
   const [downloadingEverything, setDownloadingEverything] = useState(false);
-  const [downloadProgress, setDownloadProgress] = useState({
-    total: 0,
-    completed: 0,
-    failed: 0,
-    remaining: 0
-  });
   const [downloadEverythingProgress, setDownloadEverythingProgress] = useState({
     total: 0,
     completed: 0,
@@ -180,1076 +72,263 @@ const GuideControl = () => {
     currentStep: '',
     currentGuide: ''
   });
+  const [showDownloadComplete, setShowDownloadComplete] = useState(false);
+  const [downloadResult, setDownloadResult] = useState({
+    completed: 0,
+    failed: 0,
+    message: ''
+  });
 
-  // Verificação de permissões do usuário
-  const isAdmin = user?.role === "admin";
-  const isReceptionist = user?.role === "receptionist";
-  const isPsychologist = user?.role === "psychologist";
-  const canViewAlerts = isAdmin || isReceptionist; // Apenas admin e recepcionista podem ver alertas
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  useEffect(() => {
-    calculatePatientSessions();
-  }, [unifiedData, selectedMonth]);
-
-  useEffect(() => {
-    if (activeTab === 'completed') {
-      getCompletedGuidesForCurrentMonth();
-    }
-  }, [activeTab, selectedCompletedMonth]);
-
-
+  // Função para buscar dados da API
   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      // Buscar dados unificados (appointments + guias)
-      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/return_date_guias', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({})
-      });
+      const response = await fetch(
+        "https://webhook.essenciasaudeintegrada.com.br/webhook/return_date_guias",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({}),
+        }
+      );
       
       if (!response.ok) {
         throw new Error(`Erro ao buscar dados: ${response.status}`);
       }
       
-      const data: UnifiedData[] = await response.json();
-      setUnifiedData(data);
-      calculateStats(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erro desconhecido');
-      console.error('Erro ao buscar dados:', err);
+      const data: PatientData[] = await response.json();
+      setPatientsData(data);
+      
+    } catch (e: any) {
+      setError(e?.message || "Erro desconhecido");
     } finally {
       setLoading(false);
     }
   };
 
-  const calculateStats = (data: UnifiedData[]) => {
-    const today = format(new Date(), 'yyyy-MM-dd');
-    const tomorrow = format(new Date(Date.now() + 24 * 60 * 60 * 1000), 'yyyy-MM-dd');
-    
-    const weekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
-    const weekEnd = endOfWeek(new Date(), { weekStartsOn: 1 });
-    const weekDays = eachDayOfInterval({ start: weekStart, end: weekEnd });
-    const weekDates = weekDays.map(day => format(day, 'yyyy-MM-dd'));
+  useEffect(() => {
+    fetchData();
+  }, []);
 
-    // Filtrar apenas agendamentos com datas válidas
-    const validAppointments = data.filter(app => app.date !== null);
-
-    const newStats: DashboardStats = {
-      total: validAppointments.length,
-      pending: validAppointments.filter(app => app.status === "pending").length,
-      confirmed: validAppointments.filter(app => app.status === "confirmed").length,
-      completed: validAppointments.filter(app => app.status === "completed").length,
-      cancelled: validAppointments.filter(app => app.status === "cancelled").length,
-      thisWeek: validAppointments.filter(app => weekDates.includes(app.date)).length,
-      today: validAppointments.filter(app => app.date === today).length,
-      tomorrow: validAppointments.filter(app => app.date === tomorrow).length
-    };
-
-    setStats(newStats);
-  };
-
-  // Função para detectar padrões semanais e sugerir datas faltantes
-  const detectWeeklyPatternAndSuggestDates = (appointmentDates: string[], guideDates: string[], month: number, year: number) => {
-    if (appointmentDates.length === 0) return { pattern: null, suggestedDates: [], missingAppointments: [], missingGuides: [] };
-
-    // Converter para objetos Date e ordenar
-    const sortedAppointments = appointmentDates
-      .map(date => ({ date, dateObj: parseISO(date) }))
-      .sort((a, b) => a.dateObj.getTime() - b.dateObj.getTime());
-
-    let isWeeklyPattern = false;
-    let expectedDates: string[] = [];
-
-    if (appointmentDates.length === 1) {
-      // Para casos com apenas 1 agendamento, verificar se há espaço para mais semanas no mês
-      const firstDate = sortedAppointments[0].dateObj;
-      const monthEnd = new Date(year, month, 0); // Último dia do mês
-      
-      // Calcular quantas semanas cabem no mês a partir da primeira data
-      const weeksFromFirstDate = Math.floor((monthEnd.getTime() - firstDate.getTime()) / (7 * 24 * 60 * 60 * 1000));
-      
-      // Se há pelo menos 1 semana disponível após a primeira data, assumir padrão semanal
-      if (weeksFromFirstDate >= 1) {
-        isWeeklyPattern = true;
-        
-        // Gerar datas semanais a partir da primeira data até o final do mês
-        const currentDate = new Date(firstDate);
-        
-        while (currentDate <= monthEnd) {
-          const dateStr = format(currentDate, 'yyyy-MM-dd');
-          const [dateYear, dateMonth] = dateStr.split('-').map(Number);
-          
-          if (dateYear === year && dateMonth === month) {
-            expectedDates.push(dateStr);
-          }
-          
-          currentDate.setDate(currentDate.getDate() + 7);
-        }
-      }
-    } else {
-      // Para casos com 2+ agendamentos, verificar padrão semanal
-      const intervals = [];
-      for (let i = 1; i < sortedAppointments.length; i++) {
-        const diffDays = differenceInDays(sortedAppointments[i].dateObj, sortedAppointments[i-1].dateObj);
-        intervals.push(diffDays);
-      }
-
-      // Verificar se há padrão semanal consistente (intervalos de 7 dias)
-      isWeeklyPattern = intervals.every(interval => interval === 7);
-      
-      if (isWeeklyPattern) {
-        // Calcular datas esperadas baseadas no padrão semanal
-        const firstDate = sortedAppointments[0].dateObj;
-        
-        // Gerar todas as datas semanais do mês baseadas no padrão
-        const currentDate = new Date(firstDate);
-        const monthEnd = new Date(year, month, 0); // Último dia do mês
-        
-        while (currentDate <= monthEnd) {
-          const dateStr = format(currentDate, 'yyyy-MM-dd');
-          const [dateYear, dateMonth] = dateStr.split('-').map(Number);
-          
-          if (dateYear === year && dateMonth === month) {
-            expectedDates.push(dateStr);
-          }
-          
-          currentDate.setDate(currentDate.getDate() + 7);
-        }
-      }
-    }
-
-    if (!isWeeklyPattern) return { pattern: null, suggestedDates: [], missingAppointments: [], missingGuides: [] };
-
-    // Identificar agendamentos faltantes
-    const missingAppointments = expectedDates.filter(expectedDate => 
-      !appointmentDates.includes(expectedDate)
-    );
-
-    // Identificar guias faltantes
-    const missingGuides = appointmentDates.filter(appointmentDate => 
-      !guideDates.includes(appointmentDate)
-    );
-
-    // Sugerir próximas datas baseadas no padrão
-    const suggestedDates = [];
-    if (expectedDates.length > 0) {
-      const lastExpectedDate = parseISO(expectedDates[expectedDates.length - 1]);
-      for (let i = 1; i <= 4; i++) { // Sugerir próximas 4 semanas
-        const nextDate = addDays(lastExpectedDate, 7 * i);
-        const nextDateStr = format(nextDate, 'yyyy-MM-dd');
-        const [nextYear, nextMonth] = nextDateStr.split('-').map(Number);
-        
-        // Incluir apenas se for do mês atual ou próximo
-        if ((nextYear === year && nextMonth === month) || 
-            (nextYear === year && nextMonth === month + 1) ||
-            (month === 12 && nextYear === year + 1 && nextMonth === 1)) {
-          suggestedDates.push(nextDateStr);
-        }
-      }
-    }
-
-    return {
-      pattern: isWeeklyPattern ? 'weekly' : null,
-      suggestedDates,
-      missingAppointments,
-      missingGuides,
-      expectedDates
-    };
-  };
-
-  const calculatePatientSessions = () => {
-    const patientMap = new Map<number, PatientSessionInfo>();
-    
-    // Criar datas de forma mais robusta
-    const [year, month] = selectedMonth.split('-').map(Number);
-    const selectedMonthStart = new Date(year, month - 1, 1);
-    const selectedMonthEnd = new Date(year, month, 0); // Último dia do mês
-    const nextMonthStart = new Date(year, month, 1);
-
-    // Processar dados unificados
-    unifiedData.forEach(data => {
-      const patientId = data.patient_id;
-      
-      if (!patientMap.has(patientId)) {
-        patientMap.set(patientId, {
-          patient_id: patientId,
-          patient_name: data.patient_name,
-          psychologist_name: '', // Não disponível nos dados unificados
-          payment_method: data.payment_method,
-          insurance_type: data.insurance_type,
-          total_appointments: 0,
-          monthly_appointments: [],
-          guide_dates: [],
-          appointment_dates: [],
-          last_guide_date: null,
-          needs_new_guide: false,
-          weeks_until_expiry: null,
-          status: 'ok',
-          monthly_guide_status: 'pending',
-          needs_next_month_guide: false,
-          weekly_pattern: null,
-          suggested_dates: [],
-          missing_appointments: [],
-          missing_guides: [],
-          expected_dates: []
-        });
-      }
-
-      const patient = patientMap.get(patientId)!;
-      patient.total_appointments++;
-      
-      // Filtrar agendamentos do mês selecionado
-      const appointmentDateStr = data.date;
-      if (!appointmentDateStr) return; // Pular se a data for null/undefined
-      
-      patient.appointment_dates.push(data.date);
-      const appointmentYear = parseInt(appointmentDateStr.split('-')[0]);
-      const appointmentMonth = parseInt(appointmentDateStr.split('-')[1]);
-      
-      if (appointmentYear === year && appointmentMonth === month) {
-        // Evitar duplicação de agendamentos
-        if (!patient.monthly_appointments.includes(data.date)) {
-          patient.monthly_appointments.push(data.date);
-        }
-        if (!patient.appointment_statuses) {
-          patient.appointment_statuses = new Map();
-        }
-        patient.appointment_statuses.set(data.date, data.status);
-      }
-
-      // Processar dados das guias se existirem
-      if (data.guia_id) {
-        const allGuideDates = [data.date_1, data.date_2, data.date_3, data.date_4, data.date_5]
-          .filter(date => date !== null) as string[];
-        
-        // Filtrar apenas as datas do mês selecionado
-        const monthlyGuideDates = allGuideDates.filter(date => {
-          if (!date) return false; // Pular se a data for null/undefined
-          const [guideYear, guideMonth] = date.split('-').map(Number);
-          return guideYear === year && guideMonth === month;
-        });
-        
-        // Acumular as datas das guias (não sobrescrever) e remover duplicatas
-        const existingDates = new Set(patient.guide_dates);
-        monthlyGuideDates.forEach(date => existingDates.add(date));
-        patient.guide_dates = Array.from(existingDates);
-        patient.last_guide_date = monthlyGuideDates[monthlyGuideDates.length - 1] || patient.last_guide_date;
-      }
-    });
-
-    // Calcular status e alertas
-    patientMap.forEach(patient => {
-      // Ordenar datas
-      patient.appointment_dates.sort();
-      patient.guide_dates.sort();
-      patient.monthly_appointments.sort();
-
-      // Analisar padrões semanais e sugerir datas
-      const patternAnalysis = detectWeeklyPatternAndSuggestDates(
-        patient.monthly_appointments, 
-        patient.guide_dates, 
-        month, 
-        year
-      );
-      
-      patient.weekly_pattern = patternAnalysis.pattern;
-      patient.suggested_dates = patternAnalysis.suggestedDates;
-      patient.missing_appointments = patternAnalysis.missingAppointments;
-      patient.missing_guides = patternAnalysis.missingGuides;
-      patient.expected_dates = patternAnalysis.expectedDates;
-
-      // Verificar se tem agendamentos do mês selecionado
-      if (patient.monthly_appointments.length === 0) {
-        patient.status = 'ok';
-        patient.monthly_guide_status = 'pending';
-        patient.needs_new_guide = false;
-        patient.needs_next_month_guide = false;
-        return;
-      }
-
-      // Verificar se tem guias para o mês selecionado
-      const monthlyGuideDates = patient.guide_dates.filter(date => {
-        if (!date) return false; // Pular se a data for null/undefined
-        const [guideYear, guideMonth] = date.split('-').map(Number);
-        return guideYear === year && guideMonth === month;
-      });
-
-      // Verificar se tem guias para o mês seguinte
-      const nextMonthGuideDates = patient.guide_dates.filter(date => {
-        if (!date) return false; // Pular se a data for null/undefined
-        const [guideYear, guideMonth] = date.split('-').map(Number);
-        const nextMonth = month === 12 ? 1 : month + 1;
-        const nextYear = month === 12 ? year + 1 : year;
-        return guideYear === nextYear && guideMonth === nextMonth;
-      });
-
-      // Comparar datas do mês - verificar se todas as datas de agendamento têm guias correspondentes
-      const hasAllMonthlyGuides = patient.monthly_appointments.every(appDate => 
-        monthlyGuideDates.some(guideDate => guideDate === appDate)
-      );
-
-      // Verificar se tem agendamentos sem guias (incompleto)
-      const appointmentsWithoutGuides = patient.monthly_appointments.filter(appDate => 
-        !monthlyGuideDates.some(guideDate => guideDate === appDate)
-      );
-
-      // Verificar agendamentos urgentes (próximos 5 dias sem guia)
-      const today = new Date();
-      const urgentAppointments = patient.monthly_appointments.filter(appDate => {
-        const appointmentDate = new Date(appDate);
-        const daysDifference = Math.ceil((appointmentDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-        return daysDifference <= 5 && daysDifference >= 0 && !monthlyGuideDates.some(guideDate => guideDate === appDate);
-      });
-
-      if (patient.guide_dates.length === 0) {
-        // Sem guias autorizadas para o mês
-        patient.status = 'no_guides';
-        patient.monthly_guide_status = 'pending';
-        patient.needs_new_guide = true;
-        patient.needs_next_month_guide = false;
-      } else if (urgentAppointments.length > 0) {
-        // Tem agendamentos urgentes (próximos 5 dias sem guia)
-        patient.status = 'urgent';
-        patient.monthly_guide_status = 'pending';
-        patient.needs_new_guide = true;
-        patient.needs_next_month_guide = false;
-      } else if (appointmentsWithoutGuides.length > 0) {
-        // Tem agendamentos sem guias correspondentes (incompleto)
-        patient.status = 'incomplete';
-        patient.monthly_guide_status = 'pending';
-        patient.needs_new_guide = true;
-        patient.needs_next_month_guide = false;
-      } else if (hasAllMonthlyGuides) {
-        // Todas as datas têm guias correspondentes
-        patient.monthly_guide_status = 'ok';
-        patient.status = 'ok';
-        patient.needs_new_guide = false;
-        
-        // Verificar se precisa de guia do mês seguinte (só na última semana do mês)
-        const lastWeekOfMonth = new Date(selectedMonthEnd.getFullYear(), selectedMonthEnd.getMonth(), selectedMonthEnd.getDate() - 7);
-        const isLastWeekOfMonth = today >= lastWeekOfMonth;
-        
-        patient.needs_next_month_guide = isLastWeekOfMonth && nextMonthGuideDates.length === 0;
-      } else {
-        // Caso padrão
-        patient.status = 'ok';
-        patient.monthly_guide_status = 'pending';
-        patient.needs_new_guide = false;
-        patient.needs_next_month_guide = false;
-      }
-    });
-
-    const sessions = Array.from(patientMap.values());
-    setPatientSessions(sessions);
-  };
-
-
-  const handleAddGuide = async (patientId: number) => {
-    setSelectedPatientForGuide(patientId);
-    setSelectedDates([]);
-    setPrestadorNumber("");
-    setIsAddGuideModalOpen(true);
-    
-    // Buscar guias do paciente
-    await fetchPatientGuides(patientId);
-  };
-
-  const fetchPatientGuides = async (patientId: number) => {
+  // Função para importar PDF de guia
+  const handleImportGuia = async (
+    patientName: string, 
+    numeroPrestador: number, 
+    command: "Guia-autorizada" | "Guia-assinada" | "Guia-assinada-psicologo",
+    file: File
+  ) => {
     try {
-      setLoadingGuides(true);
-      
-      // Filtrar guias do paciente dos dados unificados e remover duplicatas
-      const uniqueGuides = new Map<number, any>();
-      
-      unifiedData
-        .filter(data => data.patient_id === patientId && data.guia_id)
-        .forEach(data => {
-          // Usar guia_id como chave para evitar duplicatas
-          if (!uniqueGuides.has(data.guia_id!)) {
-            uniqueGuides.set(data.guia_id!, {
-              id: data.guia_id!,
-              id_patient: data.patient_id,
-              numero_prestador: data.numero_prestador || '',
-              date_1: data.date_1,
-              date_2: data.date_2,
-              date_3: data.date_3,
-              date_4: data.date_4,
-              date_5: data.date_5
-            });
-          }
-        });
-      
-      // Converter Map para array e ordenar da mais recente para a mais antiga
-      const sortedGuides = Array.from(uniqueGuides.values()).sort((a, b) => {
-        const dateA = new Date(a.date_1 || '');
-        const dateB = new Date(b.date_1 || '');
-        return dateB.getTime() - dateA.getTime();
-      });
-      
-      setPatientGuides(sortedGuides);
-    } catch (error) {
-      console.error('Erro ao buscar guias do paciente:', error);
-      setPatientGuides([]);
-    } finally {
-      setLoadingGuides(false);
-    }
-  };
-
-  const handleDateSelect = (date: string) => {
-    if (selectedDates.includes(date)) {
-      setSelectedDates(selectedDates.filter(d => d !== date));
-    } else if (selectedDates.length < 5) {
-      setSelectedDates([...selectedDates, date].sort());
-    }
-  };
-
-  const handleSubmitGuide = async () => {
-    if (!selectedPatientForGuide || selectedDates.length === 0 || !prestadorNumber) {
-      toast.error("Preencha todos os campos obrigatórios");
-      return;
-    }
-
-    try {
-      const payload: any = {
-        numero_prestador: prestadorNumber,
-        id_patient: selectedPatientForGuide
-      };
-
-      // Adicionar as datas selecionadas
-      selectedDates.forEach((date, index) => {
-        payload[`date_${index + 1}`] = date;
-      });
-
-      // Preencher as datas restantes com null
-      for (let i = selectedDates.length; i < 5; i++) {
-        payload[`date_${i + 1}`] = null;
-      }
-
-      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/insert_date_guias', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erro ao inserir guias: ${response.status}`);
-      }
-
-      toast.success("Guias inseridas com sucesso!");
-      setIsAddGuideModalOpen(false);
-      fetchData(); // Recarregar dados
-    } catch (error) {
-      console.error('Erro ao inserir guias:', error);
-      toast.error("Erro ao inserir guias. Tente novamente.");
-    }
-  };
-
-  const handleEditGuide = (guide: GuideData) => {
-    setEditingGuide(guide);
-    setEditFormData({
-      numero_prestador: guide.numero_prestador || '',
-      date_1: guide.date_1 || '',
-      date_2: guide.date_2 || '',
-      date_3: guide.date_3 || '',
-      date_4: guide.date_4 || '',
-      date_5: guide.date_5 || ''
-    });
-    
-    // Preencher as datas selecionadas com as datas existentes da guia
-    const existingDates = [guide.date_1, guide.date_2, guide.date_3, guide.date_4, guide.date_5]
-      .filter(date => date && date !== null && date !== '')
-      .sort();
-    setEditSelectedDates(existingDates);
-    
-    // Definir o mês do calendário baseado na primeira data existente ou mês atual
-    if (existingDates.length > 0) {
-      const firstDate = parseISO(existingDates[0]);
-      setEditCalendarMonth(new Date(firstDate.getFullYear(), firstDate.getMonth(), 1));
-    } else {
-      setEditCalendarMonth(new Date());
-    }
-  };
-
-  const handleSubmitEditGuide = async () => {
-    if (!editingGuide || !editFormData.numero_prestador) {
-      toast.error('Por favor, preencha todos os campos obrigatórios');
-      return;
-    }
-
-    try {
-      const payload = {
-        numero_prestador: editFormData.numero_prestador,
-        id_patient: editingGuide.id_patient,
-        date_1: editSelectedDates[0] || '',
-        date_2: editSelectedDates[1] || '',
-        date_3: editSelectedDates[2] || '',
-        date_4: editSelectedDates[3] || '',
-        date_5: editSelectedDates[4] || ''
-      };
-
-      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/insert_date_guias', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      if (response.ok) {
-        toast.success('Guia editada com sucesso!');
-        setEditingGuide(null);
-        setEditFormData({
-          numero_prestador: '',
-          date_1: '',
-          date_2: '',
-          date_3: '',
-          date_4: '',
-          date_5: ''
-        });
-        setEditSelectedDates([]);
-        setEditCalendarMonth(new Date());
-        fetchData(); // Recarregar dados
-      } else {
-        toast.error('Erro ao editar guia');
-      }
-    } catch (error) {
-      console.error('Erro ao editar guia:', error);
-      toast.error('Erro ao editar guia');
-    }
-  };
-
-  const handleEditDateSelect = (date: string) => {
-    if (editSelectedDates.includes(date)) {
-      // Remover data se já estiver selecionada
-      setEditSelectedDates(editSelectedDates.filter(d => d !== date));
-    } else if (editSelectedDates.length < 5) {
-      // Adicionar data se ainda não tiver 5 selecionadas
-      setEditSelectedDates([...editSelectedDates, date].sort());
-    }
-  };
-
-  const handleEditPreviousMonth = () => {
-    setEditCalendarMonth(new Date(editCalendarMonth.getFullYear(), editCalendarMonth.getMonth() - 1, 1));
-  };
-
-  const handleEditNextMonth = () => {
-    setEditCalendarMonth(new Date(editCalendarMonth.getFullYear(), editCalendarMonth.getMonth() + 1, 1));
-  };
-
-  const handleAddGuidePreviousMonth = () => {
-    setAddGuideCalendarMonth(new Date(addGuideCalendarMonth.getFullYear(), addGuideCalendarMonth.getMonth() - 1, 1));
-  };
-
-  const handleAddGuideNextMonth = () => {
-    setAddGuideCalendarMonth(new Date(addGuideCalendarMonth.getFullYear(), addGuideCalendarMonth.getMonth() + 1, 1));
-  };
-
-  const getStatusBadge = (status: string) => {
-    const statusConfig = {
-      pending: { color: "bg-yellow-500", text: "Pendente" },
-      confirmed: { color: "bg-green-500", text: "Confirmado" },
-      completed: { color: "bg-blue-500", text: "Concluído" },
-      cancelled: { color: "bg-red-500", text: "Cancelado" }
-    };
-
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.pending;
-    
-    return (
-      <Badge className={`${config.color} text-white`}>
-        {config.text}
-      </Badge>
-    );
-  };
-
-  const getAppointmentStatusColor = (status: string) => {
-    const statusColors = {
-      pending: "bg-yellow-100 text-yellow-800 border-yellow-300",
-      confirmed: "bg-green-100 text-green-800 border-green-300",
-      completed: "bg-purple-100 text-purple-800 border-purple-300",
-      cancelled: "bg-red-100 text-red-800 border-red-300"
-    };
-    
-    return statusColors[status as keyof typeof statusColors] || "bg-gray-100 text-gray-800 border-gray-300";
-  };
-
-  const getAppointmentStatusForDate = (date: string, patientId: number) => {
-    const appointment = unifiedData.find(app => 
-      app.patient_id === patientId && app.date === date
-    );
-    return appointment?.status || 'unknown';
-  };
-
-  const getSessionStatusBadge = (status: string) => {
-    const statusConfig = {
-      ok: { color: "bg-green-500", text: "OK", icon: CheckCircle },
-      warning: { color: "bg-yellow-500", text: "Atenção", icon: AlertTriangle },
-      urgent: { color: "bg-red-500", text: "Urgente", icon: AlertCircle },
-      no_guides: { color: "bg-gray-500", text: "Sem Guias", icon: FileText },
-      incomplete: { color: "bg-yellow-500", text: "Incompleto", icon: AlertTriangle }
-    };
-
-    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.ok;
-    const Icon = config.icon;
-    
-    return (
-      <Badge className={`${config.color} text-white flex items-center gap-1`}>
-        <Icon className="h-3 w-3" />
-        {config.text}
-      </Badge>
-    );
-  };
-
-  const generateDateOptions = () => {
-    const currentMonth = addGuideCalendarMonth.getMonth();
-    const currentYear = addGuideCalendarMonth.getFullYear();
-    const firstDay = new Date(currentYear, currentMonth, 1);
-    const lastDay = new Date(currentYear, currentMonth + 1, 0);
-    const startDate = startOfWeek(firstDay, { weekStartsOn: 0 });
-    const endDate = endOfWeek(lastDay, { weekStartsOn: 0 });
-    const days = eachDayOfInterval({ start: startDate, end: endDate });
-    
-    return days.map(day => ({
-      value: format(day, 'yyyy-MM-dd'),
-      label: format(day, 'dd/MM/yyyy', { locale: ptBR }),
-      day: day
-    }));
-  };
-
-  const getCompletedGuidesForCurrentMonth = async () => {
-    try {
-      setLoadingCompletedGuides(true);
-      
-      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/return_date_guias', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({})
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erro ao buscar guias: ${response.status}`);
-      }
-
-      const apiData = await response.json();
-      
-      // Mapear os dados da API para a interface CompletedGuide
-      const allGuides: CompletedGuide[] = apiData.map((item: any) => ({
-        id: item.guia_id || item.appointment_id,
-        id_patient: item.patient_id,
-        numero_prestador: item.numero_prestador?.toString() || '',
-        existe_pdf_assinado: 0, // Manter para compatibilidade
-        existe_guia_autorizada: item.existe_guia_autorizada || 0,
-        existe_guia_assinada: item.existe_guia_assinada || 0,
-        existe_guia_assinada_psicologo: item.existe_guia_assinada_psicologo || 0,
-        date_1: item.date_1,
-        date_2: item.date_2,
-        date_3: item.date_3,
-        date_4: item.date_4,
-        date_5: item.date_5,
-        name: item.patient_name || '',
-        faturado: item.faturado || 0,
-        date_faturado: item.date_faturado || null,
-        appointment_type: item.appointment_type || 'presencial'
-      }));
-      
-      // Filtrar guias do mês selecionado
-      const [selectedYear, selectedMonth] = selectedCompletedMonth.split('-').map(Number);
-      
-      const filteredGuides = allGuides.filter(guide => {
-        // Verificar se alguma das datas da guia está no mês selecionado
-        const guideDates = [guide.date_1, guide.date_2, guide.date_3, guide.date_4, guide.date_5]
-          .filter(date => date !== null) as string[];
-        
-        return guideDates.some(date => {
-          if (!date) return false; // Pular se a data for null/undefined
-          const [year, month] = date.split('-').map(Number);
-          return year === selectedYear && month === selectedMonth;
-        });
-      });
-
-      setCompletedGuides(filteredGuides);
-    } catch (error) {
-      console.error('Erro ao buscar guias concluídas:', error);
-      toast.error('Erro ao carregar guias concluídas');
-      setCompletedGuides([]);
-    } finally {
-      setLoadingCompletedGuides(false);
-    }
-  };
-
-  const handleUploadGuide = (guide: CompletedGuide, type: 'autorizada' | 'assinada' | 'assinada_psicologo') => {
-    setSelectedGuideForUpload(guide);
-    setUploadFile(null);
-    setUploadType(type);
-    setIsUploadModalOpen(true);
-  };
-
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      // Validar se é PDF
-      if (file.type !== 'application/pdf') {
-        toast.error('Somente arquivos PDF são aceitos');
-        return;
-      }
-      
-      // Validar tamanho (10MB)
-      const maxSize = 10 * 1024 * 1024; // 10MB em bytes
-      if (file.size > maxSize) {
-        toast.error('Arquivo muito grande. Tamanho máximo: 10MB');
-        return;
-      }
-      
-      setUploadFile(file);
-    }
-  };
-
-  const handleSubmitUpload = async () => {
-    if (!selectedGuideForUpload || !uploadFile || !uploadType) {
-      toast.error('Selecione um arquivo para upload');
-      return;
-    }
-
-    try {
-      setUploading(true);
-      
       const formData = new FormData();
-      formData.append('documento', uploadFile);
-      formData.append('id_patient', selectedGuideForUpload.id_patient.toString());
-      formData.append('nome_patient', selectedGuideForUpload.name);
-      formData.append('numero_prestador', selectedGuideForUpload.numero_prestador);
-      
-      // Adicionar command baseado no tipo de upload
-      let command = '';
-      switch (uploadType) {
-        case 'autorizada':
-          command = 'Guia-autorizada';
-          break;
-        case 'assinada':
-          command = 'Guia-assinada';
-          break;
-        case 'assinada_psicologo':
-          command = 'Guia-assinada-psicologo';
-          break;
-      }
       formData.append('command', command);
+      formData.append('nome_patient', patientName);
+      formData.append('numero_prestador', numeroPrestador.toString());
+      formData.append('file', file);
 
-      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/insert_guia_completed', {
-        method: 'POST',
-        body: formData
-      });
+      const response = await fetch(
+        "https://webhook.essenciasaudeintegrada.com.br/webhook/insert_guia_completed",
+        {
+          method: "POST",
+          body: formData,
+        }
+      );
 
       if (!response.ok) {
-        throw new Error(`Erro no upload: ${response.status}`);
+        throw new Error(`Erro ao importar guia: ${response.status}`);
       }
 
-      toast.success(`Guia ${uploadType === 'autorizada' ? 'autorizada' : 
-                            uploadType === 'assinada' ? 'assinada' : 
-                            uploadType === 'assinada_psicologo' ? 'assinada pelo psicólogo' : 
-                            ''} importada com sucesso!`);
-      setIsUploadModalOpen(false);
-      setSelectedGuideForUpload(null);
-      setUploadFile(null);
-      setUploadType(null);
-      // Recarregar dados para atualizar o status
-      getCompletedGuidesForCurrentMonth();
+      const result = await response.json();
+      console.log('Guia importada com sucesso:', result);
+      
+      // Recarregar dados após importação
+      fetchData();
+      
     } catch (error) {
-      console.error('Erro ao fazer upload:', error);
-      toast.error('Erro ao enviar guia. Tente novamente.');
-    } finally {
-      setUploading(false);
+      console.error('Erro ao importar guia:', error);
+      alert('Erro ao importar guia. Tente novamente.');
     }
   };
 
-  const handleDownloadGuide = async (guide: CompletedGuide, type: 'autorizada' | 'assinada' | 'assinada_psicologo') => {
+  // Função para fazer download do arquivo
+  const handleDownloadGuia = async (numeroPrestador: number, command: string) => {
     try {
-      // Determinar command baseado no tipo
-      let command = '';
-      switch (type) {
-        case 'autorizada':
-          command = 'Guia-autorizada';
-          break;
-        case 'assinada':
-          command = 'Guia-assinada';
-          break;
-        case 'assinada_psicologo':
-          command = 'Guia-assinada-psicologo';
-          break;
-      }
-
+      setDownloadingFile(`${command}_${numeroPrestador}`);
+      
       const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/get_guia_completed', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          id_patient: guide.id_patient,
-          nome_patient: guide.name,
-          numero_prestador: guide.numero_prestador,
+          numero_prestador: numeroPrestador,
           command: command
-        })
+        }),
       });
 
       if (!response.ok) {
-        throw new Error(`Erro ao baixar guia: ${response.status}`);
+        throw new Error(`Erro ao baixar arquivo: ${response.status}`);
       }
 
-      // Verificar se a resposta é JSON com dados do arquivo
-      const contentType = response.headers.get('content-type');
+      // Criar blob e fazer download
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${command}_${numeroPrestador}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
       
-      if (contentType && contentType.includes('application/json')) {
-        // Resposta JSON com informações do arquivo
-        const fileData = await response.json();
-        
-        if (fileData.data) {
-          // Extrair dados do arquivo da resposta
-          const fileName = fileData.data['File Name:'] || `Guia-${guide.name}-${guide.numero_prestador}`;
-          const fileExtension = fileData.data['File Extension:'] || 'pdf';
-          const mimeType = fileData.data['Mime Type:'] || 'application/pdf';
-          const fileSize = fileData.data['File Size:'] || 'N/A';
-          
-          // Se a API retornar o conteúdo do arquivo em base64 ou outro formato
-          // você precisará ajustar esta parte conforme a estrutura real da resposta
-          console.log('Dados do arquivo:', fileData);
-          
-          // Por enquanto, vamos usar o nome do arquivo da resposta
-          const fullFileName = `${fileName}.${fileExtension}`;
-          
-          // Se a API retornar o arquivo em base64, você pode fazer:
-          // const binaryData = atob(fileData.data.content); // se for base64
-          // const blob = new Blob([binaryData], { type: mimeType });
-          
-          // Por enquanto, vamos mostrar uma mensagem informativa
-          toast.success(`Arquivo encontrado: ${fullFileName} (${fileSize})`);
-          
-          // TODO: Implementar download real quando a estrutura do arquivo for conhecida
-          // Se a API retornar o arquivo diretamente, use o código abaixo:
-          /*
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = fullFileName;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(url);
-          */
-        } else {
-          throw new Error('Dados do arquivo não encontrados na resposta');
-        }
-      } else {
-        // Resposta direta com o arquivo (blob)
-        const blob = await response.blob();
-        
-        // Criar URL temporária para download
-        const url = window.URL.createObjectURL(blob);
-        const link = document.createElement('a');
-        link.href = url;
-        
-        // Nome do arquivo baseado no paciente e prestador
-        const fileName = `Guia-${guide.name}-${guide.numero_prestador}.pdf`;
-        link.download = fileName;
-        
-        // Trigger do download
-        document.body.appendChild(link);
-        link.click();
-        
-        // Limpeza
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-        
-        toast.success('Guia baixada com sucesso!');
-      }
+      // Esconder indicador após download iniciar
+      setTimeout(() => {
+        setDownloadingFile(null);
+      }, 1000); // 1 segundo de delay para mostrar que o download foi iniciado
+      
     } catch (error) {
-      console.error('Erro ao baixar guia:', error);
-      toast.error('Erro ao baixar guia. Tente novamente.');
+      console.error('Erro ao baixar arquivo:', error);
+      alert('Erro ao baixar arquivo. Tente novamente.');
+      setDownloadingFile(null);
     }
   };
 
-  const handleDownloadAllGuidesByType = async (type: 'autorizada' | 'assinada' | 'assinada_psicologo') => {
-    // Determinar campo e command baseado no tipo
-    let fieldName = '';
-    let command = '';
-    let typeLabel = '';
-    
-    switch (type) {
-      case 'autorizada':
-        fieldName = 'existe_guia_autorizada';
-        command = 'Guia-autorizada';
-        typeLabel = 'autorizada';
-        break;
-      case 'assinada':
-        fieldName = 'existe_guia_assinada';
-        command = 'Guia-assinada';
-        typeLabel = 'assinada';
-        break;
-      case 'assinada_psicologo':
-        fieldName = 'existe_guia_assinada_psicologo';
-        command = 'Guia-assinada-psicologo';
-        typeLabel = 'assinada pelo psicólogo';
-        break;
-    }
-
-    // Filtrar apenas guias com o tipo específico
-    const guidesToDownload = completedGuides.filter(guide => guide[fieldName as keyof CompletedGuide] === 1);
-    
-    if (guidesToDownload.length === 0) {
-      toast.info(`Nenhuma guia ${typeLabel} encontrada para download`);
-      return;
-    }
-
-    setDownloadingAll(true);
-    setDownloadProgress({
-      total: guidesToDownload.length,
-      completed: 0,
-      failed: 0,
-      remaining: guidesToDownload.length
-    });
-
-    let completed = 0;
-    let failed = 0;
-
-    // Processar cada guia sequencialmente para evitar sobrecarga
-    for (let i = 0; i < guidesToDownload.length; i++) {
-      const guide = guidesToDownload[i];
-      
-      try {
-        const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/get_guia_completed', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+  // Função para faturar
+  const handleFaturar = async (numeroPrestador: number) => {
+    try {
+      const response = await fetch(
+        "https://webhook.essenciasaudeintegrada.com.br/webhook/insert_state_faturament",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            id_patient: guide.id_patient,
-            nome_patient: guide.name,
-            numero_prestador: guide.numero_prestador,
-            command: command
-          })
-        });
-
-        if (!response.ok) {
-          throw new Error(`Erro ao baixar guia: ${response.status}`);
+            numero_prestador: numeroPrestador
+          }),
         }
+      );
 
-        // Verificar se a resposta é JSON com dados do arquivo
-        const contentType = response.headers.get('content-type');
-        
-        if (contentType && contentType.includes('application/json')) {
-          const fileData = await response.json();
-          
-          if (fileData.data) {
-            const fileName = fileData.data['File Name:'] || `Guia-${guide.name}-${guide.numero_prestador}`;
-            const fileExtension = fileData.data['File Extension:'] || 'pdf';
-            const fileSize = fileData.data['File Size:'] || 'N/A';
-            
-            console.log(`Download ${i + 1}/${guidesToDownload.length}: ${fileName}.${fileExtension} (${fileSize})`);
-            
-            // TODO: Implementar download real quando a estrutura do arquivo for conhecida
-            // Por enquanto, apenas simular o download
-            completed++;
-          } else {
-            throw new Error('Dados do arquivo não encontrados na resposta');
-          }
-        } else {
-          // Resposta direta com o arquivo (blob)
-          const blob = await response.blob();
-          
-          // Criar URL temporária para download
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          
-          // Nome do arquivo baseado no paciente e prestador
-          const fileName = `Guia-${guide.name}-${guide.numero_prestador}-${typeLabel}.pdf`;
-          link.download = fileName;
-          
-          // Trigger do download
-          document.body.appendChild(link);
-          link.click();
-          
-          // Limpeza
-          document.body.removeChild(link);
-          window.URL.revokeObjectURL(url);
-          
-          completed++;
-        }
-      } catch (error) {
-        console.error(`Erro ao baixar guia ${i + 1}:`, error);
-        failed++;
+      if (!response.ok) {
+        throw new Error(`Erro ao faturar: ${response.status}`);
       }
 
-      // Atualizar progresso
-      const remaining = guidesToDownload.length - (completed + failed);
-      setDownloadProgress({
-        total: guidesToDownload.length,
-        completed,
-        failed,
-        remaining
+      const result = await response.json();
+      console.log('Faturamento realizado com sucesso:', result);
+      
+      // Recarregar dados após faturamento
+      fetchData();
+      
+    } catch (error) {
+      console.error('Erro ao faturar:', error);
+      alert('Erro ao faturar. Tente novamente.');
+    }
+  };
+
+  // Função para lidar com upload de arquivo
+  const handleFileUpload = (
+    event: React.ChangeEvent<HTMLInputElement>,
+    patientName: string,
+    numeroPrestador: number,
+    command: "Guia-autorizada" | "Guia-assinada" | "Guia-assinada-psicologo"
+  ) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      handleImportGuia(patientName, numeroPrestador, command, file);
+    }
+  };
+
+  // Função para abrir modal de guias
+  const handleOpenGuideModal = (patient: PatientData) => {
+    setSelectedPatient(patient);
+    setIsGuideModalOpen(true);
+  };
+
+  // Função para fechar modal de guias
+  const handleCloseGuideModal = () => {
+    setIsGuideModalOpen(false);
+    setSelectedPatient(null);
+  };
+
+  // Função para recarregar dados após sucesso
+  const handleModalSuccess = () => {
+    fetchData();
+  };
+
+  // Função para mostrar confirmação de exclusão
+  const handleDeleteClick = (numeroPrestador: number) => {
+    setPrestadorToDelete(numeroPrestador);
+    setShowDeleteConfirm(true);
+  };
+
+  // Função para confirmar exclusão
+  const handleConfirmDelete = async () => {
+    if (!prestadorToDelete) return;
+
+    try {
+      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/delete_prestador", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          numero_prestador: prestadorToDelete
+        }),
       });
 
-      // Pequeno delay entre downloads para não sobrecarregar
-      if (i < guidesToDownload.length - 1) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+      if (!response.ok) {
+        throw new Error(`Erro ao excluir prestador: ${response.status}`);
       }
-    }
 
-    setDownloadingAll(false);
-    
-    // Mostrar resultado final
-    if (failed === 0) {
-      toast.success(`Download concluído! ${completed} guias ${typeLabel} baixadas com sucesso.`);
-    } else if (completed === 0) {
-      toast.error(`Falha no download! ${failed} guias ${typeLabel} falharam.`);
-    } else {
-      toast.warning(`Download parcial! ${completed} guias ${typeLabel} baixadas, ${failed} falharam.`);
+      const result = await response.json();
+      console.log('Prestador excluído com sucesso:', result);
+      
+      // Recarregar dados após exclusão
+      fetchData();
+      
+    } catch (error) {
+      console.error('Erro ao excluir prestador:', error);
+      alert('Erro ao excluir prestador. Tente novamente.');
+    } finally {
+      setShowDeleteConfirm(false);
+      setPrestadorToDelete(null);
     }
   };
 
-  // Funções específicas para cada tipo de download em massa
-  const handleDownloadAllAutorizadas = () => handleDownloadAllGuidesByType('autorizada');
-  const handleDownloadAllAssinadas = () => handleDownloadAllGuidesByType('assinada');
-  const handleDownloadAllAssinadasPsicologo = () => handleDownloadAllGuidesByType('assinada_psicologo');
+  // Função para cancelar exclusão
+  const handleCancelDelete = () => {
+    setShowDeleteConfirm(false);
+    setPrestadorToDelete(null);
+  };
 
   // Função para baixar tudo (3 requests por numero_prestador único)
   const handleDownloadEverything = async () => {
-    // Filtrar apenas guias com guia assinada pelo psicólogo E que não estão faturadas
-    const guidesToDownload = completedGuides.filter(g => 
-      g.existe_guia_assinada_psicologo === 1 && g.faturado === 0
-    );
+    // Filtrar prestadores com guia assinada pelo psicólogo E que não estão faturados
+    const guidesToDownload: Array<{numero_prestador: number, paciente_nome: string}> = [];
     
-    if (guidesToDownload.length === 0) {
-      toast.info('Nenhuma guia assinada pelo psicólogo não faturada encontrada para download');
-      return;
-    }
-
-    // Agrupar por numero_prestador único para evitar requisições duplicadas
-    const uniquePrestadores = new Map<string, CompletedGuide>();
-    guidesToDownload.forEach(guide => {
-      if (!uniquePrestadores.has(guide.numero_prestador)) {
-        uniquePrestadores.set(guide.numero_prestador, guide);
+    patientsData.forEach(patient => {
+      if (patient.prestadores) {
+        try {
+          const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
+          prestadoresData.forEach(prestador => {
+            if (prestador.existe_guia_assinada_psicologo === 1 && prestador.faturado === 0) {
+              guidesToDownload.push({
+                numero_prestador: prestador.numero_prestador,
+                paciente_nome: patient.paciente_nome
+              });
+            }
+          });
+        } catch (error) {
+          console.error('Erro ao parsear prestadores:', error);
+        }
       }
     });
 
-    const uniqueGuides = Array.from(uniquePrestadores.values());
+    if (guidesToDownload.length === 0) {
+      alert('Nenhuma guia assinada pelo psicólogo não faturada encontrada para download');
+      return;
+    }
+
+    // Calcular total de requests (3 por numero_prestador único)
+    const totalRequests = guidesToDownload.length * 3;
 
     setDownloadingEverything(true);
-    
-    // Calcular total de requests (3 por numero_prestador único)
-    const totalRequests = uniqueGuides.length * 3;
-    
     setDownloadEverythingProgress({
       total: totalRequests,
       completed: 0,
@@ -1263,20 +342,20 @@ const GuideControl = () => {
     let failed = 0;
 
     try {
-      for (let i = 0; i < uniqueGuides.length; i++) {
-        const guide = uniqueGuides[i];
-        
+      for (let i = 0; i < guidesToDownload.length; i++) {
+        const guide = guidesToDownload[i];
+
         setDownloadEverythingProgress(prev => ({
           ...prev,
-          currentGuide: guide.name,
-          currentStep: `Processando prestador ${i + 1} de ${uniqueGuides.length}`
+          currentGuide: guide.paciente_nome,
+          currentStep: `Processando prestador ${i + 1} de ${guidesToDownload.length}`
         }));
 
         // Request 1: Guia assinada pelo psicólogo
         try {
           setDownloadEverythingProgress(prev => ({
             ...prev,
-            currentStep: `Baixando guia assinada pelo psicólogo - ${guide.name}`
+            currentStep: `Baixando guia assinada pelo psicólogo - ${guide.paciente_nome}`
           }));
 
           const response1 = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/get_guia_completed', {
@@ -1293,11 +372,10 @@ const GuideControl = () => {
             const url1 = window.URL.createObjectURL(blob1);
             const link1 = document.createElement('a');
             link1.href = url1;
-            // Usar nome original do arquivo se disponível, senão usar nome padrão
             const contentDisposition = response1.headers.get('Content-Disposition');
             const filename1 = contentDisposition 
               ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') 
-              : `Guia-Assinada-Psicologo-${guide.name}-${guide.numero_prestador}.pdf`;
+              : `Guia-Assinada-Psicologo-${guide.paciente_nome}-${guide.numero_prestador}.pdf`;
             link1.download = filename1;
             document.body.appendChild(link1);
             link1.click();
@@ -1323,14 +401,14 @@ const GuideControl = () => {
         try {
           setDownloadEverythingProgress(prev => ({
             ...prev,
-            currentStep: `Baixando documento pessoal - ${guide.name}`
+            currentStep: `Baixando documento pessoal - ${guide.paciente_nome}`
           }));
 
           const response2 = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/documento_pessoal', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              nome: guide.name
+              nome: guide.paciente_nome
             })
           });
 
@@ -1339,11 +417,10 @@ const GuideControl = () => {
             const url2 = window.URL.createObjectURL(blob2);
             const link2 = document.createElement('a');
             link2.href = url2;
-            // Usar nome original do arquivo se disponível, senão usar nome padrão
             const contentDisposition2 = response2.headers.get('Content-Disposition');
             const filename2 = contentDisposition2 
               ? contentDisposition2.split('filename=')[1]?.replace(/"/g, '') 
-              : `Documento-Pessoal-${guide.name}.pdf`;
+              : `Documento-Pessoal-${guide.paciente_nome}.pdf`;
             link2.download = filename2;
             document.body.appendChild(link2);
             link2.click();
@@ -1369,14 +446,14 @@ const GuideControl = () => {
         try {
           setDownloadEverythingProgress(prev => ({
             ...prev,
-            currentStep: `Baixando relatório - ${guide.name}`
+            currentStep: `Baixando relatório - ${guide.paciente_nome}`
           }));
 
           const response3 = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/relatorio', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              nome: guide.name,
+              nome: guide.paciente_nome,
               titulo: 'RELATORIO PSICOLOGICO',
               cid: 'F-41',
               plano: 'PMDF'
@@ -1388,11 +465,10 @@ const GuideControl = () => {
             const url3 = window.URL.createObjectURL(blob3);
             const link3 = document.createElement('a');
             link3.href = url3;
-            // Usar nome original do arquivo se disponível, senão usar nome padrão
             const contentDisposition3 = response3.headers.get('Content-Disposition');
             const filename3 = contentDisposition3 
               ? contentDisposition3.split('filename=')[1]?.replace(/"/g, '') 
-              : `Relatorio-Psicologico-${guide.name}.pdf`;
+              : `Relatorio-Psicologico-${guide.paciente_nome}.pdf`;
             link3.download = filename3;
             document.body.appendChild(link3);
             link3.click();
@@ -1415,86 +491,51 @@ const GuideControl = () => {
         }));
 
         // Pequeno delay entre prestadores para não sobrecarregar
-        if (i < uniqueGuides.length - 1) {
+        if (i < guidesToDownload.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
       }
 
       setDownloadingEverything(false);
-      
-      // Mostrar resultado final
+
+      // Mostrar resultado final com toast
+      let message = '';
       if (failed === 0) {
-        toast.success(`Download concluído! ${completed} arquivos baixados com sucesso.`);
+        message = `Download concluído! ${completed} arquivos baixados com sucesso.`;
       } else if (completed === 0) {
-        toast.error(`Falha no download! ${failed} arquivos falharam.`);
+        message = `Falha no download! ${failed} arquivos falharam.`;
       } else {
-        toast.warning(`Download parcial! ${completed} arquivos baixados, ${failed} falharam.`);
+        message = `Download parcial! ${completed} arquivos baixados, ${failed} falharam.`;
       }
+      
+      setDownloadResult({
+        completed,
+        failed,
+        message
+      });
+      setShowDownloadComplete(true);
+      
+      // Esconder toast após 5 segundos
+      setTimeout(() => {
+        setShowDownloadComplete(false);
+      }, 5000);
+      
     } catch (error) {
       console.error('Erro geral no download:', error);
-      toast.error('Erro durante o download. Tente novamente.');
-      setDownloadingEverything(false);
-    }
-  };
-
-  // Função para marcar como faturado
-  const handleMarkAsFaturado = async (numero_prestador: string) => {
-    try {
-      // Salvar a posição atual do scroll
-      const currentScrollPosition = window.scrollY;
-      
-      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/insert_state_faturament', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          numero_prestador: numero_prestador
-        })
+      setDownloadResult({
+        completed: 0,
+        failed: 0,
+        message: 'Erro durante o download. Tente novamente.'
       });
-
-      if (!response.ok) {
-        throw new Error(`Erro ao marcar como faturado: ${response.status}`);
-      }
-
-      toast.success('Guia marcada como faturada com sucesso!');
+      setShowDownloadComplete(true);
+      setDownloadingEverything(false);
       
-      // Recarregar os dados
-      await getCompletedGuidesForCurrentMonth();
-      
-      // Restaurar a posição do scroll após um pequeno delay para garantir que o DOM foi atualizado
+      // Esconder toast após 5 segundos
       setTimeout(() => {
-        window.scrollTo(0, currentScrollPosition);
-      }, 100);
-      
-    } catch (error) {
-      console.error('Erro ao marcar como faturado:', error);
-      toast.error('Erro ao marcar como faturado. Tente novamente.');
+        setShowDownloadComplete(false);
+      }, 5000);
     }
   };
-
-
-  if (loading) {
-    return (
-      <Layout>
-        <div className="flex items-center justify-center h-64">
-          <RefreshCw className="h-8 w-8 animate-spin" />
-          <span className="ml-2">Carregando dados...</span>
-        </div>
-      </Layout>
-    );
-  }
-
-  if (error) {
-    return (
-      <Layout>
-        <div className="p-6 bg-red-50 border border-red-200 rounded-md text-center">
-          <p className="text-red-600">Erro: {error}</p>
-        <Button onClick={fetchData} className="mt-4">
-          Tentar Novamente
-        </Button>
-        </div>
-      </Layout>
-    );
-  }
 
   return (
     <Layout>
@@ -1502,1325 +543,609 @@ const GuideControl = () => {
         {/* Header */}
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Controle de Guias</h1>
-            <p className="text-gray-600 mt-1">Monitoramento de agendamentos e atendimentos</p>
+            <h1 className="text-3xl font-bold text-gray-900">Guias Concluídas</h1>
+            <p className="text-gray-600 mt-1">Gestão de guias médicas finalizadas</p>
           </div>
           <div className="flex gap-2">
-          <Button onClick={fetchData} variant="outline">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Atualizar
-          </Button>
-            <Button>
-              <Download className="h-4 w-4 mr-2" />
-              Exportar
+            <Button 
+              onClick={handleDownloadEverything} 
+              disabled={loading || downloadingEverything}
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              {downloadingEverything ? 'Baixando...' : 'Baixar Tudo'}
+            </Button>
+            <Button onClick={fetchData} variant="outline" disabled={loading}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+              Atualizar
             </Button>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="border-b border-gray-200">
-          <nav className="-mb-px flex space-x-8">
-            <button
-              onClick={() => setActiveTab('control')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'control'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <CalendarDays className="h-4 w-4" />
-                Controle de Guias
-              </div>
-            </button>
-            <button
-              onClick={() => setActiveTab('completed')}
-              className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                activeTab === 'completed'
-                  ? 'border-blue-500 text-blue-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <FileCheck className="h-4 w-4" />
-                Guias Concluídas
-              </div>
-            </button>
-          </nav>
-        </div>
-
-        {/* Conteúdo da aba Controle de Guias */}
-        {activeTab === 'control' && (
-          <>
-            {/* Stats Cards - Apenas para Admin e Recepcionista */}
-            {canViewAlerts && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total de Agendamentos</CardTitle>
-                <Calendar className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.total}</div>
-                <p className="text-xs text-muted-foreground">
-                  +{stats.thisWeek} esta semana
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card 
-              className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
-                activeFilter === 'incomplete' ? 'ring-2 ring-blue-500 bg-blue-50' : ''
-              }`}
-              onClick={() => setActiveFilter(activeFilter === 'incomplete' ? 'all' : 'incomplete')}
-            >
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Pacientes com agendamento e faltando pelo menos 1 guia</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {patientSessions.filter(p => p.status === 'incomplete' || p.status === 'urgent').length}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  {patientSessions.filter(p => p.status === 'incomplete').length} precisam completar guias
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card 
-              className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
-                activeFilter === 'urgent' ? 'ring-2 ring-red-500 bg-red-50' : ''
-              }`}
-              onClick={() => setActiveFilter(activeFilter === 'urgent' ? 'all' : 'urgent')}
-            >
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Urgentes</CardTitle>
-                <AlertCircle className="h-4 w-4 text-red-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-red-600">
-                  {patientSessions.filter(p => p.status === 'urgent').length}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Próximos 5 dias sem guia autorizada
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card 
-              className={`cursor-pointer transition-all duration-200 hover:shadow-md ${
-                activeFilter === 'no_guides' ? 'ring-2 ring-gray-500 bg-gray-50' : ''
-              }`}
-              onClick={() => setActiveFilter(activeFilter === 'no_guides' ? 'all' : 'no_guides')}
-            >
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Sem Guias</CardTitle>
-                <FileText className="h-4 w-4 text-gray-500" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-gray-600">
-                  {patientSessions.filter(p => p.status === 'no_guides').length}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Agendamentos sem nenhuma guia autorizada para aquele mês
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Dashboard de Sessões por Paciente - Apenas para Admin e Recepcionista */}
-        {canViewAlerts && (
-          <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <CalendarDays className="h-5 w-5" />
-                Controle de Sessões por Paciente
-              </CardTitle>
-              {activeFilter !== 'all' && (
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-sm">
-                    {activeFilter === 'urgent' && '🔴 Urgentes'}
-                    {activeFilter === 'no_guides' && '⚫ Sem Guias'}
-                    {activeFilter === 'incomplete' && '🟡 Incompletos'}
-                  </Badge>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setActiveFilter('all')}
-                    className="text-gray-500 hover:text-gray-700"
-                  >
-                    ✕
-                  </Button>
-                </div>
-              )}
+        {/* Conteúdo Principal */}
+        <div className="space-y-4">
+          {loading && (
+            <div className="text-center py-8">
+              <RefreshCw className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-500" />
+              <p className="text-gray-600">Carregando dados...</p>
             </div>
-          </CardHeader>
-          <CardContent>
-            {/* Filtro simples de mês/ano */}
-            <div className="mb-6 flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5 text-blue-600" />
-                  <span className="text-sm font-medium text-gray-700">Filtrar por mês:</span>
-                </div>
-                <input
-                  type="month"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                />
-              </div>
-              
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <span>Mostrando:</span>
-                <span className="font-medium text-blue-600">
-                  {format(parseISO(selectedMonth + '-01'), 'MMMM yyyy', { locale: ptBR })}
-                </span>
+          )}
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <div className="flex items-center gap-2 text-red-800">
+                <AlertTriangle className="h-5 w-5" />
+                <span className="font-medium">Erro ao carregar dados:</span>
+                <span>{error}</span>
               </div>
             </div>
+          )}
 
-            {(() => {
-              const filteredSessions = patientSessions.filter(p => {
-                if (p.monthly_appointments.length === 0) return false;
-                
-                switch (activeFilter) {
-                  case 'urgent':
-                    return p.status === 'urgent';
-                  case 'no_guides':
-                    return p.status === 'no_guides';
-                  case 'incomplete':
-                    return p.status === 'incomplete' || p.status === 'urgent';
-                  default:
-                    return true;
+          {!loading && !error && patientsData.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              <User className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+              <p>Nenhum paciente encontrado</p>
+            </div>
+          )}
+
+          {!loading && !error && patientsData.length > 0 && (
+            <div className="space-y-6">
+              {patientsData.map((patient) => {
+                // Parse dos prestadores do JSON string
+                let prestadoresData: PrestadorData[] = [];
+                try {
+                  prestadoresData = patient.prestadores ? JSON.parse(patient.prestadores) : [];
+                } catch (error) {
+                  console.error('Erro ao fazer parse dos prestadores:', error);
+                  prestadoresData = [];
                 }
-              });
-              
-              return filteredSessions.length === 0;
-            })() ? (
-              <div className="text-center py-12">
-                <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                  <Calendar className="h-12 w-12 text-gray-400" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-700 mb-2">
-                  Nenhum agendamento encontrado
-                </h3>
-                <p className="text-gray-500">
-                  Não há agendamentos para o período selecionado
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {patientSessions
-                  .filter(p => {
-                    if (p.monthly_appointments.length === 0) return false;
-                    
-                    switch (activeFilter) {
-                      case 'urgent':
-                        return p.status === 'urgent';
-                      case 'no_guides':
-                        return p.status === 'no_guides';
-                      case 'incomplete':
-                        return p.status === 'incomplete' || p.status === 'urgent';
-                      default:
-                        return true;
-                    }
-                  })
-                  .map((patient) => (
-                  <div
-                    key={patient.patient_id}
-                    className={`flex items-center justify-between p-6 border rounded-lg transition-colors ${
-                      patient.status === 'ok' 
-                        ? 'bg-green-50 hover:bg-green-100 border-green-200' 
-                        : patient.status === 'urgent' 
-                          ? 'bg-red-50 hover:bg-red-100 border-red-200'
-                          : 'hover:bg-gray-50'
-                    }`}
-                  >
-                    <div className="flex-1 grid grid-cols-1 xl:grid-cols-3 gap-8">
-                      {/* Coluna 1: Nome do paciente */}
-                      <div className="w-48">
-                        <p className="font-medium text-gray-900">{patient.patient_name}</p>
-                        <p className="text-sm text-gray-600">{patient.psychologist_name}</p>
-                        <p className="text-xs text-gray-500">
-                          {patient.insurance_type 
-                            ? `🏥 ${patient.insurance_type}` 
-                            : '💰 Particular'
-                          }
-                        </p>
-                      </div>
-                      
-                      {/* Coluna 2: Agendamentos e Guias */}
-                      <div className="flex-1 min-w-0 px-4">
-                        <p className="text-sm font-medium text-gray-900">
-                          {patient.monthly_appointments.length} agendamentos em {format(parseISO(selectedMonth + '-01'), 'MM/yyyy', { locale: ptBR })}
-                        </p>
-                        
-                        <div className="space-y-1 mt-2">
-                          <div className="flex items-start gap-2">
-                            <span className="text-xs font-medium text-blue-600 bg-blue-100 px-2 py-1 rounded whitespace-nowrap flex-shrink-0">
-                              📅 Agendamentos:
-                            </span>
-                            <div className="flex gap-1 whitespace-nowrap min-w-0 overflow-hidden">
-                              {patient.monthly_appointments.length > 0 
-                                ? (() => {
-                                    // Combinar agendamentos existentes com sugestões de agendamentos faltantes
-                                    const allAppointmentDates = [...patient.monthly_appointments];
-                                    
-                                    // Adicionar agendamentos faltantes detectados pelo padrão semanal
-                                    if (patient.weekly_pattern === 'weekly' && patient.missing_appointments.length > 0) {
-                                      allAppointmentDates.push(...patient.missing_appointments);
-                                    }
-                                    
-                                    // Ordenar todas as datas
-                                    const sortedDates = allAppointmentDates.sort();
-                                    
-                                    return sortedDates.map(date => {
-                                      const isMissingAppointment = patient.missing_appointments.includes(date);
-                                      const status = patient.appointment_statuses?.get(date) || 'unknown';
-                                      
-                                      return (
-                                        <span
-                                          key={date}
-                                          className={`px-1.5 py-0.5 rounded text-xs border whitespace-nowrap ${
-                                            isMissingAppointment 
-                                              ? 'bg-orange-100 text-orange-800 border-orange-300'
-                                              : getAppointmentStatusColor(status)
-                                          }`}
-                                          title={isMissingAppointment ? 'Falta agendamento semanal' : ''}
-                                        >
-                                          {format(parseISO(date), 'dd/MM', { locale: ptBR })}
-                                          {isMissingAppointment && ' - FALTA AGENDAMENTO'}
-                                        </span>
-                                      );
-                                    });
-                                  })()
-                                : <span className="text-sm text-gray-700">Nenhum agendamento</span>
-                              }
-                            </div>
-                          </div>
-                          
-                          <div className="flex items-start gap-2">
-                            <span className="text-xs font-medium text-green-600 bg-green-100 px-2 py-1 rounded whitespace-nowrap flex-shrink-0">
-                              ✅ Guias:
-                            </span>
-                            <div className="flex gap-1 whitespace-nowrap min-w-0 overflow-hidden">
-                              {(() => {
-                                // Combinar todas as datas (agendamentos + agendamentos faltantes + guias) e ordenar cronologicamente
-                                const allDates = [...patient.monthly_appointments];
-                                
-                                // Adicionar agendamentos faltantes se houver padrão semanal
-                                if (patient.weekly_pattern === 'weekly' && patient.missing_appointments.length > 0) {
-                                  allDates.push(...patient.missing_appointments);
-                                }
-                                
-                                // Adicionar todas as datas das guias do mês (mesmo sem agendamentos)
-                                const monthlyGuideDates = patient.guide_dates.filter(date => {
-                                  if (!date) return false; // Pular se a data for null/undefined
-                                  const [guideYear, guideMonth] = date.split('-').map(Number);
-                                  const [currentYear, currentMonth] = selectedMonth.split('-').map(Number);
-                                  return guideYear === currentYear && guideMonth === currentMonth;
-                                });
-                                
-                                monthlyGuideDates.forEach(guideDate => {
-                                  if (!allDates.includes(guideDate)) {
-                                    allDates.push(guideDate);
-                                  }
-                                });
-                                
-                                const sortedDates = allDates.sort();
-                                
-                                return sortedDates.map(date => {
-                                  const hasGuide = patient.guide_dates.includes(date);
-                                  const hasAppointment = patient.monthly_appointments.includes(date);
-                                  const isMissingAppointment = patient.missing_appointments.includes(date);
-                                  
-                                  return (
-                                    <span
-                                      key={date}
-                                      className={`px-1.5 py-0.5 rounded text-xs border whitespace-nowrap ${
-                                        hasGuide 
-                                          ? 'bg-green-100 text-green-800 border-green-300'
-                                          : 'bg-red-100 text-red-800 border-red-300'
-                                      }`}
-                                      title={
-                                        hasGuide 
-                                          ? 'Guia autorizada' 
-                                          : isMissingAppointment 
-                                            ? 'Sugestão: Falta guia para esta data (baseada no padrão semanal)'
-                                            : hasAppointment
-                                              ? 'Sugestão: Falta guia para este agendamento'
-                                              : 'Sugestão: Falta guia para esta data'
-                                      }
-                                    >
-                                      {hasGuide 
-                                        ? format(parseISO(date), 'dd/MM', { locale: ptBR })
-                                        : isMissingAppointment
-                                          ? `${format(parseISO(date), 'dd/MM', { locale: ptBR })} - FALTA GUIA`
-                                          : hasAppointment
-                                            ? `(${format(parseISO(date), 'dd/MM', { locale: ptBR })}) - FALTA GUIA`
-                                            : `(${format(parseISO(date), 'dd/MM', { locale: ptBR })}) - FALTA GUIA`
-                                      }
-                                    </span>
-                                  );
-                                });
-                              })()}
-                            </div>
-                          </div>
-                        </div>
-                        
-                        {/* Legenda para casos sem padrão semanal */}
-                        {patient.weekly_pattern !== 'weekly' && patient.monthly_appointments.some(appDate => !patient.guide_dates.includes(appDate)) && (
-                          <div className="mt-2 text-xs text-red-600">
-                            <span className="font-medium">📋 Legenda:</span> Falta solicitar guia para: {patient.monthly_appointments
-                              .filter(appDate => !patient.guide_dates.includes(appDate))
-                              .map(date => format(parseISO(date), 'dd/MM', { locale: ptBR }))
-                              .join(', ')}
-                          </div>
-                        )}
-                        
-                        
-                      </div>
-                      
-                      {/* Coluna 3: Status e Ações (canto direito) */}
-                      <div className="w-48 flex flex-col items-end justify-start">
-                        {patient.needs_next_month_guide && (
-                          <div className="bg-orange-100 border border-orange-300 rounded-md p-2 mb-3 w-full">
-                            <p className="text-sm font-medium text-orange-800">
-                              ⚠️ Guia do mês seguinte pendente
-                            </p>
-                          </div>
-                        )}
-                        
-                        <div className="flex flex-col items-end gap-2">
-                          {getSessionStatusBadge(patient.status)}
-                          <Button 
-                            size="sm" 
-                            variant="outline"
-                            onClick={() => handleAddGuide(patient.patient_id)}
-                          >
-                            <Plus className="h-4 w-4 mr-1" />
-                            Guias
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        )}
-
-            {/* Mensagem para Psicólogos */}
-            {isPsychologist && (
-              <Card>
-                <CardContent className="p-6">
-                  <div className="text-center">
-                    <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-                      <Users className="h-8 w-8 text-blue-600" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-gray-700 mb-2">
-                      Acesso Restrito
-                    </h3>
-                    <p className="text-gray-500 mb-4">
-                      Esta página é destinada apenas para administradores e recepcionistas. 
-                      Como psicólogo, você não tem permissão para visualizar os alertas de agendamentos e controle de guias.
-                    </p>
-                    <p className="text-sm text-gray-400">
-                      Entre em contato com um administrador se precisar de acesso a essas informações.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </>
-        )}
-
-        {/* Conteúdo da aba Guias Concluídas */}
-        {activeTab === 'completed' && (
-          <>
-            {/* Gráfico de Estatísticas */}
-            <GuideStatsChart completedGuides={completedGuides} />
-            
-            <Card>
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="flex items-center gap-2">
-                    <FileCheck className="h-5 w-5" />
-                    Guias Concluídas - {format(parseISO(selectedCompletedMonth + '-01'), 'MMMM yyyy', { locale: ptBR })}
-                  </CardTitle>
-                  <div className="flex gap-2">
-                  <Button 
-                    onClick={handleDownloadAllAutorizadas} 
-                    variant="outline" 
-                    size="sm"
-                    disabled={downloadingAll || completedGuides.filter(g => g.existe_guia_autorizada === 1).length === 0}
-                    className="flex items-center gap-2"
-                  >
-                    {downloadingAll ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                        Baixando...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-4 w-4" />
-                        Baixar Guias Autorizadas
-                      </>
-                    )}
-                  </Button>
-                  <Button 
-                    onClick={handleDownloadAllAssinadas} 
-                    variant="outline" 
-                    size="sm"
-                    disabled={downloadingAll || completedGuides.filter(g => g.existe_guia_assinada === 1).length === 0}
-                    className="flex items-center gap-2"
-                  >
-                    {downloadingAll ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                        Baixando...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-4 w-4" />
-                        Baixar Guias Assinadas
-                      </>
-                    )}
-                  </Button>
-                  <Button 
-                    onClick={handleDownloadAllAssinadasPsicologo} 
-                    variant="outline" 
-                    size="sm"
-                    disabled={downloadingAll || completedGuides.filter(g => g.existe_guia_assinada_psicologo === 1).length === 0}
-                    className="flex items-center gap-2"
-                  >
-                    {downloadingAll ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                        Baixando...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-4 w-4" />
-                        Baixar Guias Assinadas pelo Psicólogo
-                      </>
-                    )}
-                  </Button>
-                  <Button 
-                    onClick={handleDownloadEverything} 
-                    variant="default" 
-                    size="sm"
-                    disabled={downloadingEverything || downloadingAll || completedGuides.filter(g => g.existe_guia_assinada_psicologo === 1 && g.faturado === 0).length === 0}
-                    className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white"
-                  >
-                    {downloadingEverything ? (
-                      <>
-                        <RefreshCw className="h-4 w-4 animate-spin" />
-                        Baixando tudo...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="h-4 w-4" />
-                        Baixar tudo
-                      </>
-                    )}
-                  </Button>
-                  <Button onClick={getCompletedGuidesForCurrentMonth} variant="outline" size="sm">
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Atualizar
-                  </Button>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {/* Filtro de mês para guias concluídas */}
-              <div className="mb-6 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5 text-blue-600" />
-                    <span className="text-sm font-medium text-gray-700">Filtrar por mês:</span>
-                  </div>
-                  <input
-                    type="month"
-                    value={selectedCompletedMonth}
-                    onChange={(e) => setSelectedCompletedMonth(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                  />
-                </div>
                 
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <span>Mostrando:</span>
-                  <span className="font-medium text-blue-600">
-                    {format(parseISO(selectedCompletedMonth + '-01'), 'MMMM yyyy', { locale: ptBR })}
-                  </span>
-                </div>
-              </div>
-
-              {/* Indicador de progresso do download */}
-              {downloadingAll && (
-                <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-md">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-blue-900">Download em andamento...</h4>
-                    <span className="text-sm text-blue-700">
-                      {downloadProgress.completed + downloadProgress.failed} / {downloadProgress.total}
-                    </span>
-                  </div>
-                  <div className="w-full bg-blue-200 rounded-full h-2 mb-2">
-                    <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                      style={{ 
-                        width: `${((downloadProgress.completed + downloadProgress.failed) / downloadProgress.total) * 100}%` 
-                      }}
-                    ></div>
-                  </div>
-                  <div className="flex justify-between text-xs text-blue-700">
-                    <span>✅ Concluídas: {downloadProgress.completed}</span>
-                    <span>❌ Falharam: {downloadProgress.failed}</span>
-                    <span>⏳ Restantes: {downloadProgress.remaining}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Indicador de progresso do download tudo */}
-              {downloadingEverything && (
-                <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md">
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium text-green-900">Baixando tudo...</h4>
-                    <span className="text-sm text-green-700">
-                      {downloadEverythingProgress.completed + downloadEverythingProgress.failed} / {downloadEverythingProgress.total}
-                    </span>
-                  </div>
-                  <div className="w-full bg-green-200 rounded-full h-2 mb-2">
-                    <div 
-                      className="bg-green-600 h-2 rounded-full transition-all duration-300"
-                      style={{ 
-                        width: `${((downloadEverythingProgress.completed + downloadEverythingProgress.failed) / downloadEverythingProgress.total) * 100}%` 
-                      }}
-                    ></div>
-                  </div>
-                  <div className="mb-2">
-                    <p className="text-xs text-green-700 font-medium">{downloadEverythingProgress.currentStep}</p>
-                    {downloadEverythingProgress.currentGuide && (
-                      <p className="text-xs text-green-600">Paciente: {downloadEverythingProgress.currentGuide}</p>
-                    )}
-                  </div>
-                  <div className="flex justify-between text-xs text-green-700">
-                    <span>✅ Concluídas: {downloadEverythingProgress.completed}</span>
-                    <span>❌ Falharam: {downloadEverythingProgress.failed}</span>
-                    <span>⏳ Restantes: {downloadEverythingProgress.remaining}</span>
-                  </div>
-                </div>
-              )}
-
-              {loadingCompletedGuides ? (
-                <div className="flex items-center justify-center py-12">
-                  <RefreshCw className="h-8 w-8 animate-spin mr-2" />
-                  <span>Carregando dados...</span>
-                </div>
-              ) : completedGuides.length === 0 ? (
-                <div className="text-center py-12">
-                  <div className="mx-auto w-24 h-24 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                    <CheckCircle className="h-12 w-12 text-gray-400" />
-                  </div>
-                  <h3 className="text-lg font-semibold text-gray-700 mb-2">
-                    Nenhuma guia concluída encontrada
-                  </h3>
-                  <p className="text-gray-500">
-                    Não há guias de atendimento para o mês atual
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {(() => {
-                    // Agrupar guias por nome do paciente
-                    const groupedGuides = completedGuides.reduce((acc, guide) => {
-                      const key = guide.name;
-                      if (!acc[key]) {
-                        acc[key] = {
-                          patientName: guide.name,
-                          prestadores: new Map()
-                        };
-                      }
-                      
-                      // Agrupar por número de prestador dentro do paciente
-                      const prestadorKey = guide.numero_prestador;
-                      if (!acc[key].prestadores.has(prestadorKey)) {
-                        acc[key].prestadores.set(prestadorKey, {
-                          numero_prestador: guide.numero_prestador,
-                          guides: []
-                        });
-                      }
-                      acc[key].prestadores.get(prestadorKey)!.guides.push(guide);
-                      
-                      return acc;
-                    }, {} as Record<string, { patientName: string; prestadores: Map<string, { numero_prestador: string; guides: CompletedGuide[] }> }>);
-
-                    return Object.values(groupedGuides).map((group, groupIndex) => (
-                      <div
-                        key={`${group.patientName}-${groupIndex}`}
-                        className="border rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        <div className="p-6">
-                          {/* Nome do Paciente */}
-                          <div className="mb-4">
-                            <p className="text-sm font-medium text-gray-700 mb-1">Nome do Paciente:</p>
-                            <p className="text-lg font-semibold text-gray-900">
-                              {group.patientName} - <span className={`font-medium ${Array.from(group.prestadores.values())[0]?.guides[0]?.appointment_type === 'online' ? 'text-blue-600' : 'text-green-600'}`}>
-                                {Array.from(group.prestadores.values())[0]?.guides[0]?.appointment_type === 'online' ? 'Online' : 'Presencial'}
-                              </span>
-                            </p>
+                return (
+                  <Card key={patient.patient_id} className="shadow-md hover:shadow-lg transition-shadow duration-200">
+                    <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
+                      <CardTitle className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="p-2 bg-blue-100 rounded-lg">
+                            <User className="h-5 w-5 text-blue-600" />
                           </div>
-                          
-                          {/* Lista de Prestadores */}
-                          <div className="space-y-4">
-                            {Array.from(group.prestadores.values()).map((prestador, prestadorIndex) => {
-                              // Pegar as datas únicas para este prestador
-                              const allDates = new Set<string>();
-                              prestador.guides.forEach(guide => {
-                                [guide.date_1, guide.date_2, guide.date_3, guide.date_4, guide.date_5]
-                                  .filter(date => date !== null)
-                                  .forEach(date => allDates.add(date!));
-                              });
-                              const uniqueDates = Array.from(allDates).sort();
-                              
-                              // Verificar se alguma guia deste prestador está faturada
-                              const isFaturado = prestador.guides.some(guide => guide.faturado === 1);
-                              const faturadoGuide = prestador.guides.find(guide => guide.faturado === 1);
-                              
-                              return (
-                                <div key={`${prestador.numero_prestador}-${prestadorIndex}`} className="border-l-4 border-blue-200 pl-4">
-                                  <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 items-center">
-                                    {/* Número do Prestador */}
-                                    <div>
-                                      <p className="text-sm font-medium text-gray-700 mb-1">Número do Prestador:</p>
-                                      <p className="text-lg font-semibold text-gray-900">{prestador.numero_prestador}</p>
-                                    </div>
-                                    
-                                    {/* Datas das Guias */}
-                                    <div>
-                                      <p className="text-sm font-medium text-gray-700 mb-1">Datas:</p>
-                                      <div className="flex gap-1 flex-wrap">
-                                        {uniqueDates.map((date, dateIndex) => (
-                                          <span
-                                            key={dateIndex}
-                                            className="px-2 py-1 bg-green-100 text-green-800 text-xs rounded border border-green-300"
-                                          >
-                                            {format(parseISO(date), 'dd/MM/yyyy', { locale: ptBR })}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                    
-                                    {/* Botões de ação para este prestador */}
-                                    <div className="flex flex-col gap-2 justify-end">
-                                      {isFaturado ? (
-                                        // Quando faturado, mostrar apenas o botão de download da guia assinada pelo psicólogo
-                                        prestador.guides.some(guide => guide.existe_guia_assinada_psicologo === 1) ? (
-                                          <Button
-                                            size="sm"
-                                            onClick={() => {
-                                              const guideWithDoc = prestador.guides.find(guide => guide.existe_guia_assinada_psicologo === 1);
-                                              if (guideWithDoc) handleDownloadGuide(guideWithDoc, 'assinada_psicologo');
-                                            }}
-                                            className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 w-fit ml-auto"
-                                          >
-                                            <Download className="h-4 w-4" />
-                                            Baixar Guia Assinada pelo Psicólogo
-                                          </Button>
-                                        ) : (
-                                          <Button
-                                            size="sm"
-                                            onClick={() => {
-                                              const firstGuide = prestador.guides[0];
-                                              if (firstGuide) handleUploadGuide(firstGuide, 'assinada_psicologo');
-                                            }}
-                                            className="flex items-center gap-2 w-fit ml-auto"
-                                          >
-                                            <Upload className="h-4 w-4" />
-                                            Importar Guia Assinada pelo Psicólogo
-                                          </Button>
-                                        )
-                                      ) : (
-                                        // Quando não faturado, mostrar os 3 botões normalmente
-                                        <>
-                                          {prestador.guides.some(guide => guide.existe_guia_autorizada === 1) ? (
-                                            <Button
-                                              size="sm"
-                                              onClick={() => {
-                                                const guideWithDoc = prestador.guides.find(guide => guide.existe_guia_autorizada === 1);
-                                                if (guideWithDoc) handleDownloadGuide(guideWithDoc, 'autorizada');
-                                              }}
-                                              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 w-fit ml-auto"
-                                            >
-                                              <Download className="h-4 w-4" />
-                                              Baixar Guia Autorizada
-                                            </Button>
-                                          ) : (
-                                            <Button
-                                              size="sm"
-                                              onClick={() => {
-                                                const firstGuide = prestador.guides[0];
-                                                if (firstGuide) handleUploadGuide(firstGuide, 'autorizada');
-                                              }}
-                                              className="flex items-center gap-2 w-fit ml-auto"
-                                            >
-                                              <Upload className="h-4 w-4" />
-                                              Importar Guia Autorizada
-                                            </Button>
-                                          )}
-
-                                          {prestador.guides.some(guide => guide.existe_guia_assinada === 1) ? (
-                                            <Button
-                                              size="sm"
-                                              onClick={() => {
-                                                const guideWithDoc = prestador.guides.find(guide => guide.existe_guia_assinada === 1);
-                                                if (guideWithDoc) handleDownloadGuide(guideWithDoc, 'assinada');
-                                              }}
-                                              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 w-fit ml-auto"
-                                            >
-                                              <Download className="h-4 w-4" />
-                                              Baixar Guia Assinada
-                                            </Button>
-                                          ) : (
-                                            <Button
-                                              size="sm"
-                                              onClick={() => {
-                                                const firstGuide = prestador.guides[0];
-                                                if (firstGuide) handleUploadGuide(firstGuide, 'assinada');
-                                              }}
-                                              className="flex items-center gap-2 w-fit ml-auto"
-                                            >
-                                              <Upload className="h-4 w-4" />
-                                              Importar Guia Assinada
-                                            </Button>
-                                          )}
-
-                                          {prestador.guides.some(guide => guide.existe_guia_assinada_psicologo === 1) ? (
-                                            <Button
-                                              size="sm"
-                                              onClick={() => {
-                                                const guideWithDoc = prestador.guides.find(guide => guide.existe_guia_assinada_psicologo === 1);
-                                                if (guideWithDoc) handleDownloadGuide(guideWithDoc, 'assinada_psicologo');
-                                              }}
-                                              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 w-fit ml-auto"
-                                            >
-                                              <Download className="h-4 w-4" />
-                                              Baixar Guia Assinada pelo Psicólogo
-                                            </Button>
-                                          ) : (
-                                            <Button
-                                              size="sm"
-                                              onClick={() => {
-                                                const firstGuide = prestador.guides[0];
-                                                if (firstGuide) handleUploadGuide(firstGuide, 'assinada_psicologo');
-                                              }}
-                                              className="flex items-center gap-2 w-fit ml-auto"
-                                            >
-                                              <Upload className="h-4 w-4" />
-                                              Importar Guia Assinada pelo Psicólogo
-                                            </Button>
-                                          )}
-                                        </>
-                                      )}
-                                    </div>
-
-                                    {/* Coluna específica para status de faturamento */}
-                                    <div className="flex flex-col items-center justify-center">
-                                      {isFaturado ? (
-                                        // Quando faturado, mostrar status FATURADO e data
-                                        <div className="text-center">
-                                          <div className="text-2xl font-bold text-green-600 mb-1">FATURADO</div>
-                                          {faturadoGuide?.date_faturado && (
-                                            <div className="text-sm text-gray-600">
-                                              Faturado em: {format(parseISO(faturadoGuide.date_faturado), 'dd/MM/yyyy', { locale: ptBR })}
-                                            </div>
-                                          )}
-                                        </div>
-                                      ) : (
-                                        // Quando não faturado, mostrar botão FATURADO
-                                        <Button
-                                          size="sm"
-                                          variant="outline"
-                                          onClick={() => handleMarkAsFaturado(prestador.numero_prestador)}
-                                          className="text-xs px-3 py-2 bg-gray-100 hover:bg-gray-200 text-gray-600 border-gray-300"
-                                        >
-                                          FATURAR
-                                        </Button>
-                                      )}
-                                    </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-xl text-gray-800">{patient.paciente_nome}</span>
+                              {patient.appointment_type && (
+                                <Badge 
+                                  variant="secondary" 
+                                  className={`text-xs ${
+                                    patient.appointment_type === "online" 
+                                      ? "bg-green-100 text-green-800 hover:bg-green-200" 
+                                      : "bg-blue-100 text-blue-800 hover:bg-blue-200"
+                                  }`}
+                                >
+                                  {patient.appointment_type === "online" ? "Online" : "Presencial"}
+                                </Badge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 mt-2">
+                              <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800 hover:bg-blue-200">
+                                ID: {patient.patient_id}
+                              </Badge>
+                              {patient.insurance_type && (
+                                <Badge variant="secondary" className="text-xs bg-indigo-100 text-indigo-800 hover:bg-indigo-200">
+                                  {patient.insurance_type}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="border-blue-200 text-blue-700 hover:bg-blue-50"
+                          onClick={() => handleOpenGuideModal(patient)}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          + Guias
+                        </Button>
+                      </CardTitle>
+                    </CardHeader>
+                    
+                    <CardContent>
+                      {patient.mensagem ? (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-4 shadow-sm">
+                          <div className="flex items-center gap-3 text-red-800">
+                            <div className="p-2 bg-red-100 rounded-full">
+                              <AlertTriangle className="h-5 w-5" />
+                            </div>
+                            <span className="font-medium text-red-900">{patient.mensagem}</span>
+                          </div>
+                        </div>
+                      ) : prestadoresData.length > 0 ? (
+                        <div className="space-y-6">
+                          {prestadoresData.map((prestador, prestadorIdx) => (
+                            <div key={prestadorIdx} className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-200 shadow-sm hover:shadow-md transition-shadow">
+                              {/* Header do Prestador */}
+                              <div className="mb-5">
+                                <div className="flex items-center gap-3">
+                                  <div className="p-2 bg-blue-100 rounded-lg">
+                                    <FileText className="h-5 w-5 text-blue-600" />
+                                  </div>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-semibold text-lg text-gray-800 whitespace-nowrap">
+                                      Número de Prestador: {prestador.numero_prestador}
+                                    </span>
+                                    <Button 
+                                      size="sm" 
+                                      variant="destructive"
+                                      className="text-xs p-1 h-6 w-6 bg-red-600 hover:bg-red-700 text-white flex-shrink-0"
+                                      onClick={() => handleDeleteClick(prestador.numero_prestador)}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
                                   </div>
                                 </div>
-                              );
-                            })}
+                                
+                                {/* Botões de Ação */}
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  {/* Botão Guia Autorizada */}
+                                  <div className="relative">
+                                    {prestador.existe_guia_autorizada === 1 ? (
+                                      <Button 
+                                        size="sm" 
+                                        variant="default"
+                                        className="text-xs px-3 py-2 bg-green-600 hover:bg-green-700 text-white"
+                                        onClick={() => handleDownloadGuia(prestador.numero_prestador, "Guia-autorizada")}
+                                      >
+                                        <Upload className="h-3 w-3 mr-1" />
+                                        Baixar Autorizada
+                                      </Button>
+                                    ) : (
+                                      <>
+                                        <input
+                                          type="file"
+                                          accept=".pdf"
+                                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                              handleImportGuia(patient.paciente_nome, prestador.numero_prestador, "Guia-autorizada", file);
+                                            }
+                                          }}
+                                        />
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline"
+                                          className="text-xs px-3 py-2 border-green-200 text-green-700 hover:bg-green-50 relative z-0"
+                                        >
+                                          <Upload className="h-3 w-3 mr-1" />
+                                          Importar Autorizada
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
+
+                                  {/* Botão Guia Assinada */}
+                                  <div className="relative">
+                                    {prestador.existe_guia_assinada === 1 ? (
+                                      <Button 
+                                        size="sm" 
+                                        variant="default"
+                                        className="text-xs px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white"
+                                        onClick={() => handleDownloadGuia(prestador.numero_prestador, "Guia-assinada")}
+                                      >
+                                        <Upload className="h-3 w-3 mr-1" />
+                                        Baixar Assinada
+                                      </Button>
+                                    ) : (
+                                      <>
+                                        <input
+                                          type="file"
+                                          accept=".pdf"
+                                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                              handleImportGuia(patient.paciente_nome, prestador.numero_prestador, "Guia-assinada", file);
+                                            }
+                                          }}
+                                        />
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline"
+                                          className="text-xs px-3 py-2 border-blue-200 text-blue-700 hover:bg-blue-50 relative z-0"
+                                        >
+                                          <Upload className="h-3 w-3 mr-1" />
+                                          Importar Assinada
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
+
+                                  {/* Botão Guia Assinada Psicólogo */}
+                                  <div className="relative">
+                                    {prestador.existe_guia_assinada_psicologo === 1 ? (
+                                      <Button 
+                                        size="sm" 
+                                        variant="default"
+                                        className="text-xs px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white"
+                                        onClick={() => handleDownloadGuia(prestador.numero_prestador, "Guia-assinada-psicologo")}
+                                      >
+                                        <Upload className="h-3 w-3 mr-1" />
+                                        Baixar Psicólogo
+                                      </Button>
+                                    ) : (
+                                      <>
+                                        <input
+                                          type="file"
+                                          accept=".pdf"
+                                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                          onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                              handleImportGuia(patient.paciente_nome, prestador.numero_prestador, "Guia-assinada-psicologo", file);
+                                            }
+                                          }}
+                                        />
+                                        <Button 
+                                          size="sm" 
+                                          variant="outline"
+                                          className="text-xs px-3 py-2 border-purple-200 text-purple-700 hover:bg-purple-50 relative z-0"
+                                        >
+                                          <Upload className="h-3 w-3 mr-1" />
+                                          Importar Psicólogo
+                                        </Button>
+                                      </>
+                                    )}
+                                  </div>
+
+                                  {/* Botão Faturar */}
+                                  <Button 
+                                    size="sm" 
+                                    variant="default"
+                                    className="text-xs px-3 py-2 bg-green-600 hover:bg-green-700 text-white"
+                                    onClick={() => handleFaturar(prestador.numero_prestador)}
+                                    disabled={prestador.faturado === 1}
+                                  >
+                                    <DollarSign className="h-3 w-3 mr-1" />
+                                    {prestador.faturado ? "Faturado ✓" : "Faturar"}
+                                  </Button>
+                                </div>
+                              </div>
+
+
+                              {/* Datas de Agendamentos */}
+                              <div className="bg-white rounded-lg p-4 border border-gray-200">
+                                {patient.datas && patient.datas.length > 0 ? (
+                                  <>
+                                    {/* Linha de Agendamentos */}
+                                    <div className="mb-4">
+                                      <div className="flex items-center justify-between mb-3">
+                                        <div className="flex items-center gap-2">
+                                          <Calendar className="h-4 w-4 text-gray-600" />
+                                          <span className="font-semibold text-gray-800">Agendamentos:</span>
+                                        </div>
+                                        {prestador.faturado === 1 && (
+                                          <span className="text-2xl font-bold text-green-600 bg-green-100 px-4 py-2 rounded-lg border border-green-200">
+                                            FATURADO
+                                          </span>
+                                        )}
+                                      </div>
+                                      <div className="flex flex-wrap gap-2">
+                                        {patient.datas
+                                          .filter(data => data.numero_prestador === prestador.numero_prestador || data.numero_prestador === null)
+                                          .map((data, dataIdx) => {
+                                            const hasAgendamento = data.agendamento === "ok";
+                                            return (
+                                              <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${
+                                                hasAgendamento 
+                                                  ? 'bg-green-100 text-green-800 border border-green-200' 
+                                                  : 'bg-red-100 text-red-800 border border-red-200'
+                                              }`}>
+                                                {data.data}
+                                              </span>
+                                            );
+                                          })}
+                                      </div>
+                                    </div>
+
+                                    {/* Linha de Guias */}
+                                    <div className="mb-4">
+                                      <div className="flex items-center gap-2 mb-3">
+                                        <FileText className="h-4 w-4 text-gray-600" />
+                                        <span className="font-semibold text-gray-800">Guias:</span>
+                                      </div>
+                                      <div className="flex flex-wrap gap-2">
+                                        {patient.datas
+                                          .filter(data => data.numero_prestador === prestador.numero_prestador || data.numero_prestador === null)
+                                          .map((data, dataIdx) => {
+                                            const hasGuia = data.guia === "ok";
+                                            return (
+                                              <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${
+                                                hasGuia 
+                                                  ? 'bg-green-100 text-green-800 border border-green-200' 
+                                                  : 'bg-red-100 text-red-800 border border-red-200'
+                                              }`}>
+                                                {data.data}
+                                              </span>
+                                            );
+                                          })}
+                                      </div>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    {/* Fallback para quando não há dados do paciente */}
+                                    <h5 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+                                      <Calendar className="h-4 w-4 text-gray-600" />
+                                      Datas de Agendamentos
+                                    </h5>
+                                    <div className="flex flex-wrap gap-2">
+                                      {prestador.datas.map((data, dataIdx) => (
+                                        <span key={dataIdx} className="px-3 py-1 rounded-lg text-sm font-medium bg-blue-100 text-blue-800 border border-blue-200">
+                                          {format(new Date(data), 'dd/MM/yyyy')}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+
+                              {/* Data de Faturamento */}
+                              {prestador.date_faturado && (
+                                <div className="mt-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+                                  <div className="flex items-center gap-2 text-emerald-800">
+                                    <DollarSign className="h-4 w-4" />
+                                    <span className="font-medium">Data Faturado: </span>
+                                    <span className="font-semibold">
+                                      {format(new Date(prestador.date_faturado), 'dd/MM/yyyy')}
+                                    </span>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ) : patient.datas && patient.datas.length > 0 ? (
+                        <div className="space-y-4">
+                          {/* Seção para agendamentos sem prestador */}
+                          <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5 shadow-sm">
+                            <div className="flex items-center gap-3 mb-5">
+                              <div className="p-2 bg-amber-100 rounded-full">
+                                <AlertTriangle className="h-5 w-5 text-amber-600" />
+                              </div>
+                              <span className="font-bold text-lg text-amber-800">
+                                Agendamentos sem Prestador
+                              </span>
+                            </div>
+                            
+                            {/* Linha de Agendamentos */}
+                            <div className="mb-4">
+                              <div className="flex items-center gap-2 mb-3">
+                                <Calendar className="h-4 w-4 text-gray-600" />
+                                <span className="font-semibold text-gray-800">Agendamentos:</span>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {patient.datas.map((data, dataIdx) => {
+                                  const hasAgendamento = data.agendamento === "ok";
+                                  return (
+                                    <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${
+                                      hasAgendamento 
+                                        ? 'bg-green-100 text-green-800 border border-green-200' 
+                                        : 'bg-red-100 text-red-800 border border-red-200'
+                                    }`}>
+                                      {data.data}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Linha de Guias */}
+                            <div className="mb-4">
+                              <div className="flex items-center gap-2 mb-3">
+                                <FileText className="h-4 w-4 text-gray-600" />
+                                <span className="font-semibold text-gray-800">Guias:</span>
+                              </div>
+                              <div className="flex flex-wrap gap-2">
+                                {patient.datas.map((data, dataIdx) => {
+                                  const hasGuia = data.guia === "ok";
+                                  return (
+                                    <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${
+                                      hasGuia 
+                                        ? 'bg-green-100 text-green-800 border border-green-200' 
+                                        : 'bg-red-100 text-red-800 border border-red-200'
+                                    }`}>
+                                      {data.data}
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* Status do Prestador */}
+                            <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                              <div className="flex items-center gap-2 text-yellow-800">
+                                <AlertTriangle className="h-4 w-4" />
+                                <span className="text-sm font-medium">
+                                  ⚠️ Sem número de prestador definido
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                    ));
-                  })()}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-          </>
-        )}
-
-        {/* Modal para Adicionar Guias */}
-        <Dialog open={isAddGuideModalOpen} onOpenChange={(open) => {
-          setIsAddGuideModalOpen(open);
-          if (!open) {
-            setShowExistingGuides(false);
-          }
-        }}>
-          <DialogContent className="max-w-4xl w-full">
-            <DialogHeader>
-              <DialogTitle>Adicionar Guias para Paciente</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">Número do Prestador</label>
-                <input
-                  type="text"
-                  value={prestadorNumber}
-                  onChange={(e) => setPrestadorNumber(e.target.value)}
-                  placeholder="Digite o número do prestador"
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium mb-2 block">
-                  Selecionar Datas (máximo 5)
-                </label>
-                <div className="border border-gray-200 rounded-md p-4">
-                  {/* Cabeçalho do calendário com navegação */}
-                  <div className="flex items-center justify-between mb-4">
-                    <button
-                      type="button"
-                      onClick={handleAddGuidePreviousMonth}
-                      className="p-1 hover:bg-gray-100 rounded-md transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </button>
-                    <h3 className="text-sm font-medium text-gray-900">
-                      {format(addGuideCalendarMonth, 'MMMM yyyy', { locale: ptBR })}
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={handleAddGuideNextMonth}
-                      className="p-1 hover:bg-gray-100 rounded-md transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </div>
-                  
-                  <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-gray-500 mb-2">
-                    <div>Dom</div>
-                    <div>Seg</div>
-                    <div>Ter</div>
-                    <div>Qua</div>
-                    <div>Qui</div>
-                    <div>Sex</div>
-                    <div>Sáb</div>
-                  </div>
-                  <div className="grid grid-cols-7 gap-1">
-                    {generateDateOptions().map((option) => {
-                      const today = new Date();
-                      const currentMonth = addGuideCalendarMonth.getMonth();
-                      const isCurrentMonth = option.day.getMonth() === currentMonth;
-                      const isSelected = selectedDates.includes(option.value);
-                      const isToday = format(option.day, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd');
-                      const isDisabled = !isSelected && selectedDates.length >= 5;
-                      
-                      return (
-                        <button
-                          key={option.value}
-                          type="button"
-                          onClick={() => handleDateSelect(option.value)}
-                          disabled={!isCurrentMonth || isDisabled}
-                          className={`
-                            h-8 w-8 text-xs rounded-md transition-colors
-                            ${!isCurrentMonth ? 'text-gray-300 cursor-not-allowed' : ''}
-                            ${isCurrentMonth && !isSelected && !isDisabled ? 'hover:bg-gray-100 text-gray-700' : ''}
-                            ${isSelected ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}
-                            ${isToday && !isSelected ? 'bg-gray-200 text-gray-900' : ''}
-                            ${isDisabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : ''}
-                          `}
-                        >
-                          {format(option.day, 'd')}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {selectedDates.length}/5 datas selecionadas
-                </p>
-              </div>
-
-              {selectedDates.length > 0 && (
-                <div className="bg-gray-50 p-3 rounded-md">
-                  <p className="text-sm font-medium mb-2">Datas Selecionadas:</p>
-                  <div className="flex flex-wrap gap-2">
-                    {selectedDates.map((date, index) => (
-                      <span
-                        key={date}
-                        className="px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded"
-                      >
-                        {format(parseISO(date), 'dd/MM/yyyy', { locale: ptBR })}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Botões de ação - Movidos para logo após o calendário */}
-              <div className="flex justify-end gap-2 pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsAddGuideModalOpen(false)}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={handleSubmitGuide}
-                  disabled={selectedDates.length === 0 || !prestadorNumber}
-                >
-                  Adicionar Guias
-                </Button>
-              </div>
-
-              {/* Botão para mostrar guias existentes */}
-              <div className="border-t pt-4">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    setShowExistingGuides(!showExistingGuides);
-                    if (!showExistingGuides && selectedPatientForGuide) {
-                      fetchPatientGuides(selectedPatientForGuide);
-                    }
-                  }}
-                  className="flex items-center gap-2 text-gray-600 hover:text-gray-900 w-full justify-start"
-                >
-                  <FileText className="h-4 w-4 flex-shrink-0" />
-                  <span className="flex-1 text-left">
-                    {showExistingGuides ? 'Ocultar' : 'Mostrar'} Guias Existentes do Paciente
-                  </span>
-                  {showExistingGuides ? (
-                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  ) : (
-                    <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  )}
-                </Button>
-              </div>
-
-              {/* Lista de Guias Existentes - Só aparece quando acionado */}
-              {showExistingGuides && (
-                <div>
-                <div className="border border-gray-200 rounded-md p-4 max-h-48 overflow-y-auto">
-                  {loadingGuides ? (
-                    <div className="flex items-center justify-center py-4">
-                      <RefreshCw className="h-4 w-4 animate-spin mr-2" />
-                      <span className="text-sm text-gray-500">Carregando guias...</span>
-                    </div>
-                  ) : patientGuides.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm">
-                        <thead>
-                          <tr className="border-b border-gray-200">
-                            <th className="text-left py-2 px-3 font-medium text-gray-700">GUIA</th>
-                            <th className="text-left py-2 px-3 font-medium text-gray-700">Nº PRESTADOR</th>
-                            <th className="text-center py-2 px-3 font-medium text-gray-700">DATA 1</th>
-                            <th className="text-center py-2 px-3 font-medium text-gray-700">DATA 2</th>
-                            <th className="text-center py-2 px-3 font-medium text-gray-700">DATA 3</th>
-                            <th className="text-center py-2 px-3 font-medium text-gray-700">DATA 4</th>
-                            <th className="text-center py-2 px-3 font-medium text-gray-700">DATA 5</th>
-                            <th className="text-center py-2 px-3 font-medium text-gray-700">AÇÕES</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {patientGuides.map((guide, index) => (
-                            <tr key={guide.id} className="border-b border-gray-100 hover:bg-gray-50">
-                              <td className="py-2 px-3 font-medium text-gray-900">
-                                {guide.id}
-                              </td>
-                              <td className="py-2 px-3 text-gray-600">
-                                {guide.numero_prestador}
-                              </td>
-                              {[guide.date_1, guide.date_2, guide.date_3, guide.date_4, guide.date_5].map((date, dateIndex) => {
-                                const status = date ? getAppointmentStatusForDate(date, guide.id_patient) : 'unknown';
-                                return (
-                                  <td key={dateIndex} className="py-2 px-3 text-center">
-                                    {date ? (
-                                      <span className={`px-2 py-1 rounded text-xs border ${getAppointmentStatusColor(status)}`}>
-                                        {format(parseISO(date), 'dd/MM', { locale: ptBR })}
-                                      </span>
-                                    ) : (
-                                      <span className="text-gray-400 text-xs">-</span>
-                                    )}
-                                  </td>
-                                );
-                              })}
-                              <td className="py-2 px-3 text-center">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => handleEditGuide(guide)}
-                                  className="h-8 px-3"
-                                >
-                                  <Edit className="h-3 w-3 mr-1" />
-                                  Editar
-                                </Button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  ) : (
-                    <div className="text-center py-4 text-gray-500">
-                      <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-                      <p className="text-sm">Nenhuma guia encontrada para este paciente</p>
-                    </div>
-                  )}
-                </div>
-                </div>
-              )}
+                      ) : (
+                        <div className="text-center py-12 bg-gray-50 border border-gray-200 rounded-lg">
+                          <div className="p-3 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                            <FileText className="h-8 w-8 text-gray-400" />
+                          </div>
+                          <h3 className="text-lg font-medium text-gray-700 mb-2">Nenhum dado encontrado</h3>
+                          <p className="text-gray-500">Não há prestadores ou agendamentos para este paciente.</p>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                );
+              })}
             </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Modal para Editar Guia */}
-        <Dialog open={editingGuide !== null} onOpenChange={() => {
-          setEditingGuide(null);
-          setEditSelectedDates([]);
-          setEditCalendarMonth(new Date());
-        }}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Editar Guia do Paciente</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <label className="text-sm font-medium mb-2 block">Número do Prestador</label>
-                <input
-                  type="text"
-                  value={editFormData.numero_prestador}
-                  onChange={(e) => setEditFormData({...editFormData, numero_prestador: e.target.value})}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Digite o número do prestador"
-                />
-              </div>
-
-              <div>
-                <label className="text-sm font-medium mb-2 block">Selecionar Datas (máximo 5)</label>
-                <div className="border border-gray-200 rounded-md p-4">
-                  {/* Cabeçalho do calendário com navegação */}
-                  <div className="flex items-center justify-between mb-4">
-                    <button
-                      type="button"
-                      onClick={handleEditPreviousMonth}
-                      className="p-1 hover:bg-gray-100 rounded-md transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                      </svg>
-                    </button>
-                    <h3 className="text-sm font-medium text-gray-900">
-                      {format(editCalendarMonth, 'MMMM yyyy', { locale: ptBR })}
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={handleEditNextMonth}
-                      className="p-1 hover:bg-gray-100 rounded-md transition-colors"
-                    >
-                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                      </svg>
-                    </button>
-                  </div>
-                  
-                  <div className="grid grid-cols-7 gap-1 text-center text-xs font-medium text-gray-500 mb-2">
-                    <div>Dom</div>
-                    <div>Seg</div>
-                    <div>Ter</div>
-                    <div>Qua</div>
-                    <div>Qui</div>
-                    <div>Sex</div>
-                    <div>Sáb</div>
-                  </div>
-                  <div className="grid grid-cols-7 gap-1">
-                    {(() => {
-                      const today = new Date();
-                      const currentMonth = editCalendarMonth.getMonth();
-                      const currentYear = editCalendarMonth.getFullYear();
-                      const firstDay = new Date(currentYear, currentMonth, 1);
-                      const lastDay = new Date(currentYear, currentMonth + 1, 0);
-                      const startDate = startOfWeek(firstDay, { weekStartsOn: 0 });
-                      const endDate = endOfWeek(lastDay, { weekStartsOn: 0 });
-                      const days = eachDayOfInterval({ start: startDate, end: endDate });
-                      
-                      return days.map((day) => {
-                        const dayStr = format(day, 'yyyy-MM-dd');
-                        const isCurrentMonth = day.getMonth() === currentMonth;
-                        const isSelected = editSelectedDates.includes(dayStr);
-                        const isToday = format(day, 'yyyy-MM-dd') === format(today, 'yyyy-MM-dd');
-                        
-                        return (
-                          <button
-                            key={dayStr}
-                            type="button"
-                            onClick={() => handleEditDateSelect(dayStr)}
-                            disabled={!isCurrentMonth}
-                            className={`
-                              h-8 w-8 text-xs rounded-md transition-colors
-                              ${!isCurrentMonth ? 'text-gray-300 cursor-not-allowed' : ''}
-                              ${isCurrentMonth && !isSelected ? 'hover:bg-gray-100 text-gray-700' : ''}
-                              ${isSelected ? 'bg-blue-500 text-white hover:bg-blue-600' : ''}
-                              ${isToday && !isSelected ? 'bg-gray-200 text-gray-900' : ''}
-                            `}
-                          >
-                            {format(day, 'd')}
-                          </button>
-                        );
-                      });
-                    })()}
-                  </div>
-                </div>
-                
-                {editSelectedDates.length > 0 && (
-                  <div className="mt-3">
-                    <p className="text-sm font-medium text-gray-700 mb-2">Datas selecionadas:</p>
-                    <div className="flex flex-wrap gap-2">
-                      {editSelectedDates.map((date, index) => (
-                        <span
-                          key={date}
-                          className="px-2 py-1 bg-blue-100 text-blue-800 rounded-md text-sm"
-                        >
-                          {format(parseISO(date), 'dd/MM/yyyy', { locale: ptBR })} (Data {index + 1})
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setEditingGuide(null)}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={handleSubmitEditGuide}
-                  disabled={!editFormData.numero_prestador || editSelectedDates.length === 0}
-                >
-                  Salvar Alterações
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-
-        {/* Modal para Upload de Guia Assinada */}
-        <Dialog open={isUploadModalOpen} onOpenChange={(open) => {
-          setIsUploadModalOpen(open);
-          if (!open) {
-            setSelectedGuideForUpload(null);
-            setUploadFile(null);
-          }
-        }}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>
-                Importar {uploadType === 'autorizada' ? 'Guia Autorizada' : 
-                         uploadType === 'assinada' ? 'Guia Assinada' : 
-                         uploadType === 'assinada_psicologo' ? 'Guia Assinada pelo Psicólogo' : 
-                         'Guia'}
-              </DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              {selectedGuideForUpload && (
-                <div className="bg-gray-50 p-4 rounded-md">
-                  <h4 className="font-medium text-gray-900 mb-2">Dados da Guia</h4>
-                  <div className="space-y-1 text-sm">
-                    <p><span className="font-medium">Paciente:</span> {selectedGuideForUpload.name}</p>
-                    <p><span className="font-medium">ID:</span> {selectedGuideForUpload.id_patient}</p>
-                    <p><span className="font-medium">Número do Prestador:</span> {selectedGuideForUpload.numero_prestador}</p>
-                  </div>
-                </div>
-              )}
-
-              <div>
-                <label className="text-sm font-medium mb-2 block">Selecionar Arquivo PDF</label>
-                <input
-                  type="file"
-                  accept=".pdf"
-                  onChange={handleFileSelect}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                />
-                <p className="text-xs text-gray-500 mt-1">
-                  Tamanho máximo: 10MB
-                </p>
-              </div>
-
-              {uploadFile && (
-                <div className="bg-green-50 p-3 rounded-md">
-                  <p className="text-sm text-green-800">
-                    <FileText className="h-4 w-4 inline mr-1" />
-                    Arquivo selecionado: {uploadFile.name}
-                  </p>
-                  <p className="text-xs text-green-600 mt-1">
-                    Tamanho: {(uploadFile.size / 1024 / 1024).toFixed(2)} MB
-                  </p>
-                </div>
-              )}
-
-              <div className="flex justify-end gap-2 pt-4">
-                <Button
-                  variant="outline"
-                  onClick={() => setIsUploadModalOpen(false)}
-                  disabled={uploading}
-                >
-                  Cancelar
-                </Button>
-                <Button
-                  onClick={handleSubmitUpload}
-                  disabled={!uploadFile || uploading}
-                >
-                  {uploading ? (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      Enviando...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-4 w-4 mr-2" />
-                      Enviar
-                    </>
-                  )}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-        
-        <Toaster position="bottom-right" />
+          )}
+        </div>
       </div>
+
+      {/* Modal de Guias */}
+      {selectedPatient && (
+        <GuideModal
+          isOpen={isGuideModalOpen}
+          onClose={handleCloseGuideModal}
+          patient={{
+            patient_id: selectedPatient.patient_id,
+            paciente_nome: selectedPatient.paciente_nome,
+            datas: selectedPatient.datas || []
+          }}
+          onSuccess={handleModalSuccess}
+        />
+      )}
+      {/* Modal de Confirmação de Exclusão */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-sm w-full mx-4 shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-red-100 rounded-full">
+                <Trash2 className="h-5 w-5 text-red-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-800">
+                Excluir Prestador
+              </h3>
+            </div>
+            
+            <p className="text-gray-600 mb-6">
+              Tem certeza que deseja excluir o prestador <strong>{prestadorToDelete}</strong>?
+            </p>
+            
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={handleCancelDelete}
+                className="px-4 py-2"
+              >
+                Cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleConfirmDelete}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700"
+              >
+                Excluir
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Indicador de Download */}
+      {downloadingFile && (
+        <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3">
+          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+          <span className="text-sm font-medium">
+            Baixando {downloadingFile}...
+          </span>
+        </div>
+      )}
+
+      {/* Toast de Download Completo */}
+      {showDownloadComplete && (
+        <div className="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-3 rounded-lg shadow-lg z-50 max-w-sm">
+          <div className="flex items-center gap-3">
+            <div className="flex-shrink-0">
+              <div className="p-1 bg-green-500 rounded-full">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+            </div>
+            <div className="flex-1">
+              <div className="text-sm font-medium">
+                {downloadResult.completed > 0 && downloadResult.failed === 0 && 'Download Concluído!'}
+                {downloadResult.failed > 0 && downloadResult.completed === 0 && 'Download Falhou!'}
+                {downloadResult.completed > 0 && downloadResult.failed > 0 && 'Download Parcial!'}
+                {downloadResult.completed === 0 && downloadResult.failed === 0 && 'Erro!'}
+              </div>
+              <div className="text-xs mt-1">
+                {downloadResult.message}
+              </div>
+              {downloadResult.completed > 0 && (
+                <div className="text-xs mt-1 opacity-90">
+                  ✓ {downloadResult.completed} sucessos
+                  {downloadResult.failed > 0 && ` • ✗ ${downloadResult.failed} falhas`}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={() => setShowDownloadComplete(false)}
+              className="flex-shrink-0 text-green-200 hover:text-white"
+            >
+              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Progresso do Download Completo */}
+      {downloadingEverything && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-green-100 rounded-full">
+                <Upload className="h-5 w-5 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-800">
+                Baixando Tudo
+              </h3>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="text-sm text-gray-600">
+                {downloadEverythingProgress.currentStep}
+              </div>
+              
+              {downloadEverythingProgress.currentGuide && (
+                <div className="text-sm font-medium text-blue-600">
+                  Paciente: {downloadEverythingProgress.currentGuide}
+                </div>
+              )}
+              
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Progresso:</span>
+                  <span>{downloadEverythingProgress.completed} de {downloadEverythingProgress.total}</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-green-600 h-2 rounded-full transition-all duration-300"
+                    style={{ 
+                      width: `${downloadEverythingProgress.total > 0 ? (downloadEverythingProgress.completed / downloadEverythingProgress.total) * 100 : 0}%` 
+                    }}
+                  ></div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="text-center">
+                  <div className="font-semibold text-green-600">{downloadEverythingProgress.completed}</div>
+                  <div className="text-gray-500">Concluídos</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-semibold text-red-600">{downloadEverythingProgress.failed}</div>
+                  <div className="text-gray-500">Falhas</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-semibold text-blue-600">{downloadEverythingProgress.remaining}</div>
+                  <div className="text-gray-500">Restantes</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </Layout>
   );
 };
