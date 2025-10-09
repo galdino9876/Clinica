@@ -83,7 +83,7 @@ const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) =
     setIsReschedulingOpen(true);
   };
 
-  const handleReschedule = () => {
+  const handleReschedule = async () => {
     // Validação do campo obrigatório
     if (!newDate) {
       toast({
@@ -98,11 +98,56 @@ const AppointmentDetails = ({ appointment, onClose }: AppointmentDetailsProps) =
       id: appointment.id,
       newDate,
       newStartTime,
-      newEndTime
+      newEndTime,
+      insurance_type: appointment.insurance_type
     });
     
-    rescheduleAppointment(appointment.id, newDate, newStartTime, newEndTime);
-    setIsReschedulingOpen(false);
+    try {
+      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/edit_appoitments', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          appointment_id: appointment.id,
+          data_now: appointment.date, // Data atual do agendamento
+          data_new: newDate, // Nova data no formato YYYY-MM-DD
+          start_time: newStartTime,
+          end_time: newEndTime,
+          insurance_type: appointment.insurance_type || "" // Adicionando o campo insurance_type
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro ao reagendar: ${response.status}`);
+      }
+
+      // Aguardar a resposta da API
+      const responseData = await response.json();
+
+      // Fechar modal de reagendamento
+      setIsReschedulingOpen(false);
+      
+      // Mostrar toast de sucesso
+      toast({
+        title: "Reagendamento realizado com sucesso!",
+        description: `Agendamento foi reagendado para ${format(new Date(newDate), "dd/MM/yyyy")} às ${newStartTime}.`,
+        variant: "default",
+      });
+      
+      // Atualizar o agendamento local
+      rescheduleAppointment(appointment.id, newDate, newStartTime, newEndTime);
+      
+    } catch (error) {
+      console.error('Erro ao reagendar:', error);
+      
+      // Mostrar toast de erro
+      toast({
+        title: "Erro ao reagendar",
+        description: "Ocorreu um erro ao tentar reagendar. Tente novamente.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleSaveToken = () => {

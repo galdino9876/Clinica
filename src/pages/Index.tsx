@@ -1,9 +1,11 @@
 import AppointmentCalendar from "@/components/AppointmentCalendar";
 import Layout from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import React, { useEffect, useState } from "react";
-import { X, AlertTriangle, Calendar, ClipboardList, User, Edit } from "lucide-react";
+import { X, AlertTriangle, Calendar, ClipboardList, User, Edit, BarChart3 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import PsychologistAvailabilityDashboard from "@/components/PsychologistAvailabilityDashboard";
 
 type AlertWebhookItem = {
   paciente_nome: string;
@@ -171,143 +173,172 @@ const Index = () => {
             </div>
 
             <div className="p-6 max-h-[calc(90vh-120px)] overflow-y-auto">
-              {loadingAlerts && (
-                <div className="text-gray-600">Carregando alertas...</div>
-              )}
-              {!loadingAlerts && alertError && (
-                <div className="text-rose-600">{alertError}</div>
-              )}
-              {!loadingAlerts && !alertError && alertItems.length === 0 && (
-                <div className="text-gray-600">Nenhum alerta encontrado.</div>
-              )}
+              <Tabs defaultValue="alerts" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="alerts" className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    Alertas do Sistema
+                  </TabsTrigger>
+                  <TabsTrigger value="availability" className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4" />
+                    Disponibilidade dos Psicólogos
+                  </TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="alerts" className="mt-6">
+                  {loadingAlerts && (
+                    <div className="text-gray-600">Carregando alertas...</div>
+                  )}
+                  {!loadingAlerts && alertError && (
+                    <div className="text-rose-600">{alertError}</div>
+                  )}
+                  {!loadingAlerts && !alertError && alertItems.length === 0 && (
+                    <div className="text-gray-600">Nenhum alerta encontrado.</div>
+                  )}
 
-              {!loadingAlerts && !alertError && alertItems.length > 0 && (
-                <div className="space-y-4 max-w-full">
-                  {/* Alertas da API */}
-                  <Card className="w-full">
-                    <CardHeader className="pb-3">
-                      <CardTitle className="flex items-center gap-2">
-                        <AlertTriangle className="h-5 w-5 text-blue-600" />
-                        Alertas do Sistema
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-0 pb-0">
-                      {/* Cabeçalho da tabela */}
-                      <div className="flex items-center px-4 py-2 bg-gray-100 text-sm font-medium text-gray-700 mb-1">
-                        <div className="flex items-center gap-2 flex-1">
-                          <User className="h-4 w-4" />
-                          <span>Paciente</span>
-                        </div>
-                        <div className="flex items-center gap-2 flex-1">
-                          <Calendar className="h-4 w-4" />
-                          <span>Datas e Status</span>
-                        </div>
-                        <div className="flex items-center gap-2 w-20">
-                          <span>Ações</span>
-                        </div>
-                      </div>
+                  {!loadingAlerts && !alertError && alertItems.length > 0 && (
+                    <div className="space-y-4 max-w-full">
+                      {/* Alertas da API */}
+                      <Card className="w-full">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-blue-600" />
+                            Alertas do Sistema
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="px-0 pb-0">
+                          {/* Cabeçalho da tabela */}
+                          <div className="flex items-center px-4 py-2 bg-gray-100 text-sm font-medium text-gray-700 mb-1">
+                            <div className="flex items-center gap-2 flex-1">
+                              <User className="h-4 w-4" />
+                              <span>Paciente</span>
+                            </div>
+                            <div className="flex items-center gap-2 flex-1">
+                              <Calendar className="h-4 w-4" />
+                              <span>Datas e Status</span>
+                            </div>
+                            <div className="flex items-center gap-2 w-20">
+                              <span>Ações</span>
+                            </div>
+                          </div>
 
-                      <div className="space-y-1">
-                        {alertItems
-                          .filter((alert) => {
-                            // Filtrar pacientes que têm todas as datas e guias "ok"
-                            if (!alert.datas || !Array.isArray(alert.datas)) {
-                              return true; // Mostrar se não tem datas (erro)
-                            }
-                            
-                            // Verificar se todas as guias estão "ok"
-                            const todasGuiasOk = alert.datas.every(dataItem => dataItem.guia === "ok");
-                            
-                            // Se todas as guias estão ok, não mostrar
-                            if (todasGuiasOk) {
-                              return false;
-                            }
-                            
-                            return true; // Mostrar se tem pelo menos uma guia com problema
-                          })
-                          .sort((a, b) => {
-                            // Ordenar: exibir = 1 primeiro, exibir = 0 no final
-                            if (a.exibir === 1 && b.exibir !== 1) return -1;
-                            if (a.exibir !== 1 && b.exibir === 1) return 1;
-                            return 0;
-                          })
-                          .map((alert, index) => {
-                          // Determinar se o alerta está ativo ou desabilitado
-                          const isActive = alert.exibir !== 0;
-                          const alertColor = isActive ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200";
-                          
-                          return (
-                            <div key={index} className={`flex items-center px-4 py-3 rounded text-sm hover:bg-opacity-80 transition-colors border-l-4 ${alertColor}`}>
-                              {/* Nome do Paciente */}
-                              <div className="flex items-center gap-3 flex-1 min-w-0">
-                                <User className="h-4 w-4 text-gray-500 flex-shrink-0" />
-                                <div className="flex flex-col">
-                                  <span className="font-medium truncate">{alert.paciente_nome}</span>
-                                  {!isActive && (
+                          <div className="space-y-1">
+                            {alertItems
+                              .filter((alert) => {
+                                // Filtrar pacientes que têm todas as datas e guias "ok"
+                                if (!alert.datas || !Array.isArray(alert.datas)) {
+                                  return true; // Mostrar se não tem datas (erro)
+                                }
+                                
+                                // Verificar se todas as guias estão "ok"
+                                const todasGuiasOk = alert.datas.every(dataItem => dataItem.guia === "ok");
+                                
+                                // Se todas as guias estão ok, não mostrar
+                                if (todasGuiasOk) {
+                                  return false;
+                                }
+                                
+                                return true; // Mostrar se tem pelo menos uma guia com problema
+                              })
+                              .sort((a, b) => {
+                                // Ordenar: exibir = 1 primeiro, exibir = 0 no final
+                                if (a.exibir === 1 && b.exibir !== 1) return -1;
+                                if (a.exibir !== 1 && b.exibir === 1) return 1;
+                                return 0;
+                              })
+                              .map((alert, index) => {
+                              // Determinar se o alerta está ativo ou desabilitado
+                              const isActive = alert.exibir !== 0;
+                              const alertColor = isActive ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200";
+                              
+                              return (
+                                <div key={index} className={`flex items-center px-4 py-3 rounded text-sm hover:bg-opacity-80 transition-colors border-l-4 ${alertColor}`}>
+                                  {/* Nome do Paciente */}
+                                  <div className="flex items-center gap-3 flex-1 min-w-0">
+                                    <User className="h-4 w-4 text-gray-500 flex-shrink-0" />
                                     <div className="flex flex-col">
-                                      <span className="text-xs text-red-600 font-medium">⚠️ Paciente Desistiu</span>
-                                      {alert.motivo && (
-                                        <span className="text-xs text-gray-600">Motivo: {alert.motivo}</span>
+                                      <span className="font-medium truncate">{alert.paciente_nome}</span>
+                                      {!isActive && (
+                                        <div className="flex flex-col">
+                                          <span className="text-xs text-red-600 font-medium">⚠️ Paciente Desistiu</span>
+                                          {alert.motivo && (
+                                            <span className="text-xs text-gray-600">Motivo: {alert.motivo}</span>
+                                          )}
+                                        </div>
                                       )}
                                     </div>
-                                  )}
-                                </div>
-                                  </div>
-                              
-                              {/* Datas e Status */}
-                              <div className="flex items-center gap-2 flex-1 min-w-0">
-                                <div className="flex flex-col gap-1">
-                                  {alert.datas && Array.isArray(alert.datas) ? alert.datas.map((dataItem, idx) => {
-                                    // Determinar cores para agendamento
-                                    const agendamentoColor = dataItem.agendamento === "ok" ? "bg-green-200 text-green-900" : 
-                                                           dataItem.agendamento === "warning" ? "bg-yellow-200 text-yellow-900" :
-                                                           dataItem.agendamento === "error" ? "bg-red-200 text-red-900" :
-                                                           "bg-blue-200 text-blue-900";
-                                    
-                                    // Determinar cores para guia
-                                    const guiaColor = dataItem.guia === "ok" ? "bg-green-200 text-green-900" : 
-                                                     dataItem.guia === "falta" ? "bg-red-200 text-red-900" :
-                                                     "bg-blue-200 text-blue-900";
-                                    
-                                    return (
-                                      <div key={idx} className="flex items-center gap-2">
-                                        <span className="text-xs font-medium text-gray-600 min-w-[80px]">
-                                          {dataItem.data}
-                                            </span>
-                                        <div className="flex gap-1">
-                                          <span className={`px-2 py-1 rounded text-xs font-medium ${agendamentoColor}`}>
-                                            📅 {dataItem.agendamento === "falta" ? "falta agendamento" : dataItem.agendamento}
-                                          </span>
-                                          <span className={`px-2 py-1 rounded text-xs font-medium ${guiaColor}`}>
-                                            📋 {dataItem.guia === "falta" ? "falta guia" : dataItem.guia}
-                                          </span>
-                                        </div>
                                       </div>
-                                    );
-                                  }) : (
-                                    <span className="text-xs text-gray-500">Paciente sem agendamentos/guias</span>
-                                  )}
-                          </div>
-                                        </div>
+                                  
+                                  {/* Datas e Status */}
+                                  <div className="flex items-center gap-2 flex-1 min-w-0">
+                                    <div className="flex flex-col gap-1">
+                                      {alert.datas && Array.isArray(alert.datas) ? alert.datas.map((dataItem, idx) => {
+                                        // Determinar cores para agendamento
+                                        const agendamentoColor = dataItem.agendamento === "ok" ? "bg-green-200 text-green-900" : 
+                                                               dataItem.agendamento === "warning" ? "bg-yellow-200 text-yellow-900" :
+                                                               dataItem.agendamento === "error" ? "bg-red-200 text-red-900" :
+                                                               "bg-blue-200 text-blue-900";
                                         
-                                        {/* Botão Editar */}
-                              <div className="flex items-center gap-2 w-20">
-                                          <button
-                                  onClick={() => handleEditAlert(alert)}
-                                            className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                            title="Editar alerta"
-                                          >
-                                            <Edit className="h-4 w-4" />
-                                          </button>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
+                                        // Determinar cores para guia
+                                        const guiaColor = dataItem.guia === "ok" ? "bg-green-200 text-green-900" : 
+                                                         dataItem.guia === "falta" ? "bg-red-200 text-red-900" :
+                                                         "bg-blue-200 text-blue-900";
+                                        
+                                        return (
+                                          <div key={idx} className="flex items-center gap-2">
+                                            <span className="text-xs font-medium text-gray-600 min-w-[80px]">
+                                              {dataItem.data}
+                                                </span>
+                                            <div className="flex gap-1">
+                                              <span className={`px-2 py-1 rounded text-xs font-medium ${agendamentoColor}`}>
+                                                📅 {dataItem.agendamento === "falta" ? "falta agendamento" : dataItem.agendamento}
+                                              </span>
+                                              <span className={`px-2 py-1 rounded text-xs font-medium ${guiaColor}`}>
+                                                📋 {dataItem.guia === "falta" ? "falta guia" : dataItem.guia}
+                                              </span>
+                                            </div>
+                                          </div>
+                                        );
+                                      }) : (
+                                        <span className="text-xs text-gray-500">Paciente sem agendamentos/guias</span>
+                                      )}
+                              </div>
+                                            </div>
+                                            
+                                            {/* Botão Editar */}
+                                  <div className="flex items-center gap-2 w-20">
+                                              <button
+                                      onClick={() => handleEditAlert(alert)}
+                                                className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                                title="Editar alerta"
+                                              >
+                                                <Edit className="h-4 w-4" />
+                                              </button>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                            </div>
+                          </CardContent>
+                        </Card>
                       </div>
-                    </CardContent>
-                  </Card>
-                </div>
-              )}
+                    )}
+                </TabsContent>
+                
+                <TabsContent value="availability" className="mt-6">
+                  <PsychologistAvailabilityDashboard 
+                    appointments={[]}
+                    workingHours={[]}
+                    users={[]}
+                    loading={false}
+                    error={null}
+                    onRefresh={() => {
+                      // Recarregar dados se necessário
+                      window.location.reload();
+                    }}
+                  />
+                </TabsContent>
+              </Tabs>
             </div>
           </div>
         </div>

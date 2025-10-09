@@ -708,7 +708,8 @@ const AppointmentCard = React.memo(({
           data_now: appointment.date, // Data atual do agendamento
           data_new: selectedNewDate.toISOString().split('T')[0], // Nova data no formato YYYY-MM-DD
           start_time: newStartTime,
-          end_time: newEndTime
+          end_time: newEndTime,
+          insurance_type: appointment.insurance_type || "" // Adicionando o campo insurance_type
         }),
       });
 
