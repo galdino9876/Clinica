@@ -79,10 +79,24 @@ export const ComboboxDynamic = forwardRef<HTMLButtonElement, ComboboxDynamicProp
       }
     };
 
-    // Filtrar opções baseado no texto digitado
-    const filteredOptions = options.filter((option) =>
-      option.label.toLowerCase().includes(searchValue.toLowerCase())
-    );
+    // Função para remover acentos
+    const removeAccents = (str: string) => {
+      return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    };
+
+    // Filtrar opções baseado no texto digitado com busca mais precisa
+    const filteredOptions = options.filter((option) => {
+      if (!searchValue.trim()) return true;
+      
+      const searchTerm = removeAccents(searchValue.toLowerCase().trim());
+      const optionLabel = removeAccents(option.label.toLowerCase());
+      
+      // Busca mais restritiva: apenas exata ou que começa com o termo
+      // E o termo deve ter pelo menos 2 caracteres para evitar resultados irrelevantes
+      if (searchTerm.length < 2) return false;
+      
+      return optionLabel === searchTerm || optionLabel.startsWith(searchTerm);
+    });
 
     // Resetar o valor de busca quando o popover fechar
     useEffect(() => {

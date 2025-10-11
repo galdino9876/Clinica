@@ -4,7 +4,27 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { format } from 'date-fns';
+
+// Função para normalizar datas e evitar problemas de fuso horário
+const normalizeDate = (dateStr: string): Date => {
+  // Se a data já está no formato YYYY-MM-DD, usar diretamente
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+    return new Date(dateStr + 'T00:00:00');
+  }
+  
+  // Para outros formatos, tentar parsear normalmente
+  const date = new Date(dateStr);
+  
+  // Verificar se a data é válida
+  if (isNaN(date.getTime())) {
+    console.warn('Data inválida:', dateStr);
+    return new Date();
+  }
+  
+  return date;
+};
 import GuideModal from '@/components/GuideModal';
+import EditPrestadorModal from '@/components/EditPrestadorModal';
 import { 
   User, 
   Calendar, 
@@ -15,7 +35,8 @@ import {
   RefreshCw,
   Upload,
   DollarSign,
-  Trash2
+  Trash2,
+  Edit
 } from "lucide-react";
 
 interface PrestadorData {
@@ -78,6 +99,21 @@ const GuideControl: React.FC = () => {
     failed: 0,
     message: ''
   });
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingPrestador, setEditingPrestador] = useState<PrestadorData | null>(null);
+  const [scrollPosition, setScrollPosition] = useState(0);
+
+  // Função para salvar posição de scroll
+  const saveScrollPosition = () => {
+    setScrollPosition(window.scrollY);
+  };
+
+  // Função para restaurar posição de scroll
+  const restoreScrollPosition = () => {
+    setTimeout(() => {
+      window.scrollTo(0, scrollPosition);
+    }, 100);
+  };
 
   // Função para buscar dados da API
   const fetchData = async () => {
@@ -100,6 +136,9 @@ const GuideControl: React.FC = () => {
       
       const data: PatientData[] = await response.json();
       setPatientsData(data);
+      
+      // Restaurar posição de scroll após carregar dados
+      restoreScrollPosition();
       
     } catch (e: any) {
       setError(e?.message || "Erro desconhecido");
@@ -595,6 +634,14 @@ const GuideControl: React.FC = () => {
                 let prestadoresData: PrestadorData[] = [];
                 try {
                   prestadoresData = patient.prestadores ? JSON.parse(patient.prestadores) : [];
+                  
+                  // Debug: verificar formato das datas dos prestadores
+                  prestadoresData.forEach((prestador, idx) => {
+                    console.log(`Prestador ${idx} - Datas:`, prestador.datas);
+                    prestador.datas.forEach((data, dataIdx) => {
+                      console.log(`  Data ${dataIdx}:`, data, '-> Date:', new Date(data));
+                    });
+                  });
                 } catch (error) {
                   console.error('Erro ao fazer parse dos prestadores:', error);
                   prestadoresData = [];
@@ -640,7 +687,10 @@ const GuideControl: React.FC = () => {
                           size="sm" 
                           variant="outline" 
                           className="border-blue-200 text-blue-700 hover:bg-blue-50"
-                          onClick={() => handleOpenGuideModal(patient)}
+                          onClick={() => {
+                            saveScrollPosition();
+                            handleOpenGuideModal(patient);
+                          }}
                         >
                           <Plus className="h-4 w-4 mr-2" />
                           + Guias
@@ -672,6 +722,18 @@ const GuideControl: React.FC = () => {
                                     <span className="font-semibold text-lg text-gray-800 whitespace-nowrap">
                                       Número de Prestador: {prestador.numero_prestador}
                                     </span>
+                                    <Button 
+                                      size="sm" 
+                                      variant="outline"
+                                      className="text-xs p-1 h-6 w-6 border-blue-200 text-blue-700 hover:bg-blue-50 flex-shrink-0"
+                                      onClick={() => {
+                                        saveScrollPosition();
+                                        setEditingPrestador(prestador);
+                                        setShowEditModal(true);
+                                      }}
+                                    >
+                                      <Edit className="h-3 w-3" />
+                                    </Button>
                                     <Button 
                                       size="sm" 
                                       variant="destructive"
@@ -880,7 +942,7 @@ const GuideControl: React.FC = () => {
                                     <div className="flex flex-wrap gap-2">
                                       {prestador.datas.map((data, dataIdx) => (
                                         <span key={dataIdx} className="px-3 py-1 rounded-lg text-sm font-medium bg-blue-100 text-blue-800 border border-blue-200">
-                                          {format(new Date(data), 'dd/MM/yyyy')}
+                                          {format(normalizeDate(data), 'dd/MM/yyyy')}
                                         </span>
                                       ))}
                                     </div>
@@ -895,7 +957,7 @@ const GuideControl: React.FC = () => {
                                     <DollarSign className="h-4 w-4" />
                                     <span className="font-medium">Data Faturado: </span>
                                     <span className="font-semibold">
-                                      {format(new Date(prestador.date_faturado), 'dd/MM/yyyy')}
+                                      {format(normalizeDate(prestador.date_faturado), 'dd/MM/yyyy')}
                                     </span>
                                   </div>
                                 </div>
@@ -1146,6 +1208,19 @@ const GuideControl: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Modal de Edição de Prestador */}
+      <EditPrestadorModal
+        isOpen={showEditModal}
+        onClose={() => {
+          setShowEditModal(false);
+          setEditingPrestador(null);
+        }}
+        prestador={editingPrestador}
+        onSuccess={() => {
+          fetchData(); // Recarregar dados após edição (já restaura scroll)
+        }}
+      />
     </Layout>
   );
 };

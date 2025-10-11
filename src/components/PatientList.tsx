@@ -32,15 +32,8 @@ const PatientsTable = () => {
   const [isReferralOpen, setIsReferralOpen] = useState(false);
   const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
   const [isContinuityOpen, setIsContinuityOpen] = useState(false);
-  const [isNameSearchActive, setIsNameSearchActive] = useState(false);
   const nameSearchInputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    if (isNameSearchActive && nameSearchInputRef.current) {
-      nameSearchInputRef.current.focus();
-      nameSearchInputRef.current.select();
-    }
-  }, [isNameSearchActive]);
 
   // Estados para o modal de atestado
   const [attendanceDate, setAttendanceDate] = useState(new Date().toISOString().split('T')[0]);
@@ -362,26 +355,16 @@ const PatientsTable = () => {
             <thead className="bg-gray-50">
               <tr>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  {isNameSearchActive ? (
+                  <div className="relative">
                     <input
                       ref={nameSearchInputRef}
                       type="text"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      onBlur={() => setIsNameSearchActive(false)}
-                      placeholder="Pesquisar por nome..."
-                      className="w-full rounded-md border border-gray-300 px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      placeholder="Pesquisar paciente por nome..."
+                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-400 transition-colors duration-200"
                     />
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setIsNameSearchActive(true)}
-                      className="text-left w-full hover:text-gray-700"
-                      title="Clique para pesquisar por nome"
-                    >
-                      Nome
-                    </button>
-                  )}
+                  </div>
                 </th>
                 {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">CPF</th> */}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Telefone</th>

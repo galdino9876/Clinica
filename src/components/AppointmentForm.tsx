@@ -191,7 +191,6 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
       if (response.ok) {
         const data = await response.json();
         setPaymentPlans(Array.isArray(data) ? data : []);
-        console.log('Planos de pagamento carregados:', data);
       } else {
         console.error('Erro ao buscar planos de pagamento:', response.status);
         setPaymentPlans([]);
@@ -392,7 +391,6 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
         });
         if (patientsResponse.ok) {
           const data = await patientsResponse.json();
-          console.log("Resposta API pacientes (detalhada):", JSON.stringify(data, null, 2)); // Log mais detalhado
           const fetchedPatients: Patient[] = data.map((patient: any) => ({
             id: String(patient.id),
             name: patient.name,
@@ -943,7 +941,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
             label="Método de Pagamento"
             options={[
               { id: "private", label: "Particular" },
-              ...paymentPlans.map(plan => ({ id: `insurance_${plan.plano}`, label: plan.plano }))
+              ...paymentPlans.map(plan => ({ id: `insurance_${plan.id}`, label: plan.plano }))
             ]}
             placeholder={watch("paymentMethod") === "private" ? "Particular" : watch("paymentMethod") === "insurance" ? watch("insuranceType") || "Plano selecionado" : "Selecione o método de pagamento"}
             required
@@ -960,8 +958,11 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
               if (value === "private") {
                 handlePaymentMethodChange("private");
               } else if (value.startsWith("insurance_")) {
-                const planName = value.replace("insurance_", "");
-                handlePaymentMethodChange("insurance", planName);
+                const planId = value.replace("insurance_", "");
+                const selectedPlan = paymentPlans.find(plan => plan.id.toString() === planId);
+                if (selectedPlan) {
+                  handlePaymentMethodChange("insurance", selectedPlan.plano);
+                }
               }
             }}
             onFocus={() => {

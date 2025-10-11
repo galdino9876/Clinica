@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Calendar as CalendarIcon, X, Save } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -35,6 +37,7 @@ const GuideModal: React.FC<GuideModalProps> = ({
   const [selectedDates, setSelectedDates] = useState<Date[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   // Filtrar datas que precisam de guias - usar as datas exatas da API
   const datesNeedingGuides = (patient.datas || [])
@@ -129,6 +132,7 @@ const GuideModal: React.FC<GuideModalProps> = ({
     setNumeroPrestador("");
     setSelectedDates([]);
     setError(null);
+    setCalendarOpen(false);
     onClose();
   };
 
@@ -156,32 +160,68 @@ const GuideModal: React.FC<GuideModalProps> = ({
             />
           </div>
 
-          {/* Minicalendário */}
+          {/* Seletor de datas */}
           <div className="space-y-2">
             <Label>Selecione as datas para criar guias:</Label>
-            <div className="border rounded-lg p-4">
-              <Calendar
-                mode="multiple"
-                selected={selectedDates}
-                onSelect={handleDateSelect}
-                locale={ptBR}
-                className="rounded-md"
-                modifiers={{
-                  needsGuide: datesNeedingGuides,
-                }}
-                modifiersStyles={{
-                  needsGuide: {
-                    backgroundColor: '#fef3c7',
-                    border: '1px solid #f59e0b',
-                    color: '#92400e'
-                  }
-                }}
-              />
-            </div>
-            <p className="text-sm text-gray-600">
-              <span className="inline-block w-3 h-3 bg-amber-200 border border-amber-400 rounded mr-2"></span>
-              Datas que precisam de guias
-            </p>
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !selectedDates.length && "text-muted-foreground"
+                  )}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {selectedDates.length > 0 ? (
+                    `${selectedDates.length} data(s) selecionada(s)`
+                  ) : (
+                    "Selecione as datas"
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="multiple"
+                  selected={selectedDates}
+                  onSelect={handleDateSelect}
+                  locale={ptBR}
+                  className="rounded-md"
+                  modifiers={{
+                    needsGuide: datesNeedingGuides,
+                  }}
+                  modifiersStyles={{
+                    needsGuide: {
+                      backgroundColor: '#fef3c7',
+                      border: '1px solid #f59e0b',
+                      color: '#92400e'
+                    }
+                  }}
+                />
+              </PopoverContent>
+            </Popover>
+            
+            {/* Mostrar datas selecionadas */}
+            {selectedDates.length > 0 && (
+              <div className="mt-2 p-3 bg-gray-50 rounded-lg">
+                <div className="text-sm font-medium text-gray-700 mb-2">
+                  Datas selecionadas: {selectedDates.map((date, index) => {
+                    const isNeedingGuide = datesNeedingGuides.some(d => 
+                      format(d, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
+                    );
+                    return (
+                      <span key={index} className={`text-xs font-semibold ${
+                        isNeedingGuide ? 'text-amber-600' : 'text-green-600'
+                      }`}>
+                        {format(date, "dd/MM")}
+                        {isNeedingGuide && " (precisa guia)"}
+                        {index < selectedDates.length - 1 && " "}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Mensagem de erro */}
