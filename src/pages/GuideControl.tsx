@@ -967,14 +967,14 @@ const GuideControl: React.FC = () => {
                         </div>
                       ) : patient.datas && patient.datas.length > 0 ? (
                         <div className="space-y-4">
-                          {/* Seção para agendamentos sem prestador */}
+                          {/* Seção para agendamentos sem GUIA */}
                           <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5 shadow-sm">
                             <div className="flex items-center gap-3 mb-5">
                               <div className="p-2 bg-amber-100 rounded-full">
                                 <AlertTriangle className="h-5 w-5 text-amber-600" />
                               </div>
                               <span className="font-bold text-lg text-amber-800">
-                                Agendamentos sem Prestador
+                                Agendamentos sem GUIA
                               </span>
                             </div>
                             
@@ -1027,7 +1027,7 @@ const GuideControl: React.FC = () => {
                               <div className="flex items-center gap-2 text-yellow-800">
                                 <AlertTriangle className="h-4 w-4" />
                                 <span className="text-sm font-medium">
-                                  ⚠️ Sem número de prestador definido
+                                  ⚠️ Sem número de GUIA
                                 </span>
                               </div>
                             </div>
