@@ -102,6 +102,7 @@ const GuideControl: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingPrestador, setEditingPrestador] = useState<PrestadorData | null>(null);
   const [scrollPosition, setScrollPosition] = useState(0);
+  const [filterType, setFilterType] = useState<'all' | 'no-guide' | 'no-appointment'>('all');
 
   // Função para salvar posição de scroll
   const saveScrollPosition = () => {
@@ -113,6 +114,75 @@ const GuideControl: React.FC = () => {
     setTimeout(() => {
       window.scrollTo(0, scrollPosition);
     }, 100);
+  };
+
+  // Funções para calcular estatísticas do dashboard
+  const getDashboardStats = () => {
+    const totalPatients = patientsData.length;
+    let patientsWithoutGuide = 0;
+    let patientsWithoutAppointment = 0;
+
+    patientsData.forEach(patient => {
+      let hasGuide = false;
+      let hasAppointment = false;
+
+      // Verificar se tem prestadores com guia
+      if (patient.prestadores) {
+        try {
+          const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
+          hasGuide = prestadoresData.length > 0;
+        } catch (error) {
+          console.error('Erro ao parsear prestadores:', error);
+        }
+      }
+
+      // Verificar se tem agendamentos
+      if (patient.datas && patient.datas.length > 0) {
+        hasAppointment = patient.datas.some(data => data.agendamento === "ok");
+      }
+
+      if (!hasGuide) {
+        patientsWithoutGuide++;
+      }
+
+      if (!hasAppointment) {
+        patientsWithoutAppointment++;
+      }
+    });
+
+    return {
+      total: totalPatients,
+      withoutGuide: patientsWithoutGuide,
+      withoutAppointment: patientsWithoutAppointment
+    };
+  };
+
+  // Função para filtrar pacientes baseado no tipo selecionado
+  const getFilteredPatients = () => {
+    if (filterType === 'all') {
+      return patientsData;
+    }
+
+    return patientsData.filter(patient => {
+      if (filterType === 'no-guide') {
+        // Pacientes sem número de guia (sem prestadores)
+        if (!patient.prestadores) return true;
+        try {
+          const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
+          return prestadoresData.length === 0;
+        } catch (error) {
+          return true;
+        }
+      }
+
+      if (filterType === 'no-appointment') {
+        // Pacientes sem agendamento
+        if (!patient.datas || patient.datas.length === 0) return true;
+        return !patient.datas.some(data => data.agendamento === "ok");
+      }
+
+      return true;
+    });
   };
 
   // Função para buscar dados da API
@@ -601,6 +671,103 @@ const GuideControl: React.FC = () => {
           </div>
         </div>
 
+        {/* Dashboard de Estatísticas */}
+        {!loading && !error && patientsData.length > 0 && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            {/* Card Total de Pacientes */}
+            <Card 
+              className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${
+                filterType === 'all' 
+                  ? 'ring-2 ring-blue-500 bg-blue-50' 
+                  : 'hover:bg-gray-50'
+              }`}
+              onClick={() => setFilterType('all')}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Total de Pacientes</p>
+                    <p className="text-3xl font-bold text-gray-900">{getDashboardStats().total}</p>
+                  </div>
+                  <div className="p-3 bg-blue-100 rounded-full">
+                    <User className="h-6 w-6 text-blue-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Card Pacientes sem Guia */}
+            <Card 
+              className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${
+                filterType === 'no-guide' 
+                  ? 'ring-2 ring-red-500 bg-red-50' 
+                  : 'hover:bg-gray-50'
+              }`}
+              onClick={() => setFilterType('no-guide')}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Sem Número de Guia</p>
+                    <p className="text-3xl font-bold text-red-600">{getDashboardStats().withoutGuide}</p>
+                  </div>
+                  <div className="p-3 bg-red-100 rounded-full">
+                    <AlertTriangle className="h-6 w-6 text-red-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Card Pacientes sem Agendamento */}
+            <Card 
+              className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${
+                filterType === 'no-appointment' 
+                  ? 'ring-2 ring-orange-500 bg-orange-50' 
+                  : 'hover:bg-gray-50'
+              }`}
+              onClick={() => setFilterType('no-appointment')}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Sem Agendamento</p>
+                    <p className="text-3xl font-bold text-orange-600">{getDashboardStats().withoutAppointment}</p>
+                  </div>
+                  <div className="p-3 bg-orange-100 rounded-full">
+                    <Calendar className="h-6 w-6 text-orange-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Indicador de Filtro Ativo */}
+        {filterType !== 'all' && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-1 bg-blue-100 rounded">
+                  {filterType === 'no-guide' && <AlertTriangle className="h-4 w-4 text-blue-600" />}
+                  {filterType === 'no-appointment' && <Calendar className="h-4 w-4 text-blue-600" />}
+                </div>
+                <span className="text-sm font-medium text-blue-800">
+                  {filterType === 'no-guide' && 'Mostrando apenas pacientes sem número de guia'}
+                  {filterType === 'no-appointment' && 'Mostrando apenas pacientes sem agendamento'}
+                </span>
+              </div>
+              <Button 
+                size="sm" 
+                variant="outline" 
+                onClick={() => setFilterType('all')}
+                className="text-blue-700 border-blue-300 hover:bg-blue-100"
+              >
+                Mostrar Todos
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Conteúdo Principal */}
         <div className="space-y-4">
           {loading && (
@@ -629,7 +796,30 @@ const GuideControl: React.FC = () => {
 
           {!loading && !error && patientsData.length > 0 && (
             <div className="space-y-6">
-              {patientsData.map((patient) => {
+              {getFilteredPatients().length === 0 ? (
+                <div className="text-center py-12 bg-gray-50 border border-gray-200 rounded-lg">
+                  <div className="p-3 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                    {filterType === 'no-guide' && <AlertTriangle className="h-8 w-8 text-gray-400" />}
+                    {filterType === 'no-appointment' && <Calendar className="h-8 w-8 text-gray-400" />}
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-700 mb-2">
+                    {filterType === 'no-guide' && 'Nenhum paciente sem guia encontrado'}
+                    {filterType === 'no-appointment' && 'Nenhum paciente sem agendamento encontrado'}
+                  </h3>
+                  <p className="text-gray-500 mb-4">
+                    {filterType === 'no-guide' && 'Todos os pacientes possuem número de guia.'}
+                    {filterType === 'no-appointment' && 'Todos os pacientes possuem agendamentos.'}
+                  </p>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setFilterType('all')}
+                    className="text-blue-700 border-blue-300 hover:bg-blue-100"
+                  >
+                    Ver Todos os Pacientes
+                  </Button>
+                </div>
+              ) : (
+                getFilteredPatients().map((patient) => {
                 // Parse dos prestadores do JSON string
                 let prestadoresData: PrestadorData[] = [];
                 try {
@@ -1045,7 +1235,8 @@ const GuideControl: React.FC = () => {
                     </CardContent>
                   </Card>
                 );
-              })}
+                })
+              )}
             </div>
           )}
         </div>
