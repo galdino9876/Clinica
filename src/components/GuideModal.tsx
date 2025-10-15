@@ -3,13 +3,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { Calendar as CalendarIcon, X, Save } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface GuideModalProps {
   isOpen: boolean;
@@ -49,27 +49,25 @@ const GuideModal: React.FC<GuideModalProps> = ({
     })
     .sort((a, b) => a.getTime() - b.getTime());
 
-  // Selecionar automaticamente as datas que precisam de guias
+  // Inicializar com datas que precisam de guia selecionadas
   useEffect(() => {
-    if (isOpen && datesNeedingGuides.length > 0) {
-      setSelectedDates(datesNeedingGuides);
+    if (isOpen) {
+      console.log('=== INICIALIZAÇÃO DO MODAL ===');
+      console.log('patient.datas:', patient.datas);
+      console.log('datesNeedingGuides:', datesNeedingGuides);
+      
+      if (datesNeedingGuides.length > 0) {
+        console.log('Inicializando com datas que precisam de guia');
+        setSelectedDates(datesNeedingGuides);
+      } else {
+        console.log('Nenhuma data precisa de guia, iniciando vazio');
+        setSelectedDates([]);
+      }
     }
-  }, [isOpen, datesNeedingGuides]);
+  }, [isOpen]);
 
-  const handleDateSelect = (dates: Date[] | undefined) => {
-    if (!dates) return;
-    setSelectedDates(dates);
-  };
 
-  const isDateSelected = (date: Date) => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    return selectedDates.some(d => format(d, 'yyyy-MM-dd') === dateStr);
-  };
 
-  const isDateNeedingGuide = (date: Date) => {
-    const dateStr = format(date, 'yyyy-MM-dd');
-    return datesNeedingGuides.some(d => format(d, 'yyyy-MM-dd') === dateStr);
-  };
 
   const handleSubmit = async () => {
     if (!numeroPrestador.trim()) {
@@ -161,56 +159,79 @@ const GuideModal: React.FC<GuideModalProps> = ({
           </div>
 
           {/* Seletor de datas */}
-          <div className="space-y-2">
+          <div className="space-y-4">
             <Label>Selecione as datas para criar guias:</Label>
-            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-              <PopoverTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "w-full justify-start text-left font-normal",
-                    !selectedDates.length && "text-muted-foreground"
-                  )}
-                >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
-                  {selectedDates.length > 0 ? (
-                    `${selectedDates.length} data(s) selecionada(s)`
-                  ) : (
-                    "Selecione as datas"
-                  )}
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0" align="start">
-                <Calendar
-                  mode="multiple"
-                  selected={selectedDates}
-                  onSelect={handleDateSelect}
-                  locale={ptBR}
-                  className="rounded-md"
-                  modifiers={{
-                    needsGuide: datesNeedingGuides,
-                  }}
-                  modifiersStyles={{
-                    needsGuide: {
-                      backgroundColor: '#fef3c7',
-                      border: '1px solid #f59e0b',
-                      color: '#92400e'
-                    }
-                  }}
-                />
-              </PopoverContent>
-            </Popover>
+            
+            {/* Mini Calendário */}
+            <div className="space-y-2">
+              <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className="w-full justify-start text-left font-normal"
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {selectedDates.length > 0 ? (
+                      `${selectedDates.length} data(s) selecionada(s)`
+                    ) : (
+                      "Selecione as datas"
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="multiple"
+                    selected={selectedDates}
+                    onSelect={(dates) => {
+                      if (dates) {
+                        console.log('🖱️ CLIQUE NO MINI CALENDÁRIO');
+                        console.log('dates recebidas:', dates.map(d => format(d, 'dd/MM/yyyy')));
+                        setSelectedDates(dates);
+                      }
+                    }}
+                    locale={ptBR}
+                    className="rounded-md"
+                    modifiers={{
+                      needsGuideAndSelected: datesNeedingGuides.filter(date => 
+                        selectedDates.some(selected => 
+                          format(selected, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
+                        )
+                      ),
+                    }}
+                    modifiersStyles={{
+                      needsGuideAndSelected: {
+                        backgroundColor: '#fef3c7',
+                        border: '2px solid #f59e0b',
+                        color: '#92400e',
+                        fontWeight: 'bold'
+                      }
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
+              
+              {/* Informação sobre as datas sugeridas */}
+              {datesNeedingGuides.length > 0 && (
+                <div className="text-xs text-gray-600 p-2 bg-amber-50 border border-amber-200 rounded-lg">
+                  💡 <strong>Dica:</strong> As datas destacadas em amarelo no calendário são sugestões que precisam de guia. 
+                  Clique nelas para selecionar/deselecionar.
+                </div>
+              )}
+            </div>
             
             {/* Mostrar datas selecionadas */}
             {selectedDates.length > 0 && (
               <div className="mt-2 p-3 bg-gray-50 rounded-lg">
                 <div className="text-sm font-medium text-gray-700 mb-2">
+                  {selectedDates.length} data(s) selecionada(s)
+                </div>
+                <div className="text-sm text-gray-600">
                   Datas selecionadas: {selectedDates.map((date, index) => {
                     const isNeedingGuide = datesNeedingGuides.some(d => 
                       format(d, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
                     );
                     return (
-                      <span key={index} className={`text-xs font-semibold ${
+                      <span key={index} className={`font-semibold ${
                         isNeedingGuide ? 'text-amber-600' : 'text-green-600'
                       }`}>
                         {format(date, "dd/MM")}
