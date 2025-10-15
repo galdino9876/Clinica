@@ -9,6 +9,7 @@ import PsychologistAvailabilityDashboard from "@/components/PsychologistAvailabi
 
 type AlertWebhookItem = {
   paciente_nome: string;
+  patient_id?: number; // Campo opcional caso a API retorne
   motivo: string | null;
   exibir: number | string;
   datas: Array<{
@@ -60,6 +61,14 @@ const Index = () => {
       
       const data = await response.json();
       
+      // Debug: verificar estrutura dos dados da API
+      console.log('=== DEBUG ALERTAS API ===');
+      console.log('Dados recebidos da API:', data);
+      if (Array.isArray(data) && data.length > 0) {
+        console.log('Primeiro item da array:', data[0]);
+        console.log('Campos disponíveis:', Object.keys(data[0]));
+      }
+      
       // Processar o novo formato da API
       let alertItems: AlertWebhookItem[] = [];
       
@@ -104,6 +113,31 @@ const Index = () => {
     setShowEditModal(true);
   };
 
+  // Função para buscar patient_id pelo nome
+  const getPatientIdByName = async (patientName: string): Promise<number | null> => {
+    try {
+      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/patients", {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!response.ok) {
+        console.error('Erro ao buscar pacientes:', response.status);
+        return null;
+      }
+
+      const patients = await response.json();
+      const patient = patients.find((p: any) => 
+        p.name && p.name.toLowerCase().trim() === patientName.toLowerCase().trim()
+      );
+
+      return patient ? patient.id : null;
+    } catch (error) {
+      console.error('Erro ao buscar patient_id:', error);
+      return null;
+    }
+  };
+
   // Função para salvar alterações do alerta
   const handleSaveAlert = async () => {
     if (!editingAlert) {
@@ -113,11 +147,30 @@ const Index = () => {
     try {
       setSavingAlert(true);
       
-      const requestBody = {
+      const requestBody: any = {
         paciente_nome: editingAlert.paciente_nome,
         exibir: editExibir ? "1" : "0",
         motivo: editMotivo
       };
+
+      // Se não temos patient_id, tentar buscar pelo nome
+      let patientId = editingAlert.patient_id;
+      if (!patientId) {
+        console.log('Buscando patient_id para:', editingAlert.paciente_nome);
+        patientId = await getPatientIdByName(editingAlert.paciente_nome);
+        if (patientId) {
+          requestBody.patient_id = patientId;
+          console.log('patient_id encontrado:', patientId);
+        } else {
+          console.warn('patient_id não encontrado para:', editingAlert.paciente_nome);
+        }
+      } else {
+        requestBody.patient_id = patientId;
+      }
+
+      console.log('=== DEBUG SAVE ALERT ===');
+      console.log('editingAlert:', editingAlert);
+      console.log('requestBody:', requestBody);
       
       const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/alter_alerta", {
         method: "POST",
@@ -137,9 +190,6 @@ const Index = () => {
       
       // Recarregar os alertas da API para obter os dados atualizados
       await fetchAlerts();
-      
-      // Mostrar feedback de sucesso
-      alert("Alerta atualizado com sucesso!");
     } catch (error) {
       alert("Erro ao salvar alterações. Tente novamente.");
     } finally {
@@ -231,7 +281,7 @@ const Index = () => {
                                 }
                                 
                                 // Verificar se todas as guias estão "ok"
-                                const todasGuiasOk = alert.datas.every(dataItem => dataItem.guia === "ok");
+                                const todasGuiasOk = alert.datas && alert.datas.every(dataItem => dataItem.guia === "ok");
                                 
                                 // Se todas as guias estão ok, não mostrar
                                 if (todasGuiasOk) {
@@ -370,7 +420,7 @@ const Index = () => {
                   <strong>Paciente:</strong> {editingAlert.paciente_nome}
                 </p>
                 <p className="text-sm text-gray-600">
-                  <strong>Total de Datas:</strong> {editingAlert.datas.length}
+                  <strong>Total de Datas:</strong> {editingAlert.datas ? editingAlert.datas.length : 0}
                 </p>
               </div>
 
