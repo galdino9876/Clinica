@@ -18,6 +18,7 @@ import { ComboboxDynamic } from "./ComboboxDynamic";
 import { appointmentSchema, AppointmentFormData } from "@/zod/appointmentSchema"; // Ajuste o caminho
 import { InputDynamic } from "./inputDin";
 import AppointmentProgressAlert from "./AppointmentProgressAlert";
+import TimePicker from "./TimePicker";
 
 interface AppointmentFormProps {
   selectedDate: Date;
@@ -882,54 +883,46 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
         )}
 
         <div className="space-y-2">
-          <ComboboxDynamic
-            name="startTime"
-            control={control}
+          <TimePicker
+            value={watch("startTime") || ""}
+            onChange={(value) => setValue("startTime", value)}
             label="Horário de Início"
-            options={availableTimeSlots.length > 0 
-              ? availableTimeSlots.slice(0, -1).map((time) => ({ id: time, label: time }))
-              : [{ id: "09:00", label: "09:00" }]
-            }
             placeholder="Selecione o horário"
             required
-            errors={errors}
             disabled={isLoading || !selectedPsychologistId || isLoadingPsychologistHours}
-            searchPlaceholder="Digite o horário..."
-            emptyMessage="Nenhum horário encontrado."
-            onClear={() => formMethods.setValue("startTime", availableTimeSlots[0] || "09:00")}
+            error={errors.startTime?.message}
           />
           {selectedPsychologistId && availableTimeSlots.length > 0 && (
             <div className="text-xs text-gray-500">
-              Horários disponíveis para início: {availableTimeSlots.slice(0, -1).join(', ')}
+              Horários disponíveis: {availableTimeSlots.slice(0, -1).slice(0, 5).join(', ')}
+              {availableTimeSlots.length > 6 && ` e mais ${availableTimeSlots.length - 6}...`}
             </div>
           )}
         </div>
 
         <div className="space-y-2">
-          <ComboboxDynamic
-            name="endTime"
-            control={control}
+          <TimePicker
+            value={watch("endTime") || ""}
+            onChange={(value) => setValue("endTime", value)}
             label="Horário de Término"
-            options={generateEndTimeOptions(currentStartTime)}
             placeholder="Selecione o horário"
             required
-            errors={errors}
             disabled={isLoading || !selectedPsychologistId || isLoadingPsychologistHours || !currentStartTime}
-            searchPlaceholder="Digite o horário..."
-            emptyMessage="Nenhum horário encontrado."
-            onClear={() => {
-              // Se não houver horário de início, usar o primeiro disponível
-              if (currentStartTime && availableTimeSlots.length > 0) {
-                const startHour = parseInt(currentStartTime.split(':')[0]);
-                const endHour = startHour + 1;
-                const endTime = `${endHour.toString().padStart(2, '0')}:00`;
-                formMethods.setValue("endTime", endTime);
-              }
-            }}
+            error={errors.endTime?.message}
           />
           {selectedPsychologistId && currentStartTime && availableTimeSlots.length > 0 && (
             <div className="text-xs text-gray-500">
-              Horários de término disponíveis: {generateEndTimeOptions(currentStartTime).map(opt => opt.label).join(', ')}
+              Sugestão: {currentStartTime} → {(() => {
+                const startHour = parseInt(currentStartTime.split(':')[0]);
+                const startMinute = parseInt(currentStartTime.split(':')[1]);
+                let endHour = startHour;
+                let endMinute = startMinute + 10;
+                if (endMinute >= 60) {
+                  endHour += 1;
+                  endMinute -= 60;
+                }
+                return `${endHour.toString().padStart(2, '0')}:${endMinute.toString().padStart(2, '0')}`;
+              })()}
             </div>
           )}
         </div>
