@@ -1097,7 +1097,7 @@ const GuideControl: React.FC = () => {
                                           className="text-xs px-3 py-2 border-green-200 text-green-700 hover:bg-green-50 relative z-0"
                                         >
                                           <Upload className="h-3 w-3 mr-1" />
-                                          Importar Autorizada
+                                          Guia Autorizada
                                         </Button>
                                       </>
                                     )}
@@ -1134,7 +1134,7 @@ const GuideControl: React.FC = () => {
                                           className="text-xs px-3 py-2 border-blue-200 text-blue-700 hover:bg-blue-50 relative z-0"
                                         >
                                           <Upload className="h-3 w-3 mr-1" />
-                                          Importar Assinada
+                                          Assinada Paciente
                                         </Button>
                                       </>
                                     )}
@@ -1171,7 +1171,7 @@ const GuideControl: React.FC = () => {
                                           className="text-xs px-3 py-2 border-purple-200 text-purple-700 hover:bg-purple-50 relative z-0"
                                         >
                                           <Upload className="h-3 w-3 mr-1" />
-                                          Importar Psicólogo
+                                          Assinada Psicologo
                                         </Button>
                                       </>
                                     )}
