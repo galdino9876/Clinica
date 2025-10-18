@@ -102,7 +102,7 @@ const GuideControl: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingPrestador, setEditingPrestador] = useState<PrestadorData | null>(null);
   const [scrollPosition, setScrollPosition] = useState(0);
-  const [filterType, setFilterType] = useState<'all' | 'no-guide' | 'no-appointment'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'no-guide' | 'no-appointment' | 'guias-nao-assinadas' | 'guias-assinadas'>('all');
 
   // Função para salvar posição de scroll
   const saveScrollPosition = () => {
@@ -116,13 +116,63 @@ const GuideControl: React.FC = () => {
     }, 100);
   };
 
+  // Função para verificar se estamos na última semana do mês atual
+  const isLastWeekOfMonth = () => {
+    const today = new Date();
+    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+    const daysUntilEndOfMonth = lastDayOfMonth.getDate() - today.getDate();
+    
+    // Consideramos "última semana" quando restam 7 dias ou menos para o fim do mês
+    return daysUntilEndOfMonth <= 7;
+  };
+
+  // Função para determinar a cor da data baseada nas regras de negócio
+  const getDateColor = (data: GuideData, patient: PatientData, fieldType: 'agendamentos' | 'guias' = 'agendamentos') => {
+    const hasAgendamento = data.agendamento === "ok";
+    const hasGuia = data.guia === "ok";
+    const hasPrestador = data.numero_prestador !== null;
+    
+    if (fieldType === 'agendamentos') {
+      // Para o campo Agendamentos
+      if (hasAgendamento) {
+        return 'bg-green-100 text-green-800 border border-green-200'; // Verde para agendamentos confirmados
+      } else {
+        // Mostrar cinza apenas se estivermos na última semana do mês
+        return isLastWeekOfMonth() 
+          ? 'bg-gray-100 text-gray-800 border border-gray-200' // Cinza para sugestões (última semana)
+          : null; // Não mostrar se não estivermos na última semana
+      }
+    } else {
+      // Para o campo Guias
+      if (hasGuia && hasPrestador) {
+        return 'bg-green-100 text-green-800 border border-green-200'; // Verde para guias completas
+      } else if (hasAgendamento && !hasPrestador) {
+        return 'bg-red-100 text-red-800 border border-red-200'; // Vermelho para agendamentos sem guia
+      } else if (!hasAgendamento && !hasPrestador) {
+        // Mostrar cinza apenas se estivermos na última semana do mês
+        return isLastWeekOfMonth() 
+          ? 'bg-gray-100 text-gray-800 border border-gray-200' // Cinza para sugestões (última semana)
+          : null; // Não mostrar se não estivermos na última semana
+      } else {
+        return 'bg-gray-100 text-gray-800 border border-gray-200'; // Cinza para outros casos
+      }
+    }
+  };
+
   // Funções para calcular estatísticas do dashboard
   const getDashboardStats = () => {
-    const totalPatients = patientsData.length;
+    // Filtrar apenas pacientes com planos de saúde (excluir "Particular")
+    const patientsWithInsurance = patientsData.filter(patient => 
+      patient.insurance_type !== "Particular"
+    );
+    
+    const totalPatients = patientsWithInsurance.length;
     let patientsWithoutGuide = 0;
     let patientsWithoutAppointment = 0;
+    let totalGuiasSemAssinatura = 0;
+    let totalGuiasAssinadasPsicologo = 0;
 
-    patientsData.forEach(patient => {
+    patientsWithInsurance.forEach(patient => {
       let hasGuide = false;
       let hasAppointment = false;
 
@@ -131,6 +181,16 @@ const GuideControl: React.FC = () => {
         try {
           const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
           hasGuide = prestadoresData.length > 0;
+          
+          // Contar guias sem assinatura e assinadas pelo psicólogo
+          prestadoresData.forEach(prestador => {
+            if (prestador.existe_guia_assinada_psicologo === 0) {
+              totalGuiasSemAssinatura++; // Conta apenas as sem assinatura (=== 0)
+            }
+            if (prestador.existe_guia_assinada_psicologo === 1) {
+              totalGuiasAssinadasPsicologo++; // Conta apenas as assinadas pelo psicólogo
+            }
+          });
         } catch (error) {
           console.error('Erro ao parsear prestadores:', error);
         }
@@ -153,17 +213,24 @@ const GuideControl: React.FC = () => {
     return {
       total: totalPatients,
       withoutGuide: patientsWithoutGuide,
-      withoutAppointment: patientsWithoutAppointment
+      withoutAppointment: patientsWithoutAppointment,
+      totalGuiasSemAssinatura: totalGuiasSemAssinatura,
+      totalGuiasAssinadasPsicologo: totalGuiasAssinadasPsicologo
     };
   };
 
   // Função para filtrar pacientes baseado no tipo selecionado
   const getFilteredPatients = () => {
+    // Primeiro filtrar apenas pacientes com planos de saúde (excluir "Particular")
+    const patientsWithInsurance = patientsData.filter(patient => 
+      patient.insurance_type !== "Particular"
+    );
+
     if (filterType === 'all') {
-      return patientsData;
+      return patientsWithInsurance;
     }
 
-    return patientsData.filter(patient => {
+    return patientsWithInsurance.filter(patient => {
       if (filterType === 'no-guide') {
         // Pacientes sem número de guia (sem prestadores)
         if (!patient.prestadores) return true;
@@ -179,6 +246,29 @@ const GuideControl: React.FC = () => {
         // Pacientes sem agendamento
         if (!patient.datas || patient.datas.length === 0) return true;
         return !patient.datas.some(data => data.agendamento === "ok");
+      }
+
+      if (filterType === 'guias-nao-assinadas') {
+        // Pacientes com TODAS as guias sem assinatura pelo psicólogo (nenhuma com existe_guia_assinada_psicologo === 1)
+        if (!patient.prestadores) return false;
+        try {
+          const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
+          // Retorna true apenas se TODAS as guias têm existe_guia_assinada_psicologo === 0
+          return prestadoresData.length > 0 && prestadoresData.every(prestador => prestador.existe_guia_assinada_psicologo === 0);
+        } catch (error) {
+          return false;
+        }
+      }
+
+      if (filterType === 'guias-assinadas') {
+        // Pacientes com guias assinadas pelo psicólogo (existe_guia_assinada_psicologo === 1)
+        if (!patient.prestadores) return false;
+        try {
+          const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
+          return prestadoresData.some(prestador => prestador.existe_guia_assinada_psicologo === 1);
+        } catch (error) {
+          return false;
+        }
       }
 
       return true;
@@ -411,7 +501,12 @@ const GuideControl: React.FC = () => {
     // Filtrar prestadores com guia assinada pelo psicólogo E que não estão faturados
     const guidesToDownload: Array<{numero_prestador: number, paciente_nome: string}> = [];
     
-    patientsData.forEach(patient => {
+    // Filtrar apenas pacientes com planos de saúde (excluir "Particular")
+    const patientsWithInsurance = patientsData.filter(patient => 
+      patient.insurance_type !== "Particular"
+    );
+    
+    patientsWithInsurance.forEach(patient => {
       if (patient.prestadores) {
         try {
           const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
@@ -673,7 +768,7 @@ const GuideControl: React.FC = () => {
 
         {/* Dashboard de Estatísticas */}
         {!loading && !error && patientsData.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
             {/* Card Total de Pacientes */}
             <Card 
               className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${
@@ -739,34 +834,68 @@ const GuideControl: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Card Total de Guias sem Assinatura */}
+            <Card 
+              className={`cursor-pointer transition-all duration-200 hover:shadow-lg hover:bg-gray-50 ${
+                filterType === 'guias-nao-assinadas' 
+                  ? 'ring-2 ring-green-500 bg-green-50' 
+                  : 'hover:bg-gray-50'
+              }`}
+              onClick={() => setFilterType('guias-nao-assinadas')}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Total de guias sem assinatura</p>
+                    <p className="text-3xl font-bold text-green-600">{getDashboardStats().totalGuiasSemAssinatura}</p>
+                  </div>
+                  <div 
+                    className={`p-3 rounded-full transition-all duration-200 ${
+                      filterType === 'guias-nao-assinadas' 
+                        ? 'bg-green-200 ring-2 ring-green-500' 
+                        : 'bg-green-100'
+                    }`}
+                    title="Clique para filtrar guias sem assinatura"
+                  >
+                    <FileText className="h-6 w-6 text-green-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Card Guias Assinadas pelo Psicólogo */}
+            <Card 
+              className={`cursor-pointer transition-all duration-200 hover:shadow-lg hover:bg-gray-50 ${
+                filterType === 'guias-assinadas' 
+                  ? 'ring-2 ring-purple-500 bg-purple-50' 
+                  : 'hover:bg-gray-50'
+              }`}
+              onClick={() => setFilterType('guias-assinadas')}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">Guias Assinadas pelo Psicólogo</p>
+                    <p className="text-3xl font-bold text-purple-600">{getDashboardStats().totalGuiasAssinadasPsicologo}</p>
+                  </div>
+                  <div 
+                    className={`p-3 rounded-full transition-all duration-200 ${
+                      filterType === 'guias-assinadas' 
+                        ? 'bg-purple-200 ring-2 ring-purple-500' 
+                        : 'bg-purple-100'
+                    }`}
+                    title="Clique para filtrar guias assinadas"
+                  >
+                    <CheckCircle className="h-6 w-6 text-purple-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
-        {/* Indicador de Filtro Ativo */}
-        {filterType !== 'all' && (
-          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <div className="p-1 bg-blue-100 rounded">
-                  {filterType === 'no-guide' && <AlertTriangle className="h-4 w-4 text-blue-600" />}
-                  {filterType === 'no-appointment' && <Calendar className="h-4 w-4 text-blue-600" />}
-                </div>
-                <span className="text-sm font-medium text-blue-800">
-                  {filterType === 'no-guide' && 'Mostrando apenas pacientes sem número de guia'}
-                  {filterType === 'no-appointment' && 'Mostrando apenas pacientes sem agendamento'}
-                </span>
-              </div>
-              <Button 
-                size="sm" 
-                variant="outline" 
-                onClick={() => setFilterType('all')}
-                className="text-blue-700 border-blue-300 hover:bg-blue-100"
-              >
-                Mostrar Todos
-              </Button>
-            </div>
-          </div>
-        )}
+        {/* Lista de Pacientes */}
 
         {/* Conteúdo Principal */}
         <div className="space-y-4">
@@ -1084,17 +1213,14 @@ const GuideControl: React.FC = () => {
                                         {patient.datas
                                           .filter(data => data.numero_prestador === prestador.numero_prestador || data.numero_prestador === null)
                                           .map((data, dataIdx) => {
-                                            const hasAgendamento = data.agendamento === "ok";
+                                            const colorClass = getDateColor(data, patient, 'agendamentos');
+                                            if (!colorClass) return null; // Não renderizar se não deve aparecer
                                             return (
-                                              <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${
-                                                hasAgendamento 
-                                                  ? 'bg-green-100 text-green-800 border border-green-200' 
-                                                  : 'bg-red-100 text-red-800 border border-red-200'
-                                              }`}>
+                                              <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${colorClass}`}>
                                                 {data.data}
                                               </span>
                                             );
-                                          })}
+                                          }).filter(Boolean)}
                                       </div>
                                     </div>
 
@@ -1108,17 +1234,14 @@ const GuideControl: React.FC = () => {
                                         {patient.datas
                                           .filter(data => data.numero_prestador === prestador.numero_prestador || data.numero_prestador === null)
                                           .map((data, dataIdx) => {
-                                            const hasGuia = data.guia === "ok";
+                                            const colorClass = getDateColor(data, patient, 'guias');
+                                            if (!colorClass) return null; // Não renderizar se não deve aparecer
                                             return (
-                                              <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${
-                                                hasGuia 
-                                                  ? 'bg-green-100 text-green-800 border border-green-200' 
-                                                  : 'bg-red-100 text-red-800 border border-red-200'
-                                              }`}>
+                                              <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${colorClass}`}>
                                                 {data.data}
                                               </span>
                                             );
-                                          })}
+                                          }).filter(Boolean)}
                                       </div>
                                     </div>
                                   </>
@@ -1176,17 +1299,14 @@ const GuideControl: React.FC = () => {
                               </div>
                               <div className="flex flex-wrap gap-2">
                                 {patient.datas.map((data, dataIdx) => {
-                                  const hasAgendamento = data.agendamento === "ok";
+                                  const colorClass = getDateColor(data, patient, 'agendamentos');
+                                  if (!colorClass) return null; // Não renderizar se não deve aparecer
                                   return (
-                                    <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${
-                                      hasAgendamento 
-                                        ? 'bg-green-100 text-green-800 border border-green-200' 
-                                        : 'bg-red-100 text-red-800 border border-red-200'
-                                    }`}>
+                                    <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${colorClass}`}>
                                       {data.data}
                                     </span>
                                   );
-                                })}
+                                }).filter(Boolean)}
                               </div>
                             </div>
 
@@ -1198,17 +1318,14 @@ const GuideControl: React.FC = () => {
                               </div>
                               <div className="flex flex-wrap gap-2">
                                 {patient.datas.map((data, dataIdx) => {
-                                  const hasGuia = data.guia === "ok";
+                                  const colorClass = getDateColor(data, patient, 'guias');
+                                  if (!colorClass) return null; // Não renderizar se não deve aparecer
                                   return (
-                                    <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${
-                                      hasGuia 
-                                        ? 'bg-green-100 text-green-800 border border-green-200' 
-                                        : 'bg-red-100 text-red-800 border border-red-200'
-                                    }`}>
+                                    <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${colorClass}`}>
                                       {data.data}
                                     </span>
                                   );
-                                })}
+                                }).filter(Boolean)}
                               </div>
                             </div>
 
