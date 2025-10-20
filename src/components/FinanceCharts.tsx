@@ -1808,12 +1808,12 @@ const FinanceCharts = () => {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-gray-500">
-                    Receita da Clínica
+                    Receita da Clínica -6%
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-green-600">
-                    R$ {clinicRevenueCompleted.toFixed(2)}
+                    R$ {(clinicRevenueCompleted * 0.94).toFixed(2)}
                   </div>
                 </CardContent>
               </Card>
@@ -1821,12 +1821,12 @@ const FinanceCharts = () => {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-gray-500">
-                    Comissões dos Psicólogos
+                    Comissões dos Psicólogos -6%
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-blue-600">
-                    R$ {psychologistCommissionCompleted.toFixed(2)}
+                    R$ {(psychologistCommissionCompleted * 0.94).toFixed(2)}
                   </div>
                 </CardContent>
               </Card>
@@ -2059,12 +2059,12 @@ const FinanceCharts = () => {
                   <p className="font-medium">R$ {totalRevenueCompleted.toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Comissão Total:</p>
-                  <p className="font-medium">R$ {psychologistCommissionCompleted.toFixed(2)}</p>
+                  <p className="text-sm text-gray-500">Comissão Total -6%:</p>
+                  <p className="font-medium">R$ {(psychologistCommissionCompleted * 0.94).toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Receita da Clínica:</p>
-                  <p className="font-medium">R$ {clinicRevenueCompleted.toFixed(2)}</p>
+                  <p className="text-sm text-gray-500">Receita da Clínica -6%:</p>
+                  <p className="font-medium">R$ {(clinicRevenueCompleted * 0.94).toFixed(2)}</p>
                 </div>
               </div>
             </div>
