@@ -3,6 +3,7 @@ import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { format } from 'date-fns';
 
 // Função para normalizar datas e evitar problemas de fuso horário
@@ -36,7 +37,8 @@ import {
   Upload,
   DollarSign,
   Trash2,
-  Edit
+  Edit,
+  Search
 } from "lucide-react";
 
 interface PrestadorData {
@@ -103,6 +105,7 @@ const GuideControl: React.FC = () => {
   const [editingPrestador, setEditingPrestador] = useState<PrestadorData | null>(null);
   const [scrollPosition, setScrollPosition] = useState(0);
   const [filterType, setFilterType] = useState<'all' | 'no-guide' | 'no-appointment' | 'guias-nao-assinadas' | 'guias-assinadas'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
 
   // Função para salvar posição de scroll
   const saveScrollPosition = () => {
@@ -222,9 +225,16 @@ const GuideControl: React.FC = () => {
   // Função para filtrar pacientes baseado no tipo selecionado
   const getFilteredPatients = () => {
     // Primeiro filtrar apenas pacientes com planos de saúde (excluir "Particular")
-    const patientsWithInsurance = patientsData.filter(patient => 
+    let patientsWithInsurance = patientsData.filter(patient => 
       patient.insurance_type !== "Particular"
     );
+
+    // Filtrar por termo de busca (nome)
+    if (searchTerm.trim()) {
+      patientsWithInsurance = patientsWithInsurance.filter(patient =>
+        patient.paciente_nome.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
 
     if (filterType === 'all') {
       return patientsWithInsurance;
@@ -750,7 +760,18 @@ const GuideControl: React.FC = () => {
             <h1 className="text-3xl font-bold text-gray-900">Guias Concluídas</h1>
             <p className="text-gray-600 mt-1">Gestão de guias médicas finalizadas</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+              <Input
+                type="text"
+                placeholder="Buscar por nome..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10 w-64"
+              />
+            </div>
             <Button 
               onClick={handleDownloadEverything} 
               disabled={loading || downloadingEverything}
