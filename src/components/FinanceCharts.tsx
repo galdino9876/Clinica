@@ -283,7 +283,11 @@ const FinanceCharts = () => {
         patient_name: lot.name, // Usar 'name' em vez de 'patient_name'
         date: lot.date,
         value: parseFloat(lot.value), // Converter string para number
-        commission: parseFloat(lot.value) * 0.5 // 50% de comissão
+        commission: parseFloat(lot.value) * 0.5, // 50% de comissão
+        insurance_type: lot.insurance_type || 'Particular',
+        appointment_type: lot.appointment_type || 'presential',
+        patient_id: lot.patient_id,
+        appointment_id: lot.appointment_id
       };
       
 
@@ -929,16 +933,22 @@ const FinanceCharts = () => {
 
     doc.setFontSize(12);
     doc.text(`Psicólogo: ${lotDetails.psychologist_name}`, 14, 30);
-    doc.text(`Status: ${lotDetails.status === 'payments_created' ? 'Criado' : lotDetails.status}`, 14, 37);
+    doc.text(`Status: ${lotDetails.status === 'payments_created' ? 'Pagamento Criado' : lotDetails.status === 'payments_finish' ? 'Pagamento Realizado' : lotDetails.status}`, 14, 37);
     doc.text(`Valor Total: R$ ${lotDetails.total_value.toFixed(2)}`, 14, 44);
-    doc.text(`Data de Criação: ${format(new Date(lotDetails.payment_created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}`, 14, 51);
+    // Set text color to green for "Valor a Receber -6%"
+    doc.setTextColor(0, 128, 0);
+    doc.text(`Valor a Receber -6% (Imposto): R$ ${((lotDetails.total_value * 0.5) * 0.94).toFixed(2)}`, 14, 51);
+    // Reset text color to black
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Total de Consultas: ${lotDetails.appointments.length}`, 14, 58);
+    doc.text(`Data de Criação: ${format(new Date(lotDetails.payment_created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}`, 14, 65);
     
     doc.text(
       `Data de Geração: ${format(new Date(), "dd/MM/yyyy HH:mm", {
         locale: ptBR,
       })}`,
       14,
-      58
+      72
     );
 
     const tableData = lotDetails.appointments.map((appointment: any) => {
@@ -946,18 +956,29 @@ const FinanceCharts = () => {
         appointment.patient_name,
         formatDate(appointment.date),
         appointment.insurance_type || 'Particular',
+        appointment.appointment_type === 'online' ? 'Online' : 'Presencial',
         `R$ ${appointment.value.toFixed(2)}`,
         `R$ ${appointment.commission.toFixed(2)}`,
+        `R$ ${(appointment.commission * 0.94).toFixed(2)}`,
       ];
     });
 
     (doc as any).autoTable({
-      startY: 65,
-      head: [["Paciente", "Data", "Plano", "Valor Bruto", "Comissão"]],
+      startY: 80,
+      head: [["Paciente", "Data", "Plano", "Tipo", "Valor Bruto", "Comissão", "Valor a Receber -6%"]],
       body: tableData,
       theme: "grid",
       headStyles: { fillColor: [0, 123, 255], textColor: 255 },
-      styles: { fontSize: 10 },
+      styles: { fontSize: 9 },
+      columnStyles: {
+        0: { cellWidth: 40 },
+        1: { cellWidth: 25 },
+        2: { cellWidth: 30 },
+        3: { cellWidth: 20 },
+        4: { cellWidth: 25 },
+        5: { cellWidth: 25 },
+        6: { cellWidth: 30 },
+      },
     });
 
     const reportName = `lote-pagamento-${lotDetails.psychologist_name.replace(/\s+/g, '-')}-${format(
@@ -1337,7 +1358,7 @@ const FinanceCharts = () => {
                         <TableRow>
                           <TableHead>Psicólogo</TableHead>
                           <TableHead>Data Criação</TableHead>
-                          <TableHead>Valor Líquido</TableHead>
+                          <TableHead>Valor Total Bruto</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Ações</TableHead>
                         </TableRow>
@@ -1808,7 +1829,7 @@ const FinanceCharts = () => {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-gray-500">
-                    Receita da Clínica -6%
+                    Receita da Clínica -6% (Imposto)
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -1821,7 +1842,7 @@ const FinanceCharts = () => {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-gray-500">
-                    Comissões dos Psicólogos -6%
+                    Comissões dos Psicólogos -6% (Imposto)
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -2179,7 +2200,7 @@ const FinanceCharts = () => {
 
       {/* Payment Lot Details Dialog */}
       <Dialog open={!!selectedLotDetails} onOpenChange={() => setSelectedLotDetails(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Detalhes do Lote de Pagamento</DialogTitle>
             {selectedLotDetails && (
@@ -2203,7 +2224,7 @@ const FinanceCharts = () => {
                 <div>
                   <p className="text-sm text-gray-500">Status</p>
                   <Badge className="bg-blue-100 text-blue-800">
-                    {selectedLotDetails.status === 'payments_created' ? 'Criado' : selectedLotDetails.status}
+                    {selectedLotDetails.status === 'payments_created' ? 'Pagamento Criado' : selectedLotDetails.status === 'payments_finish' ? 'Pagamento Realizado' : selectedLotDetails.status}
                   </Badge>
                 </div>
                 <div>
@@ -2216,6 +2237,14 @@ const FinanceCharts = () => {
                     {format(new Date(selectedLotDetails.payment_created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                   </p>
                 </div>
+                <div>
+                  <p className="text-sm text-gray-500">Valor a Receber -6% (Imposto)</p>
+                  <p className="font-medium text-green-600">R$ {((selectedLotDetails.total_value * 0.5) * 0.94).toFixed(2)}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Total de Consultas</p>
+                  <p className="font-medium">{selectedLotDetails.appointments.length}</p>
+                </div>
               </div>
               
               <div className="rounded-md border">
@@ -2224,8 +2253,11 @@ const FinanceCharts = () => {
                     <TableRow>
                       <TableHead>Paciente</TableHead>
                       <TableHead>Data</TableHead>
+                      <TableHead>Plano</TableHead>
+                      <TableHead>Tipo</TableHead>
                       <TableHead>Valor Bruto</TableHead>
                       <TableHead>Comissão</TableHead>
+                      <TableHead>-6% (Imposto)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -2233,8 +2265,15 @@ const FinanceCharts = () => {
                       <TableRow key={index}>
                         <TableCell>{appointment.patient_name}</TableCell>
                         <TableCell>{formatDate(appointment.date)}</TableCell>
+                        <TableCell>{appointment.insurance_type}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className={appointment.appointment_type === 'online' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}>
+                            {appointment.appointment_type === 'online' ? 'Online' : 'Presencial'}
+                          </Badge>
+                        </TableCell>
                         <TableCell>R$ {appointment.value.toFixed(2)}</TableCell>
                         <TableCell>R$ {appointment.commission.toFixed(2)}</TableCell>
+                        <TableCell className="text-green-600 font-medium">R$ {(appointment.commission * 0.94).toFixed(2)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
