@@ -554,10 +554,15 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
           // Upload do PDF da guia autorizada (se houver arquivo selecionado)
           if (pdfFile) {
             try {
+              // Encontrar o nome do paciente selecionado
+              const selectedPatient = patients.find(patient => patient.id === data.patientId);
+              const patientName = selectedPatient ? selectedPatient.name : '';
+              
               const formData = new FormData();
-              formData.append('documento', pdfFile);
+              formData.append('file', pdfFile);
               formData.append('numero_prestador', data.numeroPrestador);
               formData.append('command', 'Guia-autorizada');
+              formData.append('nome_patient', patientName);
 
               const pdfResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/insert_guia_completed', {
                 method: 'POST',

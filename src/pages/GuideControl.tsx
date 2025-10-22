@@ -775,12 +775,12 @@ const GuideControl: React.FC = () => {
             <Button 
               onClick={handleDownloadEverything} 
               disabled={loading || downloadingEverything}
-              className="flex items-center gap-2 bg-green-600 hover:bg-green-700"
+              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 cursor-pointer [&>*]:cursor-pointer"
             >
               <Upload className="h-4 w-4 mr-2" />
               {downloadingEverything ? 'Baixando...' : 'Baixar Tudo'}
             </Button>
-            <Button onClick={fetchData} variant="outline" disabled={loading}>
+            <Button onClick={fetchData} variant="outline" disabled={loading} className="cursor-pointer [&>*]:cursor-pointer">
               <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
               Atualizar
             </Button>
@@ -963,7 +963,7 @@ const GuideControl: React.FC = () => {
                   <Button 
                     variant="outline" 
                     onClick={() => setFilterType('all')}
-                    className="text-blue-700 border-blue-300 hover:bg-blue-100"
+                    className="text-blue-700 border-blue-300 hover:bg-blue-100 cursor-pointer [&>*]:cursor-pointer"
                   >
                     Ver Todos os Pacientes
                   </Button>
@@ -1026,7 +1026,7 @@ const GuideControl: React.FC = () => {
                         <Button 
                           size="sm" 
                           variant="outline" 
-                          className="border-blue-200 text-blue-700 hover:bg-blue-50"
+                          className="border-blue-200 text-blue-700 hover:bg-blue-50 cursor-pointer [&>*]:cursor-pointer"
                           onClick={() => {
                             saveScrollPosition();
                             handleOpenGuideModal(patient);
@@ -1065,7 +1065,7 @@ const GuideControl: React.FC = () => {
                                     <Button 
                                       size="sm" 
                                       variant="outline"
-                                      className="text-xs p-1 h-6 w-6 border-blue-200 text-blue-700 hover:bg-blue-50 flex-shrink-0"
+                                      className="text-xs p-1 h-6 w-6 border-blue-200 text-blue-700 hover:bg-blue-50 flex-shrink-0 cursor-pointer [&>*]:cursor-pointer"
                                       onClick={() => {
                                         saveScrollPosition();
                                         setEditingPrestador(prestador);
@@ -1077,7 +1077,7 @@ const GuideControl: React.FC = () => {
                                     <Button 
                                       size="sm" 
                                       variant="destructive"
-                                      className="text-xs p-1 h-6 w-6 bg-red-600 hover:bg-red-700 text-white flex-shrink-0"
+                                      className="text-xs p-1 h-6 w-6 bg-red-600 hover:bg-red-700 text-white flex-shrink-0 cursor-pointer [&>*]:cursor-pointer"
                                       onClick={() => handleDeleteClick(prestador.numero_prestador)}
                                     >
                                       <Trash2 className="h-3 w-3" />
@@ -1093,14 +1093,14 @@ const GuideControl: React.FC = () => {
                                       <Button 
                                         size="sm" 
                                         variant="default"
-                                        className="text-xs px-3 py-2 bg-green-600 hover:bg-green-700 text-white"
+                                        className="text-xs px-3 py-2 bg-green-700 text-white hover:bg-white hover:text-green-700 hover:border-green-700 border border-green-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer"
                                         onClick={() => handleDownloadGuia(prestador.numero_prestador, "Guia-autorizada")}
                                       >
                                         <Upload className="h-3 w-3 mr-1" />
                                         Baixar Autorizada
                                       </Button>
                                     ) : (
-                                      <>
+                                      <div className="relative group">
                                         <input
                                           type="file"
                                           accept=".pdf"
@@ -1114,13 +1114,12 @@ const GuideControl: React.FC = () => {
                                         />
                                         <Button 
                                           size="sm" 
-                                          variant="outline"
-                                          className="text-xs px-3 py-2 border-green-200 text-green-700 hover:bg-green-50 relative z-0"
+                                          className="text-xs px-3 py-2 bg-white text-green-700 border border-green-200 group-hover:bg-green-700 group-hover:text-white group-hover:border-green-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer relative z-0"
                                         >
                                           <Upload className="h-3 w-3 mr-1" />
                                           Guia Autorizada
                                         </Button>
-                                      </>
+                                      </div>
                                     )}
                                   </div>
 
@@ -1130,14 +1129,14 @@ const GuideControl: React.FC = () => {
                                       <Button 
                                         size="sm" 
                                         variant="default"
-                                        className="text-xs px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white"
+                                        className="text-xs px-3 py-2 bg-blue-700 text-white hover:bg-white hover:text-blue-700 hover:border-blue-700 border border-blue-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer"
                                         onClick={() => handleDownloadGuia(prestador.numero_prestador, "Guia-assinada")}
                                       >
                                         <Upload className="h-3 w-3 mr-1" />
                                         Baixar Assinada
                                       </Button>
                                     ) : (
-                                      <>
+                                      <div className="relative group">
                                         <input
                                           type="file"
                                           accept=".pdf"
@@ -1151,13 +1150,12 @@ const GuideControl: React.FC = () => {
                                         />
                                         <Button 
                                           size="sm" 
-                                          variant="outline"
-                                          className="text-xs px-3 py-2 border-blue-200 text-blue-700 hover:bg-blue-50 relative z-0"
+                                          className="text-xs px-3 py-2 bg-white text-blue-700 border border-blue-200 group-hover:bg-blue-700 group-hover:text-white group-hover:border-blue-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer relative z-0"
                                         >
                                           <Upload className="h-3 w-3 mr-1" />
                                           Assinada Paciente
                                         </Button>
-                                      </>
+                                      </div>
                                     )}
                                   </div>
 
@@ -1167,14 +1165,14 @@ const GuideControl: React.FC = () => {
                                       <Button 
                                         size="sm" 
                                         variant="default"
-                                        className="text-xs px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white"
+                                        className="text-xs px-3 py-2 bg-purple-700 text-white hover:bg-white hover:text-purple-700 hover:border-purple-700 border border-purple-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer"
                                         onClick={() => handleDownloadGuia(prestador.numero_prestador, "Guia-assinada-psicologo")}
                                       >
                                         <Upload className="h-3 w-3 mr-1" />
                                         Baixar Psicólogo
                                       </Button>
                                     ) : (
-                                      <>
+                                      <div className="relative group">
                                         <input
                                           type="file"
                                           accept=".pdf"
@@ -1188,13 +1186,12 @@ const GuideControl: React.FC = () => {
                                         />
                                         <Button 
                                           size="sm" 
-                                          variant="outline"
-                                          className="text-xs px-3 py-2 border-purple-200 text-purple-700 hover:bg-purple-50 relative z-0"
+                                          className="text-xs px-3 py-2 bg-white text-purple-700 border border-purple-200 group-hover:bg-purple-700 group-hover:text-white group-hover:border-purple-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer relative z-0"
                                         >
                                           <Upload className="h-3 w-3 mr-1" />
                                           Assinada Psicologo
                                         </Button>
-                                      </>
+                                      </div>
                                     )}
                                   </div>
 
@@ -1202,7 +1199,7 @@ const GuideControl: React.FC = () => {
                                   <Button 
                                     size="sm" 
                                     variant="default"
-                                    className="text-xs px-3 py-2 bg-green-600 hover:bg-green-700 text-white"
+                                    className="text-xs px-3 py-2 bg-green-700 text-white hover:bg-white hover:text-green-700 hover:border-green-700 border border-green-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-700 disabled:hover:text-white"
                                     onClick={() => handleFaturar(prestador.numero_prestador)}
                                     disabled={prestador.faturado === 1}
                                   >
@@ -1414,14 +1411,14 @@ const GuideControl: React.FC = () => {
               <Button
                 variant="outline"
                 onClick={handleCancelDelete}
-                className="px-4 py-2"
+                className="px-4 py-2 cursor-pointer [&>*]:cursor-pointer"
               >
                 Cancelar
               </Button>
               <Button
                 variant="destructive"
                 onClick={handleConfirmDelete}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700"
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 cursor-pointer [&>*]:cursor-pointer"
               >
                 Excluir
               </Button>
