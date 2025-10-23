@@ -108,7 +108,7 @@ const Index = () => {
   // Função para abrir modal de edição
   const handleEditAlert = (alert: AlertWebhookItem) => {
     setEditingAlert(alert);
-    setEditExibir(alert.exibir !== 0);
+    setEditExibir(alert.exibir === 1 || alert.exibir === "1");
     setEditMotivo(alert.motivo || "");
     setShowEditModal(true);
   };
@@ -275,6 +275,16 @@ const Index = () => {
                           <div className="space-y-1">
                             {alertItems
                               .filter((alert) => {
+                                // Se exibir = 1, sempre mostrar
+                                if (alert.exibir === 1 || alert.exibir === "1") {
+                                  return true;
+                                }
+                                
+                                // Se exibir = 0, não mostrar
+                                if (alert.exibir === 0 || alert.exibir === "0") {
+                                  return false;
+                                }
+                                
                                 // Filtrar pacientes que têm todas as datas e guias "ok"
                                 if (!alert.datas || !Array.isArray(alert.datas)) {
                                   return true; // Mostrar se não tem datas (erro)
@@ -298,7 +308,7 @@ const Index = () => {
                               })
                               .map((alert, index) => {
                               // Determinar se o alerta está ativo ou desabilitado
-                              const isActive = alert.exibir !== 0;
+                              const isActive = alert.exibir === 1 || alert.exibir === "1";
                               const alertColor = isActive ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200";
                               
                               return (
