@@ -106,6 +106,11 @@ const GuideControl: React.FC = () => {
   const [scrollPosition, setScrollPosition] = useState(0);
   const [filterType, setFilterType] = useState<'all' | 'no-guide' | 'no-appointment' | 'guias-nao-assinadas' | 'guias-assinadas'>('all');
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
+    // Inicializar com o mês atual no formato YYYY-MM
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
 
   // Função para salvar posição de scroll
   const saveScrollPosition = () => {
@@ -119,31 +124,19 @@ const GuideControl: React.FC = () => {
     }, 100);
   };
 
-  // Função para verificar se estamos na última semana do mês atual
-  const isLastWeekOfMonth = () => {
-    const today = new Date();
-    const lastDayOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0);
-    const daysUntilEndOfMonth = lastDayOfMonth.getDate() - today.getDate();
-    
-    // Consideramos "última semana" quando restam 7 dias ou menos para o fim do mês
-    return daysUntilEndOfMonth <= 7;
-  };
-
   // Função para determinar a cor da data baseada nas regras de negócio
   const getDateColor = (data: GuideData, patient: PatientData, fieldType: 'agendamentos' | 'guias' = 'agendamentos') => {
     const hasAgendamento = data.agendamento === "ok";
     const hasGuia = data.guia === "ok";
-    const hasPrestador = data.numero_prestador !== null;
+    const hasPrestador = data.numero_prestador !== null && data.numero_prestador !== "null";
     
     if (fieldType === 'agendamentos') {
       // Para o campo Agendamentos
       if (hasAgendamento) {
         return 'bg-green-100 text-green-800 border border-green-200'; // Verde para agendamentos confirmados
       } else {
-        // Mostrar cinza apenas se estivermos na última semana do mês
-        return isLastWeekOfMonth() 
-          ? 'bg-gray-100 text-gray-800 border border-gray-200' // Cinza para sugestões (última semana)
-          : null; // Não mostrar se não estivermos na última semana
+        // Mostrar em vermelho para indicar falta de agendamento
+        return 'bg-red-100 text-red-800 border border-red-200';
       }
     } else {
       // Para o campo Guias
@@ -152,14 +145,76 @@ const GuideControl: React.FC = () => {
       } else if (hasAgendamento && !hasPrestador) {
         return 'bg-red-100 text-red-800 border border-red-200'; // Vermelho para agendamentos sem guia
       } else if (!hasAgendamento && !hasPrestador) {
-        // Mostrar cinza apenas se estivermos na última semana do mês
-        return isLastWeekOfMonth() 
-          ? 'bg-gray-100 text-gray-800 border border-gray-200' // Cinza para sugestões (última semana)
-          : null; // Não mostrar se não estivermos na última semana
+        // Mostrar em vermelho para indicar falta de guia
+        return 'bg-red-100 text-red-800 border border-red-200';
       } else {
         return 'bg-gray-100 text-gray-800 border border-gray-200'; // Cinza para outros casos
       }
     }
+  };
+
+  // Função para converter data DD/MM/YYYY para formato Date
+  const parseDate = (dateStr: string): Date => {
+    const [day, month, year] = dateStr.split('/');
+    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+  };
+
+  // Função para verificar se uma data está no mês selecionado
+  const isDateInSelectedMonth = (dateStr: string): boolean => {
+    const date = parseDate(dateStr);
+    const [year, month] = selectedMonth.split('-');
+    return date.getFullYear() === parseInt(year) && date.getMonth() === parseInt(month) - 1;
+  };
+
+  // Função para filtrar prestadores com base no mês selecionado
+  const filterPrestadoresByMonth = (prestadoresData: PrestadorData[], patient: PatientData): PrestadorData[] => {
+    return prestadoresData.filter(prestador => {
+      // Verificar se alguma data do prestador está no mês selecionado
+      // IMPORTANTE: Só considera datas que têm o numero_prestador IGUAL ao prestador atual
+      const hasDataInSelectedMonth = patient.datas?.some(data => {
+        // Verifica se o numero_prestador da data corresponde ao prestador atual
+        const dataMatchesPrestador = data.numero_prestador === prestador.numero_prestador;
+        return dataMatchesPrestador && isDateInSelectedMonth(data.data);
+      });
+      
+      return hasDataInSelectedMonth;
+    });
+  };
+
+  // Função para filtrar datas que pertencem a um prestador específico
+  const filterDatasByPrestador = (prestadorNumero: number, datas: GuideData[]): GuideData[] => {
+    return datas.filter(data => {
+      // Se o numero_prestador da data for um número, compara diretamente
+      if (typeof data.numero_prestador === 'number') {
+        return data.numero_prestador === prestadorNumero;
+      }
+      // Se for null ou "null", não inclui essa data (ela não pertence a nenhum prestador específico)
+      return false;
+    });
+  };
+
+  // Função para obter todas as datas que devem ser exibidas para um prestador
+  // Inclui as datas do prestador + datas do mês selecionado que estão sem prestador (como sugestões)
+  const getAllDatasForPrestador = (prestadorNumero: number, datas: GuideData[]): GuideData[] => {
+    // Primeiro pega as datas que pertencem ao prestador
+    const prestadorDatas = filterDatasByPrestador(prestadorNumero, datas);
+    
+    // Depois pega as datas do mês selecionado que estão sem prestador (numero_prestador null ou "null")
+    const datasSemPrestadorNoMes = datas.filter(data => {
+      const isNullPrestador = data.numero_prestador === null || data.numero_prestador === "null";
+      const isInSelectedMonth = isDateInSelectedMonth(data.data);
+      return isNullPrestador && isInSelectedMonth;
+    });
+    
+    // Combina e remove duplicatas
+    const allDatas = [...prestadorDatas, ...datasSemPrestadorNoMes];
+    
+    // Remove duplicatas baseado na data
+    const uniqueDatas = allDatas.filter((data, index, self) => 
+      index === self.findIndex(d => d.data === data.data)
+    );
+    
+    return uniqueDatas;
   };
 
   // Funções para calcular estatísticas do dashboard
@@ -185,8 +240,11 @@ const GuideControl: React.FC = () => {
           const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
           hasGuide = prestadoresData.length > 0;
           
-          // Contar guias sem assinatura e assinadas pelo psicólogo
-          prestadoresData.forEach(prestador => {
+          // Filtrar prestadores pelo mês selecionado
+          const prestadoresDoMes = filterPrestadoresByMonth(prestadoresData, patient);
+          
+          // Contar guias sem assinatura e assinadas pelo psicólogo apenas do mês selecionado
+          prestadoresDoMes.forEach(prestador => {
             if (prestador.existe_guia_assinada_psicologo === 0) {
               totalGuiasSemAssinatura++; // Conta apenas as sem assinatura (=== 0)
             }
@@ -220,6 +278,18 @@ const GuideControl: React.FC = () => {
       totalGuiasSemAssinatura: totalGuiasSemAssinatura,
       totalGuiasAssinadasPsicologo: totalGuiasAssinadasPsicologo
     };
+  };
+
+  // Função auxiliar para verificar se o paciente tem prestadores com guia assinada no mês selecionado
+  const hasPrestadoresWithSignedGuideInMonth = (patient: PatientData): boolean => {
+    if (!patient.prestadores) return false;
+    try {
+      const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
+      const prestadoresNoMes = filterPrestadoresByMonth(prestadoresData, patient);
+      return prestadoresNoMes.some(prestador => prestador.existe_guia_assinada_psicologo === 1);
+    } catch (error) {
+      return false;
+    }
   };
 
   // Função para filtrar pacientes baseado no tipo selecionado
@@ -271,14 +341,8 @@ const GuideControl: React.FC = () => {
       }
 
       if (filterType === 'guias-assinadas') {
-        // Pacientes com guias assinadas pelo psicólogo (existe_guia_assinada_psicologo === 1)
-        if (!patient.prestadores) return false;
-        try {
-          const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
-          return prestadoresData.some(prestador => prestador.existe_guia_assinada_psicologo === 1);
-        } catch (error) {
-          return false;
-        }
+        // Pacientes com guias assinadas pelo psicólogo no mês selecionado
+        return hasPrestadoresWithSignedGuideInMonth(patient);
       }
 
       return true;
@@ -787,6 +851,35 @@ const GuideControl: React.FC = () => {
           </div>
         </div>
 
+        {/* Filtro por Mês */}
+        {!loading && !error && patientsData.length > 0 && (
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-gray-600" />
+                <span className="font-semibold text-gray-700">Filtrar por Mês:</span>
+              </div>
+              <Input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="w-48"
+              />
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const now = new Date();
+                  setSelectedMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+                }}
+                className="cursor-pointer [&>*]:cursor-pointer"
+              >
+                Mês Atual
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Dashboard de Estatísticas */}
         {!loading && !error && patientsData.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
@@ -1050,8 +1143,22 @@ const GuideControl: React.FC = () => {
                         </div>
                       ) : prestadoresData.length > 0 ? (
                         <div className="space-y-6">
-                          {prestadoresData.map((prestador, prestadorIdx) => (
-                            <div key={prestadorIdx} className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-5 border border-blue-200 shadow-sm hover:shadow-md transition-shadow">
+                          {filterPrestadoresByMonth(prestadoresData, patient)
+                            .filter(prestador => {
+                              // Se o filtro "guias-assinadas" estiver ativo, mostrar apenas prestadores com guia assinada pelo psicólogo
+                              if (filterType === 'guias-assinadas') {
+                                return prestador.existe_guia_assinada_psicologo === 1;
+                              }
+                              return true;
+                            })
+                            .map((prestador, prestadorIdx) => {
+                            const isReadyToInvoice = prestador.existe_guia_assinada_psicologo === 1 && prestador.faturado === 0;
+                            return (
+                            <div key={prestadorIdx} className={`rounded-xl p-5 border shadow-sm hover:shadow-md transition-shadow ${
+                              isReadyToInvoice 
+                                ? 'bg-gradient-to-r from-purple-50 to-violet-50 border-purple-300' 
+                                : 'bg-gradient-to-r from-blue-50 to-indigo-50 border-blue-200'
+                            }`}>
                               {/* Header do Prestador */}
                               <div className="mb-5">
                                 <div className="flex items-center gap-3">
@@ -1226,19 +1333,22 @@ const GuideControl: React.FC = () => {
                                             FATURADO
                                           </span>
                                         )}
+                                        {isReadyToInvoice && (
+                                          <span className="text-2xl font-bold text-purple-700 bg-purple-100 px-4 py-2 rounded-lg border border-purple-300">
+                                            PRONTO PARA FATURAR
+                                          </span>
+                                        )}
                                       </div>
                                       <div className="flex flex-wrap gap-2">
-                                        {patient.datas
-                                          .filter(data => data.numero_prestador === prestador.numero_prestador || data.numero_prestador === null)
+                                        {getAllDatasForPrestador(prestador.numero_prestador, patient.datas || [])
                                           .map((data, dataIdx) => {
                                             const colorClass = getDateColor(data, patient, 'agendamentos');
-                                            if (!colorClass) return null; // Não renderizar se não deve aparecer
                                             return (
                                               <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${colorClass}`}>
                                                 {data.data}
                                               </span>
                                             );
-                                          }).filter(Boolean)}
+                                          })}
                                       </div>
                                     </div>
 
@@ -1249,17 +1359,15 @@ const GuideControl: React.FC = () => {
                                         <span className="font-semibold text-gray-800">Guias:</span>
                                       </div>
                                       <div className="flex flex-wrap gap-2">
-                                        {patient.datas
-                                          .filter(data => data.numero_prestador === prestador.numero_prestador || data.numero_prestador === null)
+                                        {getAllDatasForPrestador(prestador.numero_prestador, patient.datas || [])
                                           .map((data, dataIdx) => {
                                             const colorClass = getDateColor(data, patient, 'guias');
-                                            if (!colorClass) return null; // Não renderizar se não deve aparecer
                                             return (
                                               <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${colorClass}`}>
                                                 {data.data}
                                               </span>
                                             );
-                                          }).filter(Boolean)}
+                                          })}
                                       </div>
                                     </div>
                                   </>
@@ -1294,7 +1402,8 @@ const GuideControl: React.FC = () => {
                                 </div>
                               )}
                             </div>
-                          ))}
+                          );
+                          })}
                         </div>
                       ) : patient.datas && patient.datas.length > 0 ? (
                         <div className="space-y-4">
@@ -1316,15 +1425,16 @@ const GuideControl: React.FC = () => {
                                 <span className="font-semibold text-gray-800">Agendamentos:</span>
                               </div>
                               <div className="flex flex-wrap gap-2">
-                                {patient.datas.map((data, dataIdx) => {
-                                  const colorClass = getDateColor(data, patient, 'agendamentos');
-                                  if (!colorClass) return null; // Não renderizar se não deve aparecer
-                                  return (
-                                    <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${colorClass}`}>
-                                      {data.data}
-                                    </span>
-                                  );
-                                }).filter(Boolean)}
+                                {patient.datas
+                                  .filter(data => isDateInSelectedMonth(data.data))
+                                  .map((data, dataIdx) => {
+                                    const colorClass = getDateColor(data, patient, 'agendamentos');
+                                    return (
+                                      <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${colorClass}`}>
+                                        {data.data}
+                                      </span>
+                                    );
+                                  })}
                               </div>
                             </div>
 
@@ -1335,15 +1445,16 @@ const GuideControl: React.FC = () => {
                                 <span className="font-semibold text-gray-800">Guias:</span>
                               </div>
                               <div className="flex flex-wrap gap-2">
-                                {patient.datas.map((data, dataIdx) => {
-                                  const colorClass = getDateColor(data, patient, 'guias');
-                                  if (!colorClass) return null; // Não renderizar se não deve aparecer
-                                  return (
-                                    <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${colorClass}`}>
-                                      {data.data}
-                                    </span>
-                                  );
-                                }).filter(Boolean)}
+                                {patient.datas
+                                  .filter(data => isDateInSelectedMonth(data.data))
+                                  .map((data, dataIdx) => {
+                                    const colorClass = getDateColor(data, patient, 'guias');
+                                    return (
+                                      <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${colorClass}`}>
+                                        {data.data}
+                                      </span>
+                                    );
+                                  })}
                               </div>
                             </div>
 

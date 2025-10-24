@@ -332,38 +332,74 @@ const Index = () => {
                                   {/* Datas e Status */}
                                   <div className="flex items-center gap-2 flex-1 min-w-0">
                                     <div className="flex flex-col gap-1">
-                                      {alert.datas && Array.isArray(alert.datas) ? alert.datas.map((dataItem, idx) => {
-                                        // Determinar cores para agendamento
-                                        const agendamentoColor = dataItem.agendamento === "ok" ? "bg-green-200 text-green-900" : 
-                                                               dataItem.agendamento === "warning" ? "bg-yellow-200 text-yellow-900" :
-                                                               dataItem.agendamento === "error" ? "bg-red-200 text-red-900" :
-                                                               "bg-blue-200 text-blue-900";
+                                      {alert.datas && Array.isArray(alert.datas) ? (() => {
+                                        // Calcular data limite: mês atual + 1 semana do mês seguinte
+                                        const hoje = new Date();
+                                        const mesAtual = hoje.getMonth();
+                                        const anoAtual = hoje.getFullYear();
                                         
-                                        // Determinar cores para guia
-                                        const guiaColor = dataItem.guia === "ok" ? "bg-green-200 text-green-900" : 
-                                                         dataItem.guia === "falta" ? "bg-red-200 text-red-900" :
-                                                         "bg-blue-200 text-blue-900";
+                                        // Primeiro dia do mês atual
+                                        const primeiroDiaMesAtual = new Date(anoAtual, mesAtual, 1);
                                         
-                                        return (
-                                          <div key={idx} className="flex items-center gap-2">
-                                            <span className="text-xs font-medium text-gray-600 min-w-[80px]">
-                                              {dataItem.data}
+                                        // Primeiro dia do mês seguinte
+                                        const primeiroDiaMesSeguinte = new Date(anoAtual, mesAtual + 1, 1);
+                                        // 1 semana depois (7 dias)
+                                        const umaSemanaDepois = new Date(primeiroDiaMesSeguinte);
+                                        umaSemanaDepois.setDate(umaSemanaDepois.getDate() + 7);
+                                        
+                                        // Filtrar datas: a partir do mês atual ou até 1 semana do mes seguinte
+                                        const datasFiltradas = alert.datas.filter((dataItem) => {
+                                          const [day, month, year] = dataItem.data.split('/');
+                                          const dataObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                                          
+                                          // Incluir se for do mês atual ou depois, até 1 semana do mês seguinte
+                                          return dataObj >= primeiroDiaMesAtual && dataObj <= umaSemanaDepois;
+                                        });
+                                        
+                                        return datasFiltradas.map((dataItem, idx) => {
+                                          // Converter data para comparação
+                                          const [day, month, year] = dataItem.data.split('/');
+                                          const dataObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                                          const hojeCompare = new Date();
+                                          hojeCompare.setHours(0, 0, 0, 0);
+                                          dataObj.setHours(0, 0, 0, 0);
+                                          
+                                          // Verificar se é a data atual
+                                          const isHoje = dataObj.getTime() === hojeCompare.getTime();
+                                          
+                                          // Determinar cores para agendamento
+                                          const agendamentoColor = dataItem.agendamento === "ok" ? "bg-green-200 text-green-900" : 
+                                                                 dataItem.agendamento === "warning" ? "bg-yellow-200 text-yellow-900" :
+                                                                 dataItem.agendamento === "error" ? "bg-red-200 text-red-900" :
+                                                                 "bg-blue-200 text-blue-900";
+                                          
+                                          // Determinar cores para guia
+                                          const guiaColor = dataItem.guia === "ok" ? "bg-green-200 text-green-900" : 
+                                                           dataItem.guia === "falta" ? "bg-red-200 text-red-900" :
+                                                           "bg-blue-200 text-blue-900";
+                                          
+                                          return (
+                                            <div key={idx} className={`flex items-center gap-2 ${isHoje ? 'ring-2 ring-blue-500 ring-offset-1 rounded-md px-1' : ''}`}>
+                                              <span className={`text-xs font-medium min-w-[80px] ${isHoje ? 'font-bold text-blue-700' : 'text-gray-600'}`}>
+                                                {dataItem.data}
+                                                {isHoje && <span className="ml-1 text-blue-600">●</span>}
+                                              </span>
+                                              <div className="flex gap-1">
+                                                <span className={`px-2 py-1 rounded text-xs font-medium ${agendamentoColor}`}>
+                                                  📅 {dataItem.agendamento === "falta" ? "falta agendamento" : dataItem.agendamento}
                                                 </span>
-                                            <div className="flex gap-1">
-                                              <span className={`px-2 py-1 rounded text-xs font-medium ${agendamentoColor}`}>
-                                                📅 {dataItem.agendamento === "falta" ? "falta agendamento" : dataItem.agendamento}
-                                              </span>
-                                              <span className={`px-2 py-1 rounded text-xs font-medium ${guiaColor}`}>
-                                                📋 {dataItem.guia === "falta" ? "falta guia" : dataItem.guia}
-                                              </span>
+                                                <span className={`px-2 py-1 rounded text-xs font-medium ${guiaColor}`}>
+                                                  📋 {dataItem.guia === "falta" ? "falta guia" : dataItem.guia}
+                                                </span>
+                                              </div>
                                             </div>
-                                          </div>
-                                        );
-                                      }) : (
+                                          );
+                                        });
+                                      })() : (
                                         <span className="text-xs text-gray-500">Paciente sem agendamentos/guias</span>
                                       )}
-                              </div>
-                                            </div>
+                                    </div>
+                                  </div>
                                             
                                             {/* Botão Editar */}
                                   <div className="flex items-center gap-2 w-20">
