@@ -37,6 +37,8 @@ interface Appointment {
   price?: number;
   // Campo da guia
   guia?: string | null;
+  // Campo do plano
+  insurance_type?: string;
 }
 
 interface WorkingHour {
@@ -1332,21 +1334,46 @@ const AppointmentCalendar = () => {
           statusUpdate = 'confirmed';
       }
 
-      const webhookUrl = `https://webhook.essenciasaudeintegrada.com.br/webhook/appoiments?id=${appointmentId}&action=${webhookAction}`;
+      // Buscar os dados completos do agendamento
+      const appointment = appointments.find(apt => apt.id === appointmentId);
+      if (!appointment) {
+        throw new Error('Agendamento não encontrado');
+      }
+
+      // Buscar dados do paciente
+      const patient = patients.find(p => p.id === appointment.patient_id);
+      const patientName = patient ? (patient.nome || patient.name || 'Paciente não encontrado') : 'Paciente não encontrado';
+
+      // Buscar dados do psicólogo
+      const psychologist = users.find(u => u.id === appointment.psychologist_id);
+      const psychologistName = psychologist ? (psychologist.nome || psychologist.name || 'Psicólogo não encontrado') : 'Psicólogo não encontrado';
+      const psychologistPhone = (psychologist as any)?.phone || (psychologist as any)?.telefone || 'Não informado';
+
+      // Preparar o body da requisição
+      const requestBody = {
+        id: appointmentId,
+        action: webhookAction,
+        patient_name: patientName,
+        psychologist_name: psychologistName,
+        psychologist_phone: psychologistPhone,
+        date: appointment.date || appointment.appointment_date || appointment.scheduled_date || '',
+        start_time: appointment.start_time || appointment.startTime || appointment.time || '',
+        end_time: appointment.end_time || appointment.endTime || ''
+      };
+
+      const webhookUrl = 'https://webhook.essenciasaudeintegrada.com.br/webhook/appoiments';
 
       const response = await fetch(webhookUrl, {
-        method: 'GET',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-        }
+        },
+        body: JSON.stringify(requestBody)
       });
 
       if (!response.ok) {
         throw new Error(`Erro na API: ${response.status} ${response.statusText}`);
       }
-
-      // Atualizar os dados locais após sucesso
-      await refetch();
 
       // Atualizar os dados locais após sucesso
       await refetch();
@@ -1375,7 +1402,7 @@ const AppointmentCalendar = () => {
     } catch (error) {
       throw error; // Re-throw para o componente filho tratar
     }
-  }, [refetch, selectedDateDetails]);
+  }, [refetch, selectedDateDetails, appointments, patients, users]);
 
   const handleAttendanceCompleted = useCallback((appointment: Appointment) => {
     // Abrir modal de observações
