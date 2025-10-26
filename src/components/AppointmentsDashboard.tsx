@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/components/ui/hover-card";
 import { Calendar, Clock, Users, CheckCircle, AlertCircle } from "lucide-react";
-import { format } from "date-fns";
+import { format, addDays, isSaturday } from "date-fns";
 
 interface DashboardAppointment {
   id: number;
@@ -44,9 +44,31 @@ const AppointmentsDashboard = () => {
   };
 
   const getTomorrowDate = (): string => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    return format(tomorrow, 'yyyy-MM-dd');
+    const today = new Date();
+    
+    // Se for sábado, pular domingo e ir para segunda-feira
+    if (isSaturday(today)) {
+      const monday = addDays(today, 2);
+      return format(monday, 'yyyy-MM-dd');
+    } else {
+      // Para outros dias, apenas adicionar 1 dia
+      const tomorrow = addDays(today, 1);
+      return format(tomorrow, 'yyyy-MM-dd');
+    }
+  };
+
+  const getTomorrowLabel = (): string => {
+    const today = new Date();
+    
+    // Se for sábado, mostrar "Segunda-feira"
+    if (isSaturday(today)) {
+      const monday = addDays(today, 2);
+      return format(monday, 'dd/MM/yyyy');
+    } else {
+      // Para outros dias, mostrar "Amanhã"
+      const tomorrow = addDays(today, 1);
+      return format(tomorrow, 'dd/MM/yyyy');
+    }
   };
 
   const fetchDashboardData = async () => {
@@ -270,7 +292,7 @@ const AppointmentsDashboard = () => {
         <CardHeader className="pb-3">
           <CardTitle className="flex items-center gap-2 text-lg">
             <Calendar className="h-5 w-5 text-purple-600" />
-            Amanhã - {format(new Date(Date.now() + 24 * 60 * 60 * 1000), 'dd/MM/yyyy')}
+            {isSaturday(new Date()) ? 'Segunda-feira' : 'Amanhã'} - {getTomorrowLabel()}
             <Badge variant="outline" className="ml-auto">
               {dashboardData.tomorrow.total} total
             </Badge>

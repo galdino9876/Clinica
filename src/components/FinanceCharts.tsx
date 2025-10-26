@@ -521,7 +521,14 @@ const FinanceCharts = () => {
       }
 
       if (response.ok) {
+        // Limpar estados
         setSelectedAppointments([]);
+        setSelectedPaymentPsychologist("");
+        setShowPaymentAppointments(false);
+        setPatientSearchTerm("");
+        setPaymentDateRange(undefined);
+        
+        // Recarregar lotes de pagamento
         await loadPaymentBatches();
         
         toast({
@@ -2066,16 +2073,14 @@ const FinanceCharts = () => {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-gray-500">
-                  Minha Comissão
+                  Minha Comissão -6% (Imposto)
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-blue-600">
-                  R$ {psychologistCommissionCompleted.toFixed(2)}
+                  R$ {(psychologistCommissionCompleted * 0.94).toFixed(2)}
                 </div>
-                <p className="text-xs text-gray-500">
-                  Baseado nos percentuais individuais
-                </p>
+                
               </CardContent>
             </Card>
           )}
