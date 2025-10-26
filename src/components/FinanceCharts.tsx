@@ -35,7 +35,7 @@ import { PaymentBatch, PaymentItem } from "@/types/payment";
 import { Appointment } from "@/types/appointment";
 import { DateRange } from "react-day-picker";
 
-import { Download, Edit, Save, Loader, DollarSign, CheckSquare, XSquare, Eye, AlertTriangle, Search, CalendarRange, Users, Calendar as CalendarIcon, TrendingUp, Trash2, Check } from "lucide-react";
+import { Download, Edit, Save, Loader, DollarSign, CheckSquare, XSquare, Eye, AlertTriangle, Search, CalendarRange, Users, Calendar as CalendarIcon, TrendingUp, Trash2, Check, Upload } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
@@ -112,6 +112,11 @@ const FinanceCharts = () => {
   const [selectedLotDetails, setSelectedLotDetails] = useState<any | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<any | null>(null);
   const [showApproveConfirm, setShowApproveConfirm] = useState<any | null>(null);
+  const [pixKey, setPixKey] = useState<string>("");
+  const [showUploadModal, setShowUploadModal] = useState<any | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [isDownloadingComprovante, setIsDownloadingComprovante] = useState<boolean>(false);
 
   const isAdmin = user?.role === "admin";
   const isReceptionist = user?.role === "receptionist";
@@ -274,6 +279,8 @@ const FinanceCharts = () => {
           psychologist_id: lot.psychologist_id, // Adicionar psychologist_id
           payment_created_at: lot.created_at, // Usar created_at da API
           status: lot.control, // Usar control como status
+          pix: lot.pix, // Campo PIX da API
+          comprovante: lot.comprovante, // Campo comprovante da API
           appointments: [],
           total_value: 0
         };
@@ -1038,27 +1045,170 @@ const FinanceCharts = () => {
     }
   };
 
+  const uploadComprovante = async () => {
+    if (!selectedFile || !showUploadModal) {
+      toast({
+        title: "Arquivo não selecionado",
+        description: "Por favor, selecione um arquivo para upload.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validar tipo de arquivo
+    const validTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'application/pdf'];
+    if (!validTypes.includes(selectedFile.type)) {
+      toast({
+        title: "Formato inválido",
+        description: "Por favor, selecione um arquivo JPG, PNG ou PDF.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+      formData.append('payment_id', showUploadModal.payment_id);
+      formData.append('lot_id', showUploadModal.id || showUploadModal.payment_id); // ID do lote de pagamento
+      formData.append('psychologist_name', showUploadModal.psychologist_name);
+      formData.append('psychologist_id', showUploadModal.psychologist_id);
+
+      console.log('Enviando comprovante com dados:', {
+        payment_id: showUploadModal.payment_id,
+        lot_id: showUploadModal.id,
+        psychologist_id: showUploadModal.psychologist_id
+      });
+
+      const response = await fetch('https://n8n.essenciasaudeintegrada.com.br/webhook/comprovante', {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        toast({
+          title: "Comprovante anexado",
+          description: "Comprovante de pagamento anexado com sucesso!",
+        });
+        // Recarregar lotes
+        loadPaymentBatches();
+        // Fechar modal
+        setShowUploadModal(null);
+        setSelectedFile(null);
+      } else {
+        toast({
+          title: "Erro ao anexar",
+          description: "Não foi possível anexar o comprovante. Tente novamente.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao enviar comprovante:', error);
+      toast({
+        title: "Erro ao anexar",
+        description: "Ocorreu um erro ao processar o comprovante.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const downloadComprovante = async (lot: any) => {
+    if (!lot.comprovante) {
+      toast({
+        title: "Comprovante não disponível",
+        description: "Este lote não possui comprovante disponível.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsDownloadingComprovante(true);
+
+    // Mostrar alerta de início do download
+    toast({
+      title: "Iniciando download",
+      description: "Buscando comprovante...",
+    });
+
+    try {
+      // Fazer POST para a API com o valor do comprovante
+      const response = await fetch('https://n8n.essenciasaudeintegrada.com.br/webhook/get_comprovante', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          comprovante: lot.comprovante
+        }),
+      });
+
+      if (response.ok) {
+        // Tentar baixar o arquivo
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `comprovante_${lot.payment_id}_${lot.psychologist_name}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+
+        toast({
+          title: "Download concluído",
+          description: "Comprovante baixado com sucesso!",
+        });
+      } else {
+        toast({
+          title: "Erro ao baixar",
+          description: "Não foi possível baixar o comprovante. Tente novamente.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error('Erro ao baixar comprovante:', error);
+      toast({
+        title: "Erro ao baixar",
+        description: "Ocorreu um erro ao processar o download.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDownloadingComprovante(false);
+    }
+  };
+
   const approvePaymentLot = async (lot: any) => {
     try {
-      // console.log('=== APROVANDO LOTE DE PAGAMENTO ===');
-      // console.log('Lot completo:', lot);
-      // console.log('Lot.payment_id:', lot.payment_id);
-      // console.log('Lot.id:', lot.id);
-      // console.log('Tipo do payment_id:', typeof lot.payment_id);
-      // console.log('URL da API:', 'https://webhook.essenciasaudeintegrada.com.br/webhook/payments_aprove');
+      // Validar se a chave PIX foi informada
+      if (!pixKey || pixKey.trim() === "") {
+        toast({
+          title: "Chave PIX obrigatória",
+          description: "Por favor, informe a chave PIX para receber o pagamento.",
+          variant: "destructive",
+        });
+        return;
+      }
 
       // Verificar se payment_id existe e não é undefined/null
       if (!lot.payment_id) {
         console.error('ERRO: payment_id não encontrado no objeto lot');
         console.error('Objeto lot recebido:', JSON.stringify(lot, null, 2));
+        toast({
+          title: "Erro ao aprovar",
+          description: "Não foi possível encontrar o ID do pagamento.",
+          variant: "destructive",
+        });
         return;
       }
 
       const requestBody = {
-        payment_id: lot.payment_id
+        payment_id: lot.payment_id,
+        pix_key: pixKey.trim()
       };
-
-      // console.log('Body da requisição:', JSON.stringify(requestBody));
 
       const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/payments_aprove', {
         method: 'POST',
@@ -1068,22 +1218,33 @@ const FinanceCharts = () => {
         },
         body: JSON.stringify(requestBody),
       });
-
-      // console.log('Resposta da API:', response.status);
-      // console.log('Resposta completa:', await response.text());
       
       if (response.ok) {
-        // console.log('Lote de pagamento aprovado com sucesso');
+        toast({
+          title: "Lote aprovado",
+          description: "Pagamento aprovado com sucesso!",
+        });
         // Recarregar a lista de lotes
         loadPaymentBatches();
-        // Fechar modais
+        // Fechar modais e limpar PIX
         setSelectedLotDetails(null);
         setShowApproveConfirm(null);
+        setPixKey("");
       } else {
         console.error('Erro ao aprovar lote de pagamento:', response.status);
+        toast({
+          title: "Erro ao aprovar",
+          description: "Não foi possível aprovar o lote. Tente novamente.",
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error('Erro ao aprovar lote de pagamento:', error);
+      toast({
+        title: "Erro ao aprovar",
+        description: "Ocorreu um erro ao processar a aprovação.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -1405,6 +1566,35 @@ const FinanceCharts = () => {
                                   >
                                     <Eye className="h-4 w-4" />
                                   </Button>
+                                  {/* Botão Importar Comprovante - apenas para admin/recepcionista quando pix E comprovante são null */}
+                                  {canManageFinance && !lot.pix && !lot.comprovante && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => setShowUploadModal(lot)}
+                                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                      title="Importar comprovante"
+                                    >
+                                      <Upload className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  {/* Botão Baixar Comprovante - para todos quando há comprovante */}
+                                  {lot.comprovante && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => downloadComprovante(lot)}
+                                      disabled={isDownloadingComprovante}
+                                      className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      title="Baixar comprovante"
+                                    >
+                                      {isDownloadingComprovante ? (
+                                        <Loader className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Download className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  )}
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -1541,6 +1731,7 @@ const FinanceCharts = () => {
                                   >
                                     <Eye className="h-4 w-4" />
                                   </Button>
+                                  {/* Botão Aprovar - apenas quando status é payments_created */}
                                   {lot.status === 'payments_created' && (
                                     <Button
                                       variant="outline"
@@ -1550,6 +1741,23 @@ const FinanceCharts = () => {
                                       title="Aprovar lote de pagamento"
                                     >
                                       <Check className="h-4 w-4" />
+                                    </Button>
+                                  )}
+                                  {/* Botão Baixar Comprovante - quando há comprovante */}
+                                  {lot.comprovante && (
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() => downloadComprovante(lot)}
+                                      disabled={isDownloadingComprovante}
+                                      className="text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      title="Baixar comprovante"
+                                    >
+                                      {isDownloadingComprovante ? (
+                                        <Loader className="h-4 w-4 animate-spin" />
+                                      ) : (
+                                        <Download className="h-4 w-4" />
+                                      )}
                                     </Button>
                                   )}
                                 </div>
@@ -2353,7 +2561,10 @@ const FinanceCharts = () => {
       </Dialog>
 
       {/* Approve Confirmation Dialog */}
-      <Dialog open={!!showApproveConfirm} onOpenChange={() => setShowApproveConfirm(null)}>
+      <Dialog open={!!showApproveConfirm} onOpenChange={() => {
+        setShowApproveConfirm(null);
+        setPixKey(""); // Limpar chave PIX ao fechar o modal
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Confirmar Aprovação</DialogTitle>
@@ -2367,19 +2578,35 @@ const FinanceCharts = () => {
               </div>
               <div>
                 <p className="text-sm text-gray-600">
-                  Tem certeza que deseja aprovar o lote de pagamento do psicólogo <strong>{showApproveConfirm?.psychologist_name}</strong>?
+                  <strong>Tem certeza que deseja aprovar o lote de pagamento?</strong>
                 </p>
-                <p className="text-xs text-gray-500 mt-1">
-                  Valor total: <strong>R$ {showApproveConfirm?.total_value?.toFixed(2)}</strong>
-                </p>
-                <p className="text-xs text-gray-500">
-                  Comissão (50%): <strong>R$ {(showApproveConfirm?.total_value * 0.5)?.toFixed(2)}</strong>
-                </p>
+                
+                
               </div>
+            </div>
+
+            {/* Campo de Chave PIX */}
+            <div className="space-y-2 pt-2 border-t">
+              <label htmlFor="pixKey" className="text-sm font-medium text-gray-700">
+                Chave PIX para Recebimento <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="pixKey"
+                placeholder="Digite sua chave PIX (CPF, telefone, e-mail ou chave aleatória)"
+                value={pixKey}
+                onChange={(e) => setPixKey(e.target.value)}
+                className="w-full"
+              />
+              <p className="text-xs text-gray-500">
+                A chave PIX será utilizada para o processamento do pagamento.
+              </p>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowApproveConfirm(null)}>
+            <Button variant="outline" onClick={() => {
+              setShowApproveConfirm(null);
+              setPixKey("");
+            }}>
               Cancelar
             </Button>
             <Button 
@@ -2391,6 +2618,78 @@ const FinanceCharts = () => {
               }}
             >
               Aprovar Lote
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Upload Comprovante Dialog */}
+      <Dialog open={!!showUploadModal} onOpenChange={() => {
+        setShowUploadModal(null);
+        setSelectedFile(null);
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Importar Comprovante de Pagamento</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <p className="text-sm text-gray-600">
+                Selecione o arquivo do comprovante de pagamento para o lote de <strong>{showUploadModal?.psychologist_name}</strong>
+              </p>
+              <p className="text-xs text-gray-500">
+                Formatos aceitos: JPG, PNG ou PDF
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="fileInput" className="text-sm font-medium text-gray-700">
+                Arquivo do Comprovante <span className="text-red-500">*</span>
+              </label>
+              <Input
+                id="fileInput"
+                type="file"
+                accept=".jpg,.jpeg,.png,.pdf"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    setSelectedFile(file);
+                  }
+                }}
+              />
+              {selectedFile && (
+                <p className="text-xs text-green-600">
+                  Arquivo selecionado: {selectedFile.name}
+                </p>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setShowUploadModal(null);
+                setSelectedFile(null);
+              }}
+            >
+              Cancelar
+            </Button>
+            <Button 
+              className="bg-blue-600 hover:bg-blue-700 text-white" 
+              onClick={uploadComprovante}
+              disabled={!selectedFile || isUploading}
+            >
+              {isUploading ? (
+                <>
+                  <Loader className="mr-2 h-4 w-4 animate-spin" />
+                  Enviando...
+                </>
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Importar Comprovante
+                </>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
