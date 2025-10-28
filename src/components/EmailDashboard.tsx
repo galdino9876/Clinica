@@ -2,6 +2,8 @@ import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { Loader2, Mail, Send, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
@@ -13,21 +15,34 @@ interface EmailData {
   id_patient: number;
   patient_name: string;
   email_patient: string;
+  appointment_type?: "online" | "presencial";
 }
 
 const EmailDashboard = () => {
-  const [pendingEmails, setPendingEmails] = useState<EmailData[]>([]);
-  const [sentEmails, setSentEmails] = useState<EmailData[]>([]);
+  const [allPendingEmails, setAllPendingEmails] = useState<EmailData[]>([]);
+  const [allSentEmails, setAllSentEmails] = useState<EmailData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedEmails, setSelectedEmails] = useState<Set<number>>(new Set());
   const [sendingEmails, setSendingEmails] = useState(false);
+  const [showPresential, setShowPresential] = useState(false);
   const [progressAlert, setProgressAlert] = useState({
     isVisible: false,
     total: 0,
     sent: 0,
     failed: 0,
     current: 0
+  });
+
+  // Filtrar emails baseado no tipo de atendimento
+  const pendingEmails = allPendingEmails.filter(email => {
+    if (showPresential) return true; // Mostrar todos
+    return email.appointment_type === "online";
+  });
+
+  const sentEmails = allSentEmails.filter(email => {
+    if (showPresential) return true; // Mostrar todos
+    return email.appointment_type === "online";
   });
 
   useEffect(() => {
@@ -65,8 +80,8 @@ const EmailDashboard = () => {
         (email) => email.email_controle === 1
       );
       
-      setPendingEmails(pending);
-      setSentEmails(sent);
+      setAllPendingEmails(pending);
+      setAllSentEmails(sent);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro desconhecido');
       console.error('Erro ao buscar emails:', err);
@@ -201,9 +216,18 @@ const EmailDashboard = () => {
     <div className="space-y-4 max-w-full">
       <div className="flex justify-between items-center">
         <div>
-          <p className="text-sm text-gray-600">
-            Emails pendentes para envio: {pendingEmails.length} | Emails já enviados: {sentEmails.length}
-          </p>
+          
+          <div className="flex items-center gap-3 mt-2">
+            <Switch
+              id="show-presential"
+              checked={showPresential}
+              onCheckedChange={setShowPresential}
+            />
+            <Label htmlFor="show-presential" className="text-xs text-gray-600 cursor-pointer">
+              Mostrar também atendimentos presenciais
+            </Label>
+          </div>
+          
         </div>
         <div className="flex gap-2">
           <Button onClick={fetchEmailData} variant="outline">
@@ -264,6 +288,9 @@ const EmailDashboard = () => {
               <div className="flex-1">
                 <span>Email</span>
               </div>
+              <div className="w-32">
+                <span>Tipo</span>
+              </div>
               <div className="w-24">
                 <span>ID</span>
               </div>
@@ -288,6 +315,13 @@ const EmailDashboard = () => {
                   </div>
                   <div className="flex-1 text-gray-600 truncate">
                     {email.email_patient}
+                  </div>
+                  <div className="w-32">
+                    <Badge variant={email.appointment_type === "online" ? "default" : "secondary"} className={
+                      email.appointment_type === "online" ? "bg-blue-100 text-blue-800" : "bg-orange-100 text-orange-800"
+                    }>
+                      {email.appointment_type === "online" ? "Online" : "Presencial"}
+                    </Badge>
                   </div>
                   <div className="w-24 text-gray-500">
                     {email.id_patient}
@@ -318,6 +352,9 @@ const EmailDashboard = () => {
               <div className="flex-1">
                 <span>Email</span>
               </div>
+              <div className="w-32">
+                <span>Tipo</span>
+              </div>
               <div className="w-24">
                 <span>Status</span>
               </div>
@@ -335,6 +372,13 @@ const EmailDashboard = () => {
                   </div>
                   <div className="flex-1 text-gray-600 truncate">
                     {email.email_patient}
+                  </div>
+                  <div className="w-32">
+                    <Badge variant={email.appointment_type === "online" ? "default" : "secondary"} className={
+                      email.appointment_type === "online" ? "bg-blue-100 text-blue-800" : "bg-orange-100 text-orange-800"
+                    }>
+                      {email.appointment_type === "online" ? "Online" : "Presencial"}
+                    </Badge>
                   </div>
                   <div className="w-24">
                     <Badge variant="secondary" className="bg-green-100 text-green-800">

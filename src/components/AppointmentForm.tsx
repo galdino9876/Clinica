@@ -86,6 +86,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
   const appointmentType = watch("appointmentType");
   const selectedPsychologistId = watch("psychologistId");
   const paymentMethod = watch("paymentMethod");
+  const startTime = watch("startTime");
 
   // Limpar consultório quando mudar para online
   useEffect(() => {
@@ -101,6 +102,33 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
       setValue("quantidadeAutorizada", 1);
     }
   }, [paymentMethod, setValue]);
+
+  // Atualizar automaticamente o horário de término quando o horário de início mudar
+  useEffect(() => {
+    if (startTime) {
+      try {
+        // Parsear o horário de início
+        const [hours, minutes] = startTime.split(':').map(Number);
+        
+        // Adicionar 1 hora
+        let endHours = hours + 1;
+        const endMinutes = minutes;
+        
+        // Garantir que as horas não ultrapassem 23
+        if (endHours > 23) {
+          endHours = 23;
+        }
+        
+        // Criar o novo horário de término
+        const newEndTime = `${endHours.toString().padStart(2, '0')}:${endMinutes.toString().padStart(2, '0')}`;
+        
+        // Atualizar o horário de término
+        setValue("endTime", newEndTime);
+      } catch (error) {
+        console.error('Erro ao calcular horário de término:', error);
+      }
+    }
+  }, [startTime, setValue]);
 
   // Função para buscar horários de trabalho do psicólogo
   const fetchPsychologistWorkingHours = async (psychologistId: string) => {

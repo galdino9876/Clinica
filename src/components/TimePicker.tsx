@@ -22,37 +22,13 @@ const TimePicker: React.FC<TimePickerProps> = ({
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const handleContainerClick = () => {
-    if (!disabled && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.click(); // Simular clique no input para abrir o picker
-      // Tentar abrir o picker nativo do navegador (método moderno)
-      if ('showPicker' in inputRef.current) {
-        try {
-          (inputRef.current as any).showPicker();
-        } catch (error) {
-          // Fallback: apenas focar no input
-          console.log('showPicker não suportado neste navegador');
-        }
-      }
+  const handleInputFocus = (e: React.FocusEvent<HTMLInputElement>) => {
+    // Permitir que o usuário clique e edite diretamente
+    if (!disabled) {
+      e.target.select();
     }
   };
 
-  const handleInputClick = (e: React.MouseEvent<HTMLInputElement>) => {
-    // Prevenir que o clique no input feche o seletor
-    e.stopPropagation();
-    if (!disabled) {
-      // Tentar abrir o picker diretamente
-      if ('showPicker' in e.target) {
-        try {
-          (e.target as any).showPicker();
-        } catch (error) {
-          // Fallback: apenas focar no input
-          console.log('showPicker não suportado neste navegador');
-        }
-      }
-    }
-  };
   return (
     <div className="space-y-1">
       {label && (
@@ -64,10 +40,9 @@ const TimePicker: React.FC<TimePickerProps> = ({
       
       <div className="relative">
         <div 
-          className={`flex items-center gap-2 w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 cursor-pointer ${
+          className={`flex items-center gap-2 w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 ${
             disabled ? 'bg-gray-50 cursor-not-allowed opacity-50' : 'hover:border-gray-400'
           }`}
-          onClick={handleContainerClick}
         >
           <Clock className="h-4 w-4 text-gray-400" />
           <input
@@ -75,11 +50,12 @@ const TimePicker: React.FC<TimePickerProps> = ({
             type="time"
             value={value || ''}
             onChange={(e) => onChange(e.target.value)}
+            onFocus={handleInputFocus}
             placeholder={placeholder}
             disabled={disabled}
-            className="flex-1 bg-transparent border-none outline-none text-sm cursor-pointer"
-            title="Selecione o horário"
-            onClick={handleInputClick}
+            step="300"
+            className="flex-1 bg-transparent border-none outline-none text-sm cursor-text"
+            title="Digite o horário diretamente (formato: HH:MM)"
           />
         </div>
       </div>
