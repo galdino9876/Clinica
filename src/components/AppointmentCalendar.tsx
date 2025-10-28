@@ -1349,6 +1349,9 @@ const AppointmentCalendar = () => {
       const psychologistName = psychologist ? (psychologist.nome || psychologist.name || 'Psicólogo não encontrado') : 'Psicólogo não encontrado';
       const psychologistPhone = (psychologist as any)?.phone || (psychologist as any)?.telefone || 'Não informado';
 
+      // Determinar o tipo de atendimento (online ou presencial)
+      const appointmentType = appointment.room_id ? 'presencial' : 'online';
+
       // Preparar o body da requisição
       const requestBody = {
         id: appointmentId,
@@ -1358,7 +1361,8 @@ const AppointmentCalendar = () => {
         psychologist_phone: psychologistPhone,
         date: appointment.date || appointment.appointment_date || appointment.scheduled_date || '',
         start_time: appointment.start_time || appointment.startTime || appointment.time || '',
-        end_time: appointment.end_time || appointment.endTime || ''
+        end_time: appointment.end_time || appointment.endTime || '',
+        appointment_type: appointmentType
       };
 
       const webhookUrl = 'https://webhook.essenciasaudeintegrada.com.br/webhook/appoiments';
