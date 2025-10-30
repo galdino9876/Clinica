@@ -8,6 +8,7 @@ import ReferralDialog from "./patient/ReferralDialog";
 import AttendanceDialog from "./patient/AttendanceDialog";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 
 // Utilitário: retorna 'Criança' (<12) ou 'Adulto' (>=12) com base na data de nascimento
 const getCategoriaEtaria = (birthdate?: string): string => {
@@ -611,13 +612,16 @@ const PatientsTable = () => {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 CID
               </label>
-              <input
-                type="text"
-                value={continuityCid}
-                onChange={(e) => setContinuityCid(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="F-41"
-              />
+              <Select value={continuityCid} onValueChange={(v) => setContinuityCid(v)}>
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Selecione o CID" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="F-41">F-41</SelectItem>
+                  <SelectItem value="F-38">F-38</SelectItem>
+                  <SelectItem value="F-22">F-22</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div>
