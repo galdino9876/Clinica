@@ -9,6 +9,19 @@ import AttendanceDialog from "./patient/AttendanceDialog";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
+// Utilitário: retorna 'Criança' (<12) ou 'Adulto' (>=12) com base na data de nascimento
+const getCategoriaEtaria = (birthdate?: string): string => {
+  if (!birthdate) return "-";
+  const d = new Date(birthdate);
+  if (isNaN(d.getTime())) return "-";
+  const today = new Date();
+  let age = today.getFullYear() - d.getFullYear();
+  const monthDiff = today.getMonth() - d.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < d.getDate())) age--;
+  if (age < 0) return "-";
+  return age < 12 ? "Criança" : "Adulto";
+};
+
 const PatientsTable = () => {
   const { user } = useAuth(); // Adicionado para obter o usuário autenticado
   const [patients, setPatients] = useState([]);
@@ -373,13 +386,14 @@ const PatientsTable = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Responsável</th>
                 )}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Criança/Adulto</th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredPatients.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 5 : 4} className="px-6 py-4 text-center text-gray-500">Nenhum paciente encontrado</td>
+                  <td colSpan={isAdmin ? 6 : 5} className="px-6 py-4 text-center text-gray-500">Nenhum paciente encontrado</td>
                 </tr>
               ) : (
                 sortedFilteredPatients.map((patient, index) => (
@@ -388,10 +402,25 @@ const PatientsTable = () => {
                     {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.cpf || "N/A"}</td> */}
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.phone || patient.telefone || "N/A"}</td>
                     {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.email || "N/A"}</td> */}
-                                         {isAdmin && (
-                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.psychologist_name || "N/A"}</td>
-                     )}
+                    {isAdmin && (
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.psychologist_name || patient.nome_responsavel || "N/A"}</td>
+                    )}
                     <td className="px-6 py-4 whitespace-nowrap">{renderStatus(patient.status || "Ativo")}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                      {(() => {
+                        const categoria = getCategoriaEtaria(patient.birthdate || patient.data_nascimento);
+                        const classes = categoria === 'Adulto'
+                          ? 'bg-blue-100 text-blue-800'
+                          : categoria === 'Criança'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-gray-100 text-gray-800';
+                        return (
+                          <span className={`px-2 py-1 rounded-full text-xs font-medium ${classes}`}>
+                            {categoria}
+                          </span>
+                        );
+                      })()}
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex space-x-2">
                         {actions
