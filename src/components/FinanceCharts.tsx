@@ -1528,7 +1528,7 @@ const FinanceCharts = () => {
                           <TableHead>Data Criação</TableHead>
                           <TableHead>Valor Total Bruto</TableHead>
                           <TableHead>Status</TableHead>
-                          <TableHead>Ações</TableHead>
+                          <TableHead>Ações/Comprovante</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1573,8 +1573,7 @@ const FinanceCharts = () => {
                                   >
                                     <Eye className="h-4 w-4" />
                                   </Button>
-                                  {/* Botão Importar Comprovante - apenas para admin/recepcionista quando pix E comprovante são null */}
-                                  {canManageFinance && !lot.pix && !lot.comprovante && (
+                                  {canManageFinance && !lot.comprovante && (
                                     <Button
                                       variant="outline"
                                       size="sm"
@@ -1585,7 +1584,6 @@ const FinanceCharts = () => {
                                       <Upload className="h-4 w-4" />
                                     </Button>
                                   )}
-                                  {/* Botão Baixar Comprovante - para todos quando há comprovante */}
                                   {lot.comprovante && (
                                     <Button
                                       variant="outline"
@@ -1695,7 +1693,7 @@ const FinanceCharts = () => {
                             <TableHead>Comissão (50%)</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Atendimentos</TableHead>
-                            <TableHead>Ações</TableHead>
+                            <TableHead>Ações/Comprovante</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -2457,6 +2455,10 @@ const FinanceCharts = () => {
                 <div>
                   <p className="text-sm text-gray-500">Total de Consultas</p>
                   <p className="font-medium">{selectedLotDetails.appointments.length}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-gray-500">Chave PIX</p>
+                  <p className="font-medium break-all">{selectedLotDetails.pix || "—"}</p>
                 </div>
               </div>
               
