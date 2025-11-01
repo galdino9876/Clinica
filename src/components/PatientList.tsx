@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Edit, Trash2, Eye, Plus, FileText, Activity, Send, CircleArrowUp, MessageCircle, ClipboardList } from "lucide-react";
+import { Edit, Trash2, Eye, Plus, FileText, Activity, Send, CircleArrowUp, MessageCircle, ClipboardList, Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import PatientForm from "./PatientForm";
 import PatientAppointmentHistory from "./PatientAppointmentHistory";
@@ -60,6 +60,16 @@ const PatientsTable = () => {
   const [continuityCid, setContinuityCid] = useState("F-41");
   const [continuityPlan, setContinuityPlan] = useState("PMDF");
   const [continuityLoading, setContinuityLoading] = useState(false);
+
+  // Estados para o processamento em massa de pedidos de continuidade
+  const [isBulkContinuityOpen, setIsBulkContinuityOpen] = useState(false);
+  const [bulkContinuityLoading, setBulkContinuityLoading] = useState(false);
+  const [bulkContinuityProgress, setBulkContinuityProgress] = useState({
+    total: 0,
+    completed: 0,
+    current: null,
+    errors: []
+  });
 
   const fetchPatients = async () => {
     try {
@@ -336,6 +346,112 @@ const PatientsTable = () => {
     }
   };
 
+  // Função para processar pedidos de continuidade em massa
+  const handleBulkContinuityRequest = async () => {
+    const patientsToProcess = filteredPatients.filter(p => p.status !== "Inativo");
+    
+    if (patientsToProcess.length === 0) {
+      toast.error('Nenhum paciente ativo encontrado para processar.');
+      return;
+    }
+
+    setIsBulkContinuityOpen(true);
+    setBulkContinuityLoading(true);
+    const errors: Array<{ patient: string; error: string }> = [];
+    let completed = 0;
+
+    setBulkContinuityProgress({
+      total: patientsToProcess.length,
+      completed: 0,
+      current: null,
+      errors: []
+    });
+
+    const dateStr = new Date().toISOString().split('T')[0];
+
+    for (let i = 0; i < patientsToProcess.length; i++) {
+      const patient = patientsToProcess[i];
+      const patientName = patient.name || patient.nome;
+      
+      setBulkContinuityProgress({
+        total: patientsToProcess.length,
+        completed: completed,
+        current: patientName,
+        errors: errors
+      });
+
+      try {
+        const requestBody = {
+          cid: "F-41",
+          nome: patientName,
+          plano: "PMDF",
+          titulo: "RELATORIO PSICOLOGICO"
+        };
+
+        // Fazer fetch para a API
+        const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/relatorio', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody)
+        });
+
+        if (!response.ok) {
+          throw new Error(`Erro ao processar paciente: ${response.statusText}`);
+        }
+
+        // Verificar o tipo de conteúdo da resposta
+        const contentType = response.headers.get('content-type') || '';
+        
+        if (contentType.includes('application/json')) {
+          // Se for JSON, pode ser um erro ou resposta em JSON
+          const jsonData = await response.json();
+          console.log('Resposta JSON:', jsonData);
+          // Continuar mesmo se for JSON, pode ser uma resposta de sucesso
+        } else {
+          // Se for arquivo (PDF, imagem, etc.), fazer download
+          const arrayBuffer = await response.arrayBuffer();
+          const blob = new Blob([arrayBuffer], { type: contentType || 'application/pdf' });
+          const filename = `RELATORIO_${patientName.replace(/\s+/g, '_')}_${dateStr}`;
+          downloadFile(blob, filename, contentType || 'application/pdf');
+        }
+
+        completed++;
+        setBulkContinuityProgress({
+          total: patientsToProcess.length,
+          completed: completed,
+          current: null,
+          errors: errors
+        });
+
+        // Pequeno delay entre requisições para não sobrecarregar a API
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
+      } catch (error: any) {
+        console.error(`Erro ao processar paciente ${patientName}:`, error);
+        errors.push({ patient: patientName, error: error.message || 'Erro desconhecido' });
+        completed++;
+        setBulkContinuityProgress({
+          total: patientsToProcess.length,
+          completed: completed,
+          current: null,
+          errors: errors
+        });
+      }
+    }
+
+    setBulkContinuityLoading(false);
+    
+    // Mostrar mensagem final
+    const successCount = patientsToProcess.length - errors.length;
+    if (errors.length === 0) {
+      toast.success(`Todos os ${patientsToProcess.length} pedidos foram processados com sucesso!`);
+    } else {
+      toast.warning(`${successCount} de ${patientsToProcess.length} pedidos processados. ${errors.length} erro(s) encontrado(s).`);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -351,15 +467,27 @@ const PatientsTable = () => {
         <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-semibold text-gray-800">Pacientes ({filteredPatients.length})</h2>
-            {canManagePatients && (
-              <button
-                onClick={() => setIsFormOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center gap-2"
-              >
-                <Plus size={16} />
-                Novo Paciente
-              </button>
-            )}
+            <div className="flex gap-2">
+              {canManagePatients && (
+                <button
+                  onClick={() => setIsFormOpen(true)}
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center gap-2"
+                >
+                  <Plus size={16} />
+                  Novo Paciente
+                </button>
+              )}
+              {canViewRecords && (
+                <button
+                  onClick={handleBulkContinuityRequest}
+                  disabled={bulkContinuityLoading || filteredPatients.length === 0}
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md flex items-center gap-2"
+                >
+                  <Download size={16} />
+                  Baixar Pedidos Continuidade
+                </button>
+              )}
+            </div>
           </div>
           {error && <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">{error}</div>}
         </div>
@@ -656,6 +784,91 @@ const PatientsTable = () => {
                 {continuityLoading ? 'Gerando...' : 'Gerar Pedido'}
               </button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Progresso - Baixar Pedidos Continuidade em Massa */}
+      <Dialog open={isBulkContinuityOpen} onOpenChange={(open) => {
+        if (!bulkContinuityLoading) {
+          setIsBulkContinuityOpen(open);
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Baixando Pedidos de Continuidade</DialogTitle>
+            <DialogDescription>
+              Processando pedidos para todos os pacientes...
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">
+                  Progresso: {bulkContinuityProgress.completed} de {bulkContinuityProgress.total}
+                </span>
+                <span className="font-medium text-gray-800">
+                  {bulkContinuityProgress.total > 0 
+                    ? Math.round((bulkContinuityProgress.completed / bulkContinuityProgress.total) * 100)
+                    : 0}%
+                </span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-3">
+                <div
+                  className="bg-green-600 h-3 rounded-full transition-all duration-300"
+                  style={{
+                    width: `${bulkContinuityProgress.total > 0 
+                      ? (bulkContinuityProgress.completed / bulkContinuityProgress.total) * 100 
+                      : 0}%`
+                  }}
+                />
+              </div>
+            </div>
+
+            {bulkContinuityProgress.current && (
+              <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                <p className="text-sm text-blue-800">
+                  <strong>Processando:</strong> {bulkContinuityProgress.current}
+                </p>
+              </div>
+            )}
+
+            {bulkContinuityProgress.errors.length > 0 && (
+              <div className="bg-red-50 border border-red-200 rounded-md p-3 max-h-40 overflow-y-auto">
+                <p className="text-sm font-medium text-red-800 mb-2">
+                  Erros ({bulkContinuityProgress.errors.length}):
+                </p>
+                <ul className="text-xs text-red-700 space-y-1">
+                  {bulkContinuityProgress.errors.map((err, idx) => (
+                    <li key={idx}>
+                      <strong>{err.patient}:</strong> {err.error}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {!bulkContinuityLoading && bulkContinuityProgress.completed === bulkContinuityProgress.total && (
+              <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                <p className="text-sm text-green-800 font-medium">
+                  Processamento concluído!
+                </p>
+                <p className="text-xs text-green-700 mt-1">
+                  {bulkContinuityProgress.total - bulkContinuityProgress.errors.length} arquivo(s) baixado(s) com sucesso.
+                </p>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-4">
+            <button
+              onClick={() => setIsBulkContinuityOpen(false)}
+              disabled={bulkContinuityLoading}
+              className="px-4 py-2 bg-gray-600 hover:bg-gray-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white rounded-md transition-colors"
+            >
+              {bulkContinuityLoading ? 'Processando...' : 'Fechar'}
+            </button>
           </div>
         </DialogContent>
       </Dialog>

@@ -5,6 +5,7 @@ import { useForm, UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import PatientForm from "./PatientForm";
 import { useToast } from "@/hooks/use-toast";
@@ -57,6 +58,9 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
   // Estados para feedback visual do agendamento
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showProgressAlert, setShowProgressAlert] = useState(false);
+  
+  // Estado para notificar psicólogo
+  const [notificarPsicologo, setNotificarPsicologo] = useState(false);
 
   const formMethods: UseFormReturn<AppointmentFormData> = useForm<AppointmentFormData>({
     resolver: zodResolver(appointmentSchema),
@@ -530,6 +534,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
               payment_method: data.paymentMethod,
               insurance_type: data.insuranceType,
               is_recurring: false,
+              notificar: notificarPsicologo,
             }),
           });
 
@@ -1103,7 +1108,21 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
         </div>
       )}
 
-      <div className="flex justify-end gap-2">
+      <div className="flex justify-end items-center gap-2">
+        <div className="flex items-center gap-2">
+          <Label htmlFor="notificar-psicologo" className="text-sm font-medium text-gray-700">
+            Alertar psicólogo
+          </Label>
+          <Switch
+            id="notificar-psicologo"
+            checked={notificarPsicologo}
+            onCheckedChange={setNotificarPsicologo}
+            disabled={isLoading || isSubmitting}
+          />
+          <span className="text-sm text-gray-500">
+            {notificarPsicologo ? "ON" : "OFF"}
+          </span>
+        </div>
         <Button type="button" variant="outline" onClick={onClose} disabled={isLoading}>
           Cancelar
         </Button>
