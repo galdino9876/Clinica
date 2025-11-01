@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -349,18 +349,27 @@ const GuideControl: React.FC = () => {
     });
   };
 
+  // Ref para controlar se é o primeiro carregamento
+  const isInitialMount = useRef(true);
+
   // Função para buscar dados da API
   const fetchData = async () => {
     try {
       setLoading(true);
       setError(null);
       
+      // Extrair o mês do selectedMonth (formato YYYY-MM)
+      const [year, monthStr] = selectedMonth.split('-');
+      const month = parseInt(monthStr, 10); // Converte para número (1-12)
+      
       const response = await fetch(
         "https://webhook.essenciasaudeintegrada.com.br/webhook/return_date_guias",
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({}),
+          body: JSON.stringify({
+            mes: month
+          }),
         }
       );
       
@@ -371,8 +380,12 @@ const GuideControl: React.FC = () => {
       const data: PatientData[] = await response.json();
       setPatientsData(data);
       
-      // Restaurar posição de scroll após carregar dados
-      restoreScrollPosition();
+      // Restaurar posição de scroll após carregar dados (apenas após o primeiro carregamento)
+      if (!isInitialMount.current) {
+        restoreScrollPosition();
+      } else {
+        isInitialMount.current = false;
+      }
       
     } catch (e: any) {
       setError(e?.message || "Erro desconhecido");
@@ -381,9 +394,11 @@ const GuideControl: React.FC = () => {
     }
   };
 
+  // Carregar dados inicialmente e quando o mês selecionado mudar
   useEffect(() => {
     fetchData();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedMonth]);
 
   // Função para importar PDF de guia
   const handleImportGuia = async (
