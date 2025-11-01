@@ -32,24 +32,6 @@ export const appointmentSchema = z.object({
 }, {
   message: "O método de pagamento é obrigatório!",
   path: ["paymentMethod"]
-}).refine((data) => {
-  // Se o método de pagamento não for particular, os campos de guia são obrigatórios
-  if (data.paymentMethod && data.paymentMethod !== "private") {
-    return data.numeroPrestador && data.numeroPrestador.trim().length > 0;
-  }
-  return true;
-}, {
-  message: "O número do prestador é obrigatório para planos de saúde!",
-  path: ["numeroPrestador"]
-}).refine((data) => {
-  // Se o método de pagamento não for particular, a quantidade autorizada é obrigatória
-  if (data.paymentMethod && data.paymentMethod !== "private") {
-    return data.quantidadeAutorizada && data.quantidadeAutorizada >= 1 && data.quantidadeAutorizada <= 5;
-  }
-  return true;
-}, {
-  message: "A quantidade autorizada é obrigatória para planos de saúde (1-5)!",
-  path: ["quantidadeAutorizada"]
 });
 
 export type AppointmentFormData = z.infer<typeof appointmentSchema>;

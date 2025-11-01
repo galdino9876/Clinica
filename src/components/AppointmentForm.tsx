@@ -550,75 +550,84 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
         }
       }
 
-      // Enviar dados de guia para a API (apenas para planos de saúde)
+      // Enviar dados de guia para a API (apenas se os campos de guia estiverem preenchidos)
       if (successCount > 0 && data.paymentMethod && data.paymentMethod !== "private") {
-        try {
-          // Preparar dados da guia baseados na quantidade autorizada
-          const quantidadeAutorizada = data.quantidadeAutorizada;
-          const guiaData: any = {
-            numero_prestador: Number(data.numeroPrestador),
-            id_patient: Number(data.patientId),
-            date_1: "",
-            date_2: "",
-            date_3: "",
-            date_4: "",
-            date_5: ""
-          };
+        // Verificar se os campos obrigatórios da guia estão preenchidos
+        const hasNumeroPrestador = data.numeroPrestador && data.numeroPrestador.trim().length > 0;
+        const hasQuantidadeAutorizada = data.quantidadeAutorizada && data.quantidadeAutorizada >= 1 && data.quantidadeAutorizada <= 5;
+        
+        // Só enviar para a API se ambos os campos estiverem preenchidos
+        if (hasNumeroPrestador && hasQuantidadeAutorizada) {
+          try {
+            // Preparar dados da guia baseados na quantidade autorizada
+            const quantidadeAutorizada = data.quantidadeAutorizada;
+            const guiaData: any = {
+              numero_prestador: Number(data.numeroPrestador),
+              id_patient: Number(data.patientId),
+              date_1: "",
+              date_2: "",
+              date_3: "",
+              date_4: "",
+              date_5: ""
+            };
 
-          // Preencher as datas baseadas na quantidade autorizada e nas datas selecionadas
-          for (let i = 1; i <= quantidadeAutorizada && i <= selectedDates.length; i++) {
-            const dateKey = `date_${i}` as keyof typeof guiaData;
-            guiaData[dateKey] = format(selectedDates[i - 1], "yyyy-MM-dd");
-          }
-
-          // Enviar para a API de guias
-          const guiaResponse = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/insert_date_guias", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(guiaData),
-          });
-
-          if (guiaResponse.ok) {
-            console.log("Guia enviada com sucesso:", guiaData);
-          } else {
-            console.error("Erro ao enviar guia:", guiaResponse.status);
-          }
-
-          // Upload do PDF da guia autorizada (se houver arquivo selecionado)
-          if (pdfFile) {
-            try {
-              // Encontrar o nome do paciente selecionado
-              const selectedPatient = patients.find(patient => patient.id === data.patientId);
-              const patientName = selectedPatient ? selectedPatient.name : '';
-              
-              const formData = new FormData();
-              formData.append('file', pdfFile);
-              formData.append('numero_prestador', data.numeroPrestador);
-              formData.append('command', 'Guia-autorizada');
-              formData.append('nome_patient', patientName);
-
-              const pdfResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/insert_guia_completed', {
-                method: 'POST',
-                body: formData
-              });
-
-              if (pdfResponse.ok) {
-                console.log("PDF da guia autorizada enviado com sucesso");
-                // Limpar o arquivo após sucesso
-                setPdfFile(null);
-                const fileInput = document.getElementById('pdf-file-input') as HTMLInputElement;
-                if (fileInput) {
-                  fileInput.value = '';
-                }
-              } else {
-                console.error("Erro ao enviar PDF da guia:", pdfResponse.status);
-              }
-            } catch (error) {
-              console.error('Erro ao fazer upload do PDF:', error);
+            // Preencher as datas baseadas na quantidade autorizada e nas datas selecionadas
+            for (let i = 1; i <= quantidadeAutorizada && i <= selectedDates.length; i++) {
+              const dateKey = `date_${i}` as keyof typeof guiaData;
+              guiaData[dateKey] = format(selectedDates[i - 1], "yyyy-MM-dd");
             }
+
+            // Enviar para a API de guias
+            const guiaResponse = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/insert_date_guias", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(guiaData),
+            });
+
+            if (guiaResponse.ok) {
+              console.log("Guia enviada com sucesso:", guiaData);
+            } else {
+              console.error("Erro ao enviar guia:", guiaResponse.status);
+            }
+
+            // Upload do PDF da guia autorizada (se houver arquivo selecionado)
+            if (pdfFile) {
+              try {
+                // Encontrar o nome do paciente selecionado
+                const selectedPatient = patients.find(patient => patient.id === data.patientId);
+                const patientName = selectedPatient ? selectedPatient.name : '';
+                
+                const formData = new FormData();
+                formData.append('file', pdfFile);
+                formData.append('numero_prestador', data.numeroPrestador);
+                formData.append('command', 'Guia-autorizada');
+                formData.append('nome_patient', patientName);
+
+                const pdfResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/insert_guia_completed', {
+                  method: 'POST',
+                  body: formData
+                });
+
+                if (pdfResponse.ok) {
+                  console.log("PDF da guia autorizada enviado com sucesso");
+                  // Limpar o arquivo após sucesso
+                  setPdfFile(null);
+                  const fileInput = document.getElementById('pdf-file-input') as HTMLInputElement;
+                  if (fileInput) {
+                    fileInput.value = '';
+                  }
+                } else {
+                  console.error("Erro ao enviar PDF da guia:", pdfResponse.status);
+                }
+              } catch (error) {
+                console.error('Erro ao fazer upload do PDF:', error);
+              }
+            }
+          } catch (error) {
+            console.error("Erro ao enviar dados da guia:", error);
           }
-        } catch (error) {
-          console.error("Erro ao enviar dados da guia:", error);
+        } else {
+          console.log("Campos de guia não preenchidos. Pulando envio para API de guias.");
         }
       }
 
@@ -1044,11 +1053,10 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
             <div className="space-y-2">
               <InputDynamic
                 name="numeroPrestador"
-                label="Número do Prestador *"
+                label="Número do Prestador"
                 control={control}
                 type="text"
                 placeholder="Ex: 32113578"
-                required
                 disabled={isLoading}
                 errors={errors}
                 onClear={() => formMethods.setValue("numeroPrestador", "")}
@@ -1056,7 +1064,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium text-gray-700">
-                Quantidade Autorizada *
+                Quantidade Autorizada
               </label>
               <select
                 {...formMethods.register("quantidadeAutorizada")}
