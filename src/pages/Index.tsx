@@ -15,12 +15,30 @@ type AlertWebhookItem = {
   motivo: string | null;
   exibir: number | string;
   insurance_type?: string; // Tipo de plano/seguro
+  birthdate?: string; // Data de nascimento para calcular se é adulto ou criança
   datas: Array<{
     data: string; // Data no formato "DD/MM/YYYY"
     agendamento: string; // Status do agendamento ("ok", "warning", "error", etc.)
     guia: string; // Status da guia ("falta", "ok", etc.)
     numero_prestador: number | string | null;
   }>;
+};
+
+// Função para determinar se é adulto ou criança baseado na data de nascimento
+const getCategoriaEtaria = (birthdate?: string): string => {
+  if (!birthdate) return "";
+  try {
+    const d = new Date(birthdate);
+    if (isNaN(d.getTime())) return "";
+    const today = new Date();
+    let age = today.getFullYear() - d.getFullYear();
+    const monthDiff = today.getMonth() - d.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < d.getDate())) age--;
+    if (age < 0) return "";
+    return age < 12 ? "Criança" : "Adulto";
+  } catch (error) {
+    return "";
+  }
 };
 
 // Função para obter o dia da semana em português
@@ -151,6 +169,7 @@ const Index = () => {
   const [loadingAlerts, setLoadingAlerts] = useState(false);
   const [alertError, setAlertError] = useState<string | null>(null);
   const [alertItems, setAlertItems] = useState<AlertWebhookItem[]>([]);
+  const [patientsBirthdates, setPatientsBirthdates] = useState<Map<number, string>>(new Map());
   
   // Estados para o modal de edição
   const [showEditModal, setShowEditModal] = useState(false);
@@ -204,6 +223,15 @@ const Index = () => {
       }
       
       setAlertItems(alertItems);
+      
+      // Buscar datas de nascimento dos pacientes que têm patient_id
+      const patientIds = alertItems
+        .map(alert => alert.patient_id)
+        .filter((id): id is number => id !== undefined && id !== null);
+      
+      if (patientIds.length > 0) {
+        fetchPatientsBirthdates(patientIds);
+      }
       
     } catch (e: any) {
       setAlertError(e?.message || "Erro desconhecido");
@@ -260,6 +288,43 @@ const Index = () => {
     } catch (error) {
       console.error('Erro ao buscar patient_id:', error);
       return null;
+    }
+  };
+
+  // Função para buscar data de nascimento dos pacientes
+  const fetchPatientsBirthdates = async (patientIds: number[]) => {
+    try {
+      // Filtrar IDs que ainda não temos no cache
+      const uniqueIds = [...new Set(patientIds.filter(id => id))];
+      
+      if (uniqueIds.length === 0) return;
+
+      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/patients", {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+
+      if (!response.ok) {
+        console.error('Erro ao buscar pacientes:', response.status);
+        return;
+      }
+
+      const patients = await response.json();
+      
+      // Atualizar cache com callback para ter acesso ao estado atual
+      setPatientsBirthdates(prevMap => {
+        const newBirthdates = new Map(prevMap);
+        
+        patients.forEach((patient: any) => {
+          if (patient.id && patient.birthdate && uniqueIds.includes(patient.id)) {
+            newBirthdates.set(patient.id, patient.birthdate);
+          }
+        });
+        
+        return newBirthdates;
+      });
+    } catch (error) {
+      console.error('Erro ao buscar datas de nascimento:', error);
     }
   };
 
@@ -481,7 +546,24 @@ const Index = () => {
                                   <div className="flex items-center gap-3 flex-1 min-w-0">
                                     <User className="h-4 w-4 text-gray-500 flex-shrink-0" />
                                     <div className="flex flex-col">
+                                      <div className="flex items-center gap-2">
                                       <span className="font-medium truncate">{alert.paciente_nome}</span>
+                                        {(() => {
+                                          // Tentar usar birthdate do alert, ou buscar do cache se tiver patient_id
+                                          const birthdate = alert.birthdate || (alert.patient_id ? patientsBirthdates.get(alert.patient_id) : undefined);
+                                          const categoria = getCategoriaEtaria(birthdate);
+                                          
+                                          return categoria ? (
+                                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                              categoria === "Criança" 
+                                                ? "bg-orange-100 text-orange-700" 
+                                                : "bg-blue-100 text-blue-700"
+                                            }`}>
+                                              {categoria}
+                                            </span>
+                                          ) : null;
+                                        })()}
+                                      </div>
                                       {alert.insurance_type && (
                                         <span className="text-xs text-gray-500">Plano: {alert.insurance_type}</span>
                                       )}
@@ -567,9 +649,9 @@ const Index = () => {
                                                   📅 {dataItem.agendamento === "falta" ? "falta agendamento" : dataItem.agendamento}
                                                 </span>
                                                 {!isParticular && (
-                                                  <span className={`px-2 py-1 rounded text-xs font-medium ${guiaColor}`}>
-                                                    📋 {dataItem.guia === "falta" ? "falta guia" : dataItem.guia}
-                                                  </span>
+                                                <span className={`px-2 py-1 rounded text-xs font-medium ${guiaColor}`}>
+                                                  📋 {dataItem.guia === "falta" ? "falta guia" : dataItem.guia}
+                                                </span>
                                                 )}
                                               </div>
                                             </div>

@@ -49,6 +49,7 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
   const [isLoading, setIsLoading] = useState(false);
   const [showComplementaryData, setShowComplementaryData] = useState(false);
   const [identityPdfFile, setIdentityPdfFile] = useState<File | null>(null);
+  const [encaminhamentoPdfFile, setEncaminhamentoPdfFile] = useState<File | null>(null);
   const valueId = useId();
 
   const formMethods = useForm<PatientFormData>({
@@ -121,6 +122,35 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
       }
       
       setIdentityPdfFile(file);
+    }
+  };
+
+  // Função para lidar com a seleção do arquivo PDF de encaminhamento médico
+  const handleEncaminhamentoPdfSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      // Validar se é PDF
+      if (file.type !== 'application/pdf') {
+        toast({
+          title: "Erro",
+          description: "Por favor, selecione apenas arquivos PDF.",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Validar tamanho (10MB)
+      const maxSize = 10 * 1024 * 1024; // 10MB em bytes
+      if (file.size > maxSize) {
+        toast({
+          title: "Erro",
+          description: "Arquivo muito grande. Tamanho máximo: 10MB",
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      setEncaminhamentoPdfFile(file);
     }
   };
 
@@ -227,6 +257,53 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
             toast({
               title: "Aviso",
               description: "Paciente cadastrado, mas houve erro ao enviar documento de identidade.",
+              variant: "destructive"
+            });
+          }
+        }
+
+        // Terceiro submit: Enviar encaminhamento médico PDF (se fornecido)
+        if (encaminhamentoPdfFile) {
+          try {
+            console.log('Enviando PDF de encaminhamento médico para insert_encaminhamento_medico');
+            
+            const formData = new FormData();
+            formData.append('encaminhamento', encaminhamentoPdfFile);
+            formData.append('nome', data.name);
+
+            console.log('FormData preparado para encaminhamento:', {
+              encaminhamento: encaminhamentoPdfFile.name,
+              nome: data.name
+            });
+
+            const encaminhamentoResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/insert_encaminhamento_medico', {
+              method: 'POST',
+              body: formData
+            });
+
+            console.log('Resposta da API insert_encaminhamento_medico:', encaminhamentoResponse.status);
+
+            if (encaminhamentoResponse.ok) {
+              const encaminhamentoResult = await encaminhamentoResponse.json();
+              console.log('Resultado do envio do encaminhamento:', encaminhamentoResult);
+              toast({
+                title: "Sucesso",
+                description: "Encaminhamento médico enviado com sucesso.",
+              });
+            } else {
+              const errorText = await encaminhamentoResponse.text();
+              console.error('Erro ao enviar encaminhamento médico:', encaminhamentoResponse.status, errorText);
+              toast({
+                title: "Aviso",
+                description: "Paciente cadastrado, mas houve erro ao enviar encaminhamento médico.",
+                variant: "destructive"
+              });
+            }
+          } catch (encaminhamentoError) {
+            console.error('Erro ao enviar encaminhamento médico:', encaminhamentoError);
+            toast({
+              title: "Aviso",
+              description: "Paciente cadastrado, mas houve erro ao enviar encaminhamento médico.",
               variant: "destructive"
             });
           }
@@ -353,6 +430,28 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
           {identityPdfFile && (
             <p className="text-sm text-green-600 mt-1">
               ✓ Arquivo selecionado: {identityPdfFile.name}
+            </p>
+          )}
+        </div>
+
+        {/* Campo de upload de PDF de encaminhamento médico */}
+        <div className="md:col-span-2">
+          <label className="text-sm font-medium text-gray-700 mb-2 block">
+            Encaminhamento Médico (PDF)
+          </label>
+          <input
+            type="file"
+            accept=".pdf"
+            onChange={handleEncaminhamentoPdfSelect}
+            className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            disabled={isLoading}
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            Tamanho máximo: 10MB (Opcional)
+          </p>
+          {encaminhamentoPdfFile && (
+            <p className="text-sm text-green-600 mt-1">
+              ✓ Arquivo selecionado: {encaminhamentoPdfFile.name}
             </p>
           )}
         </div>
