@@ -6,6 +6,8 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Loader2, Mail, Send, CheckCircle2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 // Interface para os dados da API
 interface EmailData {
@@ -16,7 +18,88 @@ interface EmailData {
   patient_name: string;
   email_patient: string;
   appointment_type?: "online" | "presencial";
+  insurance_type?: string;
+  date?: string;
 }
+
+// Função para obter o dia da semana em português
+const getDayOfWeek = (dateString: string): string => {
+  try {
+    const date = parseISO(dateString);
+    return format(date, 'EEEE', { locale: ptBR });
+  } catch (error) {
+    console.error('Erro ao obter dia da semana:', error);
+    return '';
+  }
+};
+
+// Função para obter o número do dia da semana (0=domingo, 1=segunda, etc.)
+const getDayOfWeekNumber = (dateString: string): number => {
+  try {
+    const date = parseISO(dateString);
+    return date.getDay(); // 0=domingo, 1=segunda, ..., 6=sábado
+  } catch (error) {
+    console.error('Erro ao obter número do dia da semana:', error);
+    return 7; // Retorna 7 para emails sem data (vão para o final)
+  }
+};
+
+// Função para formatar insurance_type e dia da semana
+const formatInsuranceAndDay = (email: EmailData): string => {
+  if (!email.insurance_type || !email.date) {
+    return email.insurance_type || '';
+  }
+  const dayOfWeek = getDayOfWeek(email.date);
+  // Capitalizar primeira letra
+  const capitalizedDay = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
+  return `${email.insurance_type} - ${capitalizedDay}`;
+};
+
+// Função para agrupar e ordenar emails por dia da semana
+const groupEmailsByDay = (emails: EmailData[]): Array<{ day: string; dayNumber: number; emails: EmailData[] }> => {
+  // Separar emails com e sem data
+  const emailsWithDate = emails.filter(email => email.date);
+  const emailsWithoutDate = emails.filter(email => !email.date);
+  
+  // Agrupar por dia da semana
+  const grouped = emailsWithDate.reduce((acc, email) => {
+    if (!email.date) return acc;
+    
+    const dayOfWeek = getDayOfWeek(email.date);
+    const dayNumber = getDayOfWeekNumber(email.date);
+    const capitalizedDay = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
+    
+    // Ajustar para que segunda-feira seja o primeiro dia (getDay retorna 0 para domingo)
+    const adjustedDayNumber = dayNumber === 0 ? 7 : dayNumber; // Domingo vai para o final
+    
+    const existingGroup = acc.find(g => g.day === capitalizedDay);
+    if (existingGroup) {
+      existingGroup.emails.push(email);
+    } else {
+      acc.push({
+        day: capitalizedDay,
+        dayNumber: adjustedDayNumber,
+        emails: [email]
+      });
+    }
+    
+    return acc;
+  }, [] as Array<{ day: string; dayNumber: number; emails: EmailData[] }>);
+  
+  // Ordenar grupos por dia da semana (segunda=1, terça=2, ..., domingo=7)
+  grouped.sort((a, b) => a.dayNumber - b.dayNumber);
+  
+  // Adicionar emails sem data no final
+  if (emailsWithoutDate.length > 0) {
+    grouped.push({
+      day: 'Sem data',
+      dayNumber: 8,
+      emails: emailsWithoutDate
+    });
+  }
+  
+  return grouped;
+};
 
 const EmailDashboard = () => {
   const [allPendingEmails, setAllPendingEmails] = useState<EmailData[]>([]);
@@ -291,41 +374,59 @@ const EmailDashboard = () => {
               <div className="w-32">
                 <span>Tipo</span>
               </div>
+              <div className="flex-1">
+                <span>Plano / Dia</span>
+              </div>
               <div className="w-24">
                 <span>ID</span>
               </div>
             </div>
             
             <div className="space-y-1">
-              {pendingEmails.map((email) => (
-                <div 
-                  key={email.id} 
-                  className={`flex items-center px-4 py-2 rounded text-sm hover:bg-gray-100 transition-colors ${
-                    selectedEmails.has(email.id) ? 'bg-blue-50' : 'bg-gray-50'
-                  }`}
-                >
-                  <div className="w-12 flex items-center justify-center">
-                    <Checkbox
-                      checked={selectedEmails.has(email.id)}
-                      onCheckedChange={() => handleToggleSelect(email.id)}
-                    />
+              {groupEmailsByDay(pendingEmails).map((group) => (
+                <div key={group.day} className="space-y-1">
+                  {/* Cabeçalho do grupo */}
+                  <div className="px-4 py-2 bg-blue-100 border-l-4 border-blue-500">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-blue-800 text-sm">{group.day}</span>
+                      <span className="text-xs text-blue-600">({group.emails.length} {group.emails.length === 1 ? 'email' : 'emails'})</span>
+                    </div>
                   </div>
-                  <div className="flex-1 font-medium">
-                    {email.patient_name}
-                  </div>
-                  <div className="flex-1 text-gray-600 truncate">
-                    {email.email_patient}
-                  </div>
-                  <div className="w-32">
-                    <Badge variant={email.appointment_type === "online" ? "default" : "secondary"} className={
-                      email.appointment_type === "online" ? "bg-blue-100 text-blue-800" : "bg-orange-100 text-orange-800"
-                    }>
-                      {email.appointment_type === "online" ? "Online" : "Presencial"}
-                    </Badge>
-                  </div>
-                  <div className="w-24 text-gray-500">
-                    {email.id_patient}
-                  </div>
+                  {/* Emails do grupo */}
+                  {group.emails.map((email) => (
+                    <div 
+                      key={email.id} 
+                      className={`flex items-center px-4 py-2 rounded text-sm hover:bg-gray-100 transition-colors ${
+                        selectedEmails.has(email.id) ? 'bg-blue-50' : 'bg-gray-50'
+                      }`}
+                    >
+                      <div className="w-12 flex items-center justify-center">
+                        <Checkbox
+                          checked={selectedEmails.has(email.id)}
+                          onCheckedChange={() => handleToggleSelect(email.id)}
+                        />
+                      </div>
+                      <div className="flex-1 font-medium">
+                        {email.patient_name}
+                      </div>
+                      <div className="flex-1 text-gray-600 truncate">
+                        {email.email_patient}
+                      </div>
+                      <div className="w-32">
+                        <Badge variant={email.appointment_type === "online" ? "default" : "secondary"} className={
+                          email.appointment_type === "online" ? "bg-blue-100 text-blue-800" : "bg-orange-100 text-orange-800"
+                        }>
+                          {email.appointment_type === "online" ? "Online" : "Presencial"}
+                        </Badge>
+                      </div>
+                      <div className="flex-1 text-gray-600 font-medium">
+                        {formatInsuranceAndDay(email)}
+                      </div>
+                      <div className="w-24 text-gray-500">
+                        {email.id_patient}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>
@@ -355,36 +456,54 @@ const EmailDashboard = () => {
               <div className="w-32">
                 <span>Tipo</span>
               </div>
+              <div className="flex-1">
+                <span>Plano / Dia</span>
+              </div>
               <div className="w-24">
                 <span>Status</span>
               </div>
             </div>
             
             <div className="space-y-1">
-              {sentEmails.map((email) => (
-                <div 
-                  key={email.id} 
-                  className="flex items-center px-4 py-2 rounded text-sm bg-gray-50 opacity-75"
-                >
-                  <div className="w-12"></div>
-                  <div className="flex-1 font-medium">
-                    {email.patient_name}
+              {groupEmailsByDay(sentEmails).map((group) => (
+                <div key={group.day} className="space-y-1">
+                  {/* Cabeçalho do grupo */}
+                  <div className="px-4 py-2 bg-green-100 border-l-4 border-green-500">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-green-800 text-sm">{group.day}</span>
+                      <span className="text-xs text-green-600">({group.emails.length} {group.emails.length === 1 ? 'email' : 'emails'})</span>
+                    </div>
                   </div>
-                  <div className="flex-1 text-gray-600 truncate">
-                    {email.email_patient}
-                  </div>
-                  <div className="w-32">
-                    <Badge variant={email.appointment_type === "online" ? "default" : "secondary"} className={
-                      email.appointment_type === "online" ? "bg-blue-100 text-blue-800" : "bg-orange-100 text-orange-800"
-                    }>
-                      {email.appointment_type === "online" ? "Online" : "Presencial"}
-                    </Badge>
-                  </div>
-                  <div className="w-24">
-                    <Badge variant="secondary" className="bg-green-100 text-green-800">
-                      Email enviado
-                    </Badge>
-                  </div>
+                  {/* Emails do grupo */}
+                  {group.emails.map((email) => (
+                    <div 
+                      key={email.id} 
+                      className="flex items-center px-4 py-2 rounded text-sm bg-gray-50 opacity-75"
+                    >
+                      <div className="w-12"></div>
+                      <div className="flex-1 font-medium">
+                        {email.patient_name}
+                      </div>
+                      <div className="flex-1 text-gray-600 truncate">
+                        {email.email_patient}
+                      </div>
+                      <div className="w-32">
+                        <Badge variant={email.appointment_type === "online" ? "default" : "secondary"} className={
+                          email.appointment_type === "online" ? "bg-blue-100 text-blue-800" : "bg-orange-100 text-orange-800"
+                        }>
+                          {email.appointment_type === "online" ? "Online" : "Presencial"}
+                        </Badge>
+                      </div>
+                      <div className="flex-1 text-gray-600 font-medium">
+                        {formatInsuranceAndDay(email)}
+                      </div>
+                      <div className="w-24">
+                        <Badge variant="secondary" className="bg-green-100 text-green-800">
+                          Email enviado
+                        </Badge>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>

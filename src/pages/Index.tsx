@@ -273,40 +273,82 @@ const Index = () => {
                           </div>
 
                           <div className="space-y-1">
-                            {alertItems
-                              .filter((alert) => {
-                                // Se exibir = 1, sempre mostrar
-                                if (alert.exibir === 1 || alert.exibir === "1") {
-                                  return true;
-                                }
+                            {(() => {
+                              // Função auxiliar para obter a data mais próxima de um paciente (de hoje para frente)
+                              const getProximaData = (alert: AlertWebhookItem): number => {
+                                const hoje = new Date();
+                                hoje.setHours(0, 0, 0, 0);
+                                const mesAtual = hoje.getMonth();
+                                const anoAtual = hoje.getFullYear();
+                                const primeiroDiaMesSeguinte = new Date(anoAtual, mesAtual + 1, 1);
+                                const umaSemanaDepois = new Date(primeiroDiaMesSeguinte);
+                                umaSemanaDepois.setDate(umaSemanaDepois.getDate() + 7);
                                 
-                                // Se exibir = 0, não mostrar
-                                if (alert.exibir === 0 || alert.exibir === "0") {
-                                  return false;
-                                }
-                                
-                                // Filtrar pacientes que têm todas as datas e guias "ok"
                                 if (!alert.datas || !Array.isArray(alert.datas)) {
-                                  return true; // Mostrar se não tem datas (erro)
+                                  return Infinity; // Sem datas, vai para o final
                                 }
                                 
-                                // Verificar se todas as guias estão "ok"
-                                const todasGuiasOk = alert.datas && alert.datas.every(dataItem => dataItem.guia === "ok");
+                                const datasFiltradas = alert.datas
+                                  .map((dataItem) => {
+                                    const [day, month, year] = dataItem.data.split('/');
+                                    const dataObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                                    dataObj.setHours(0, 0, 0, 0);
+                                    return dataObj;
+                                  })
+                                  .filter((dataObj) => dataObj >= hoje && dataObj <= umaSemanaDepois);
                                 
-                                // Se todas as guias estão ok, não mostrar
-                                if (todasGuiasOk) {
-                                  return false;
+                                if (datasFiltradas.length === 0) {
+                                  return Infinity; // Sem datas futuras, vai para o final
                                 }
                                 
-                                return true; // Mostrar se tem pelo menos uma guia com problema
-                              })
-                              .sort((a, b) => {
-                                // Ordenar: exibir = 1 primeiro, exibir = 0 no final
-                                if (a.exibir === 1 && b.exibir !== 1) return -1;
-                                if (a.exibir !== 1 && b.exibir === 1) return 1;
-                                return 0;
-                              })
-                              .map((alert, index) => {
+                                // Retornar a data mais próxima (mais antiga)
+                                return Math.min(...datasFiltradas.map(d => d.getTime()));
+                              };
+                              
+                              return alertItems
+                                .filter((alert) => {
+                                  // Se exibir = 1, sempre mostrar
+                                  if (alert.exibir === 1 || alert.exibir === "1") {
+                                    return true;
+                                  }
+                                  
+                                  // Se exibir = 0, não mostrar
+                                  if (alert.exibir === 0 || alert.exibir === "0") {
+                                    return false;
+                                  }
+                                  
+                                  // Filtrar pacientes que têm todas as datas e guias "ok"
+                                  if (!alert.datas || !Array.isArray(alert.datas)) {
+                                    return true; // Mostrar se não tem datas (erro)
+                                  }
+                                  
+                                  // Verificar se todas as guias estão "ok"
+                                  const todasGuiasOk = alert.datas && alert.datas.every(dataItem => dataItem.guia === "ok");
+                                  
+                                  // Se todas as guias estão ok, não mostrar
+                                  if (todasGuiasOk) {
+                                    return false;
+                                  }
+                                  
+                                  return true; // Mostrar se tem pelo menos uma guia com problema
+                                })
+                                .sort((a, b) => {
+                                  // Primeiro: ordenar por exibir = 1 primeiro
+                                  if (a.exibir === 1 && b.exibir !== 1) return -1;
+                                  if (a.exibir !== 1 && b.exibir === 1) return 1;
+                                  
+                                  // Segundo: ordenar pela data mais próxima de hoje para frente
+                                  const dataA = getProximaData(a);
+                                  const dataB = getProximaData(b);
+                                  
+                                  if (dataA !== dataB) {
+                                    return dataA - dataB; // Ordem crescente (hoje primeiro)
+                                  }
+                                  
+                                  // Terceiro: se mesma data, ordenar por nome
+                                  return a.paciente_nome.localeCompare(b.paciente_nome);
+                                })
+                                .map((alert, index) => {
                               // Determinar se o alerta está ativo ou desabilitado
                               const isActive = alert.exibir === 1 || alert.exibir === "1";
                               const alertColor = isActive ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200";
@@ -335,11 +377,9 @@ const Index = () => {
                                       {alert.datas && Array.isArray(alert.datas) ? (() => {
                                         // Calcular data limite: mês atual + 1 semana do mês seguinte
                                         const hoje = new Date();
+                                        hoje.setHours(0, 0, 0, 0);
                                         const mesAtual = hoje.getMonth();
                                         const anoAtual = hoje.getFullYear();
-                                        
-                                        // Primeiro dia do mês atual
-                                        const primeiroDiaMesAtual = new Date(anoAtual, mesAtual, 1);
                                         
                                         // Primeiro dia do mês seguinte
                                         const primeiroDiaMesSeguinte = new Date(anoAtual, mesAtual + 1, 1);
@@ -347,16 +387,26 @@ const Index = () => {
                                         const umaSemanaDepois = new Date(primeiroDiaMesSeguinte);
                                         umaSemanaDepois.setDate(umaSemanaDepois.getDate() + 7);
                                         
-                                        // Filtrar datas: a partir do mês atual ou até 1 semana do mes seguinte
+                                        // Filtrar datas: a partir de hoje até 1 semana do mês seguinte
                                         const datasFiltradas = alert.datas.filter((dataItem) => {
                                           const [day, month, year] = dataItem.data.split('/');
                                           const dataObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+                                          dataObj.setHours(0, 0, 0, 0);
                                           
-                                          // Incluir se for do mês atual ou depois, até 1 semana do mês seguinte
-                                          return dataObj >= primeiroDiaMesAtual && dataObj <= umaSemanaDepois;
+                                          // Incluir apenas datas de hoje para frente, até 1 semana do mês seguinte
+                                          return dataObj >= hoje && dataObj <= umaSemanaDepois;
                                         });
                                         
-                                        return datasFiltradas.map((dataItem, idx) => {
+                                        // Ordenar datas de hoje para frente (ordem cronológica crescente)
+                                        const datasOrdenadas = datasFiltradas.sort((a, b) => {
+                                          const [dayA, monthA, yearA] = a.data.split('/');
+                                          const [dayB, monthB, yearB] = b.data.split('/');
+                                          const dataObjA = new Date(parseInt(yearA), parseInt(monthA) - 1, parseInt(dayA));
+                                          const dataObjB = new Date(parseInt(yearB), parseInt(monthB) - 1, parseInt(dayB));
+                                          return dataObjA.getTime() - dataObjB.getTime();
+                                        });
+                                        
+                                        return datasOrdenadas.map((dataItem, idx) => {
                                           // Converter data para comparação
                                           const [day, month, year] = dataItem.data.split('/');
                                           const dataObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
@@ -413,7 +463,8 @@ const Index = () => {
                                             </div>
                                           </div>
                                         );
-                                      })}
+                                      });
+                            })()}
                             </div>
                           </CardContent>
                         </Card>

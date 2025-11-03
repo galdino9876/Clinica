@@ -101,10 +101,14 @@ const GuideControl: React.FC = () => {
     failed: 0,
     message: ''
   });
+  const [uploadingDocument, setUploadingDocument] = useState<{
+    patientName: string;
+    documentType: string;
+  } | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingPrestador, setEditingPrestador] = useState<PrestadorData | null>(null);
   const [scrollPosition, setScrollPosition] = useState(0);
-  const [filterType, setFilterType] = useState<'all' | 'no-guide' | 'no-appointment' | 'guias-nao-assinadas' | 'guias-assinadas'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'no-guide' | 'no-appointment' | 'guias-nao-assinadas' | 'guias-assinadas' | 'faturado'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     // Inicializar com o mês atual no formato YYYY-MM
@@ -119,9 +123,16 @@ const GuideControl: React.FC = () => {
 
   // Função para restaurar posição de scroll
   const restoreScrollPosition = () => {
-    setTimeout(() => {
-      window.scrollTo(0, scrollPosition);
-    }, 100);
+    // Usar requestAnimationFrame para garantir que o DOM foi atualizado
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        window.scrollTo(0, scrollPosition);
+        // Tentar novamente após um pequeno delay caso a primeira tentativa não funcione
+        requestAnimationFrame(() => {
+          window.scrollTo(0, scrollPosition);
+        });
+      }, 50);
+    });
   };
 
   // Função para determinar a cor da data baseada nas regras de negócio
@@ -228,7 +239,8 @@ const GuideControl: React.FC = () => {
     let patientsWithoutGuide = 0;
     let patientsWithoutAppointment = 0;
     let totalGuiasSemAssinatura = 0;
-    let totalGuiasAssinadasPsicologo = 0;
+    let totalGuiasAssinadasPsicologo = 0; // Prontas para faturar (assinadas mas não faturadas)
+    let totalGuiasFaturadas = 0;
 
     patientsWithInsurance.forEach(patient => {
       let hasGuide = false;
@@ -243,13 +255,16 @@ const GuideControl: React.FC = () => {
           // Filtrar prestadores pelo mês selecionado
           const prestadoresDoMes = filterPrestadoresByMonth(prestadoresData, patient);
           
-          // Contar guias sem assinatura e assinadas pelo psicólogo apenas do mês selecionado
+          // Contar guias sem assinatura, prontas para faturar e faturadas apenas do mês selecionado
           prestadoresDoMes.forEach(prestador => {
             if (prestador.existe_guia_assinada_psicologo === 0) {
               totalGuiasSemAssinatura++; // Conta apenas as sem assinatura (=== 0)
             }
-            if (prestador.existe_guia_assinada_psicologo === 1) {
-              totalGuiasAssinadasPsicologo++; // Conta apenas as assinadas pelo psicólogo
+            if (prestador.existe_guia_assinada_psicologo === 1 && prestador.faturado === 0) {
+              totalGuiasAssinadasPsicologo++; // Conta apenas as assinadas pelo psicólogo e não faturadas (prontas para faturar)
+            }
+            if (prestador.faturado === 1) {
+              totalGuiasFaturadas++; // Conta as faturadas
             }
           });
         } catch (error) {
@@ -276,7 +291,8 @@ const GuideControl: React.FC = () => {
       withoutGuide: patientsWithoutGuide,
       withoutAppointment: patientsWithoutAppointment,
       totalGuiasSemAssinatura: totalGuiasSemAssinatura,
-      totalGuiasAssinadasPsicologo: totalGuiasAssinadasPsicologo
+      totalGuiasAssinadasPsicologo: totalGuiasAssinadasPsicologo, // Prontas para faturar
+      totalGuiasFaturadas: totalGuiasFaturadas
     };
   };
 
@@ -341,8 +357,27 @@ const GuideControl: React.FC = () => {
       }
 
       if (filterType === 'guias-assinadas') {
-        // Pacientes com guias assinadas pelo psicólogo no mês selecionado
-        return hasPrestadoresWithSignedGuideInMonth(patient);
+        // Pacientes com guias assinadas pelo psicólogo e prontas para faturar (não faturadas) no mês selecionado
+        if (!patient.prestadores) return false;
+        try {
+          const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
+          const prestadoresNoMes = filterPrestadoresByMonth(prestadoresData, patient);
+          return prestadoresNoMes.some(prestador => prestador.existe_guia_assinada_psicologo === 1 && prestador.faturado === 0);
+        } catch (error) {
+          return false;
+        }
+      }
+
+      if (filterType === 'faturado') {
+        // Pacientes com guias faturadas no mês selecionado
+        if (!patient.prestadores) return false;
+        try {
+          const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
+          const prestadoresNoMes = filterPrestadoresByMonth(prestadoresData, patient);
+          return prestadoresNoMes.some(prestador => prestador.faturado === 1);
+        } catch (error) {
+          return false;
+        }
       }
 
       return true;
@@ -382,7 +417,10 @@ const GuideControl: React.FC = () => {
       
       // Restaurar posição de scroll após carregar dados (apenas após o primeiro carregamento)
       if (!isInitialMount.current) {
-        restoreScrollPosition();
+        // Usar requestAnimationFrame para garantir que o DOM foi atualizado antes de restaurar scroll
+        requestAnimationFrame(() => {
+          restoreScrollPosition();
+        });
       } else {
         isInitialMount.current = false;
       }
@@ -407,6 +445,24 @@ const GuideControl: React.FC = () => {
     command: "Guia-autorizada" | "Guia-assinada" | "Guia-assinada-psicologo",
     file: File
   ) => {
+    // Salvar posição de scroll antes do upload
+    saveScrollPosition();
+    
+    // Mapear o comando para um nome amigável
+    const documentTypeMap: Record<string, string> = {
+      "Guia-autorizada": "Guia Autorizada",
+      "Guia-assinada": "Guia Assinada Paciente",
+      "Guia-assinada-psicologo": "Guia Assinada Psicólogo"
+    };
+    
+    const documentType = documentTypeMap[command] || command;
+    
+    // Mostrar alerta de carregamento
+    setUploadingDocument({
+      patientName: patientName,
+      documentType: documentType
+    });
+    
     try {
       const formData = new FormData();
       formData.append('command', command);
@@ -429,11 +485,23 @@ const GuideControl: React.FC = () => {
       const result = await response.json();
       console.log('Guia importada com sucesso:', result);
       
-      // Recarregar dados após importação
-      fetchData();
+      // Esconder alerta de carregamento
+      setUploadingDocument(null);
+      
+      // Garantir que não é o primeiro carregamento para restaurar scroll
+      if (isInitialMount.current) {
+        isInitialMount.current = false;
+      }
+      
+      // Recarregar dados após importação (vai restaurar scroll automaticamente)
+      await fetchData();
       
     } catch (error) {
       console.error('Erro ao importar guia:', error);
+      
+      // Esconder alerta de carregamento mesmo em caso de erro
+      setUploadingDocument(null);
+      
       alert('Erro ao importar guia. Tente novamente.');
     }
   };
@@ -897,7 +965,7 @@ const GuideControl: React.FC = () => {
 
         {/* Dashboard de Estatísticas */}
         {!loading && !error && patientsData.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+          <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
             {/* Card Total de Pacientes */}
             <Card 
               className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${
@@ -993,7 +1061,7 @@ const GuideControl: React.FC = () => {
               </CardContent>
             </Card>
 
-            {/* Card Guias Assinadas pelo Psicólogo */}
+            {/* Card Guias Assinadas pelo Psicólogo (Prontas para Faturar) */}
             <Card 
               className={`cursor-pointer transition-all duration-200 hover:shadow-lg hover:bg-gray-50 ${
                 filterType === 'guias-assinadas' 
@@ -1014,9 +1082,38 @@ const GuideControl: React.FC = () => {
                         ? 'bg-purple-200 ring-2 ring-purple-500' 
                         : 'bg-purple-100'
                     }`}
-                    title="Clique para filtrar guias assinadas"
+                    title="Clique para filtrar guias prontas para faturar"
                   >
                     <CheckCircle className="h-6 w-6 text-purple-600" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Card FATURADO */}
+            <Card 
+              className={`cursor-pointer transition-all duration-200 hover:shadow-lg hover:bg-gray-50 ${
+                filterType === 'faturado' 
+                  ? 'ring-2 ring-emerald-500 bg-emerald-50' 
+                  : 'hover:bg-gray-50'
+              }`}
+              onClick={() => setFilterType('faturado')}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm font-medium text-gray-600">FATURADO</p>
+                    <p className="text-3xl font-bold text-emerald-600">{getDashboardStats().totalGuiasFaturadas}</p>
+                  </div>
+                  <div 
+                    className={`p-3 rounded-full transition-all duration-200 ${
+                      filterType === 'faturado' 
+                        ? 'bg-emerald-200 ring-2 ring-emerald-500' 
+                        : 'bg-emerald-100'
+                    }`}
+                    title="Clique para filtrar guias faturadas"
+                  >
+                    <DollarSign className="h-6 w-6 text-emerald-600" />
                   </div>
                 </div>
               </CardContent>
@@ -1059,14 +1156,23 @@ const GuideControl: React.FC = () => {
                   <div className="p-3 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
                     {filterType === 'no-guide' && <AlertTriangle className="h-8 w-8 text-gray-400" />}
                     {filterType === 'no-appointment' && <Calendar className="h-8 w-8 text-gray-400" />}
+                    {filterType === 'guias-nao-assinadas' && <FileText className="h-8 w-8 text-gray-400" />}
+                    {filterType === 'guias-assinadas' && <CheckCircle className="h-8 w-8 text-gray-400" />}
+                    {filterType === 'faturado' && <DollarSign className="h-8 w-8 text-gray-400" />}
                   </div>
                   <h3 className="text-lg font-medium text-gray-700 mb-2">
                     {filterType === 'no-guide' && 'Nenhum paciente sem guia encontrado'}
                     {filterType === 'no-appointment' && 'Nenhum paciente sem agendamento encontrado'}
+                    {filterType === 'guias-nao-assinadas' && 'Nenhuma guia sem assinatura encontrada'}
+                    {filterType === 'guias-assinadas' && 'Nenhuma guia pronta para faturar encontrada'}
+                    {filterType === 'faturado' && 'Nenhuma guia faturada encontrada'}
                   </h3>
                   <p className="text-gray-500 mb-4">
                     {filterType === 'no-guide' && 'Todos os pacientes possuem número de guia.'}
                     {filterType === 'no-appointment' && 'Todos os pacientes possuem agendamentos.'}
+                    {filterType === 'guias-nao-assinadas' && 'Todas as guias foram assinadas pelo psicólogo.'}
+                    {filterType === 'guias-assinadas' && 'Não há guias prontas para faturar no momento.'}
+                    {filterType === 'faturado' && 'Não há guias faturadas no período selecionado.'}
                   </p>
                   <Button 
                     variant="outline" 
@@ -1156,13 +1262,29 @@ const GuideControl: React.FC = () => {
                             <span className="font-medium text-red-900">{patient.mensagem}</span>
                           </div>
                         </div>
-                      ) : prestadoresData.length > 0 ? (
-                        <div className="space-y-6">
-                          {filterPrestadoresByMonth(prestadoresData, patient)
-                            .filter(prestador => {
-                              // Se o filtro "guias-assinadas" estiver ativo, mostrar apenas prestadores com guia assinada pelo psicólogo
+                      ) : (() => {
+                        // Verificar se há prestadores no mês selecionado
+                        const prestadoresNoMes = filterPrestadoresByMonth(prestadoresData, patient);
+                        // Verificar se há datas sem prestador no mês selecionado
+                        const datasSemPrestadorNoMes = patient.datas?.filter(data => {
+                          const isNullPrestador = data.numero_prestador === null || data.numero_prestador === "null";
+                          return isNullPrestador && isDateInSelectedMonth(data.data);
+                        }) || [];
+                        
+                        // Se há prestadores no mês, mostrar eles (e também datas sem prestador se houver)
+                        if (prestadoresNoMes.length > 0) {
+                          return (
+                            <div className="space-y-6">
+                              {/* Prestadores do mês */}
+                              {prestadoresNoMes
+                                .filter(prestador => {
+                              // Se o filtro "guias-assinadas" estiver ativo, mostrar apenas prestadores prontos para faturar (assinados mas não faturados)
                               if (filterType === 'guias-assinadas') {
-                                return prestador.existe_guia_assinada_psicologo === 1;
+                                return prestador.existe_guia_assinada_psicologo === 1 && prestador.faturado === 0;
+                              }
+                              // Se o filtro "faturado" estiver ativo, mostrar apenas prestadores faturados
+                              if (filterType === 'faturado') {
+                                return prestador.faturado === 1;
                               }
                               return true;
                             })
@@ -1419,8 +1541,142 @@ const GuideControl: React.FC = () => {
                             </div>
                           );
                           })}
-                        </div>
-                      ) : patient.datas && patient.datas.length > 0 ? (
+                              
+                              {/* Se há datas sem prestador no mês, mostrar seção "Agendamentos sem GUIA" */}
+                              {datasSemPrestadorNoMes.length > 0 && (
+                                <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5 shadow-sm">
+                                  <div className="flex items-center gap-3 mb-5">
+                                    <div className="p-2 bg-amber-100 rounded-full">
+                                      <AlertTriangle className="h-5 w-5 text-amber-600" />
+                                    </div>
+                                    <span className="font-bold text-lg text-amber-800">
+                                      Agendamentos sem GUIA
+                                    </span>
+                                  </div>
+                                  
+                                  {/* Linha de Agendamentos */}
+                                  <div className="mb-4">
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <Calendar className="h-4 w-4 text-gray-600" />
+                                      <span className="font-semibold text-gray-800">Agendamentos:</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                      {datasSemPrestadorNoMes
+                                        .map((data, dataIdx) => {
+                                          const colorClass = getDateColor(data, patient, 'agendamentos');
+                                          return (
+                                            <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${colorClass}`}>
+                                              {data.data}
+                                            </span>
+                                          );
+                                        })}
+                                    </div>
+                                  </div>
+
+                                  {/* Linha de Guias */}
+                                  <div className="mb-4">
+                                    <div className="flex items-center gap-2 mb-3">
+                                      <FileText className="h-4 w-4 text-gray-600" />
+                                      <span className="font-semibold text-gray-800">Guias:</span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                      {datasSemPrestadorNoMes
+                                        .map((data, dataIdx) => {
+                                          const colorClass = getDateColor(data, patient, 'guias');
+                                          return (
+                                            <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${colorClass}`}>
+                                              {data.data}
+                                            </span>
+                                          );
+                                        })}
+                                    </div>
+                                  </div>
+
+                                  {/* Status do Prestador */}
+                                  <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                    <div className="flex items-center gap-2 text-yellow-800">
+                                      <AlertTriangle className="h-4 w-4" />
+                                      <span className="text-sm font-medium">
+                                        ⚠️ Sem número de GUIA
+                                      </span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+                        
+                        // Se há datas sem prestador no mês (mas não há prestadores no mês), mostrar seção "Agendamentos sem GUIA"
+                        if (datasSemPrestadorNoMes.length > 0) {
+                          return (
+                            <div className="space-y-4">
+                              {/* Seção para agendamentos sem GUIA */}
+                              <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5 shadow-sm">
+                                <div className="flex items-center gap-3 mb-5">
+                                  <div className="p-2 bg-amber-100 rounded-full">
+                                    <AlertTriangle className="h-5 w-5 text-amber-600" />
+                                  </div>
+                                  <span className="font-bold text-lg text-amber-800">
+                                    Agendamentos sem GUIA
+                                  </span>
+                                </div>
+                                
+                                {/* Linha de Agendamentos */}
+                                <div className="mb-4">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <Calendar className="h-4 w-4 text-gray-600" />
+                                    <span className="font-semibold text-gray-800">Agendamentos:</span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {datasSemPrestadorNoMes
+                                      .map((data, dataIdx) => {
+                                        const colorClass = getDateColor(data, patient, 'agendamentos');
+                                        return (
+                                          <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${colorClass}`}>
+                                            {data.data}
+                                          </span>
+                                        );
+                                      })}
+                                  </div>
+                                </div>
+
+                                {/* Linha de Guias */}
+                                <div className="mb-4">
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <FileText className="h-4 w-4 text-gray-600" />
+                                    <span className="font-semibold text-gray-800">Guias:</span>
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {datasSemPrestadorNoMes
+                                      .map((data, dataIdx) => {
+                                        const colorClass = getDateColor(data, patient, 'guias');
+                                        return (
+                                          <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${colorClass}`}>
+                                            {data.data}
+                                          </span>
+                                        );
+                                      })}
+                                  </div>
+                                </div>
+
+                                {/* Status do Prestador */}
+                                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                  <div className="flex items-center gap-2 text-yellow-800">
+                                    <AlertTriangle className="h-4 w-4" />
+                                    <span className="text-sm font-medium">
+                                      ⚠️ Sem número de GUIA
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        }
+                        
+                        // Caso padrão: mostrar seção original (quando não há prestadores)
+                        if (patient.datas && patient.datas.length > 0) {
+                          return (
                         <div className="space-y-4">
                           {/* Seção para agendamentos sem GUIA */}
                           <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5 shadow-sm">
@@ -1484,15 +1740,20 @@ const GuideControl: React.FC = () => {
                             </div>
                           </div>
                         </div>
-                      ) : (
-                        <div className="text-center py-12 bg-gray-50 border border-gray-200 rounded-lg">
-                          <div className="p-3 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
-                            <FileText className="h-8 w-8 text-gray-400" />
+                          );
+                        }
+                        
+                        // Caso sem dados
+                        return (
+                          <div className="text-center py-12 bg-gray-50 border border-gray-200 rounded-lg">
+                            <div className="p-3 bg-gray-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                              <FileText className="h-8 w-8 text-gray-400" />
+                            </div>
+                            <h3 className="text-lg font-medium text-gray-700 mb-2">Nenhum dado encontrado</h3>
+                            <p className="text-gray-500">Não há prestadores ou agendamentos para este paciente.</p>
                           </div>
-                          <h3 className="text-lg font-medium text-gray-700 mb-2">Nenhum dado encontrado</h3>
-                          <p className="text-gray-500">Não há prestadores ou agendamentos para este paciente.</p>
-                        </div>
-                      )}
+                        );
+                      })()}
                     </CardContent>
                   </Card>
                 );
@@ -1559,6 +1820,16 @@ const GuideControl: React.FC = () => {
           <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
           <span className="text-sm font-medium">
             Baixando {downloadingFile}...
+          </span>
+        </div>
+      )}
+
+      {/* Indicador de Upload/Carregamento de Documento */}
+      {uploadingDocument && (
+        <div className="fixed bottom-4 right-4 bg-purple-600 text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3 max-w-sm">
+          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent flex-shrink-0"></div>
+          <span className="text-sm font-medium">
+            Carregando documento {uploadingDocument.documentType} - {uploadingDocument.patientName}
           </span>
         </div>
       )}
