@@ -6,6 +6,8 @@ import React, { useEffect, useState } from "react";
 import { X, AlertTriangle, Calendar, ClipboardList, User, Edit, BarChart3 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import PsychologistAvailabilityDashboard from "@/components/PsychologistAvailabilityDashboard";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 type AlertWebhookItem = {
   paciente_nome: string;
@@ -18,6 +20,128 @@ type AlertWebhookItem = {
     guia: string; // Status da guia ("falta", "ok", etc.)
     numero_prestador: number | string | null;
   }>;
+};
+
+// Função para obter o dia da semana em português
+const getDayOfWeek = (dateString: string): string => {
+  try {
+    const [day, month, year] = dateString.split('/');
+    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    return format(date, 'EEEE', { locale: ptBR });
+  } catch (error) {
+    console.error('Erro ao obter dia da semana:', error);
+    return '';
+  }
+};
+
+// Função para obter o número do dia da semana (0=domingo, 1=segunda, etc.)
+const getDayOfWeekNumber = (dateString: string): number => {
+  try {
+    const [day, month, year] = dateString.split('/');
+    const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    const dayNumber = date.getDay(); // 0=domingo, 1=segunda, ..., 6=sábado
+    // Ajustar para que segunda-feira seja o primeiro dia
+    return dayNumber === 0 ? 7 : dayNumber; // Domingo vai para o final
+  } catch (error) {
+    console.error('Erro ao obter número do dia da semana:', error);
+    return 8; // Retorna 8 para datas inválidas (vão para o final)
+  }
+};
+
+// Função para agrupar alertas por dia da semana da data mais próxima
+const groupAlertsByDay = (alerts: AlertWebhookItem[]): Array<{ day: string; dayNumber: number; alerts: AlertWebhookItem[] }> => {
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const mesAtual = hoje.getMonth();
+  const anoAtual = hoje.getFullYear();
+  const primeiroDiaMesSeguinte = new Date(anoAtual, mesAtual + 1, 1);
+  const umaSemanaDepois = new Date(primeiroDiaMesSeguinte);
+  umaSemanaDepois.setDate(umaSemanaDepois.getDate() + 7);
+  
+  const grouped = alerts.reduce((acc, alert) => {
+    // Encontrar a data mais próxima do alerta
+    if (!alert.datas || !Array.isArray(alert.datas)) {
+      // Sem datas, adicionar ao grupo "Sem data"
+      const noDateGroup = acc.find(g => g.day === 'Sem data');
+      if (noDateGroup) {
+        noDateGroup.alerts.push(alert);
+      } else {
+        acc.push({
+          day: 'Sem data',
+          dayNumber: 8,
+          alerts: [alert]
+        });
+      }
+      return acc;
+    }
+    
+    // Filtrar datas futuras
+    const datasFiltradas = alert.datas
+      .map((dataItem) => {
+        const [day, month, year] = dataItem.data.split('/');
+        const dataObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+        dataObj.setHours(0, 0, 0, 0);
+        return { dataObj, dataItem };
+      })
+      .filter(({ dataObj }) => dataObj >= hoje && dataObj <= umaSemanaDepois);
+    
+    if (datasFiltradas.length === 0) {
+      // Sem datas futuras, adicionar ao grupo "Sem data"
+      const noDateGroup = acc.find(g => g.day === 'Sem data');
+      if (noDateGroup) {
+        noDateGroup.alerts.push(alert);
+      } else {
+        acc.push({
+          day: 'Sem data',
+          dayNumber: 8,
+          alerts: [alert]
+        });
+      }
+      return acc;
+    }
+    
+    // Pegar a data mais próxima
+    const dataMaisProxima = datasFiltradas.sort((a, b) => a.dataObj.getTime() - b.dataObj.getTime())[0];
+    const dataStr = dataMaisProxima.dataItem.data;
+    const dayOfWeek = getDayOfWeek(dataStr);
+    const dayNumber = getDayOfWeekNumber(dataStr);
+    const capitalizedDay = dayOfWeek.charAt(0).toUpperCase() + dayOfWeek.slice(1);
+    
+    const existingGroup = acc.find(g => g.day === capitalizedDay);
+    if (existingGroup) {
+      existingGroup.alerts.push(alert);
+    } else {
+      acc.push({
+        day: capitalizedDay,
+        dayNumber: dayNumber,
+        alerts: [alert]
+      });
+    }
+    
+    return acc;
+  }, [] as Array<{ day: string; dayNumber: number; alerts: AlertWebhookItem[] }>);
+  
+  // Ordenar grupos por dia da semana (segunda=1, terça=2, ..., domingo=7, sem data=8)
+  grouped.sort((a, b) => {
+    if (a.dayNumber !== b.dayNumber) {
+      return a.dayNumber - b.dayNumber;
+    }
+    // Se mesmo dia, ordenar por nome do paciente
+    return a.alerts[0].paciente_nome.localeCompare(b.alerts[0].paciente_nome);
+  });
+  
+  // Dentro de cada grupo, ordenar os alertas
+  grouped.forEach(group => {
+    group.alerts.sort((a, b) => {
+      // Primeiro: ordenar por exibir = 1 primeiro
+      if (a.exibir === 1 && b.exibir !== 1) return -1;
+      if (a.exibir !== 1 && b.exibir === 1) return 1;
+      // Segundo: ordenar por nome
+      return a.paciente_nome.localeCompare(b.paciente_nome);
+    });
+  });
+  
+  return grouped;
 };
 
 const Index = () => {
@@ -274,81 +398,48 @@ const Index = () => {
 
                           <div className="space-y-1">
                             {(() => {
-                              // Função auxiliar para obter a data mais próxima de um paciente (de hoje para frente)
-                              const getProximaData = (alert: AlertWebhookItem): number => {
-                                const hoje = new Date();
-                                hoje.setHours(0, 0, 0, 0);
-                                const mesAtual = hoje.getMonth();
-                                const anoAtual = hoje.getFullYear();
-                                const primeiroDiaMesSeguinte = new Date(anoAtual, mesAtual + 1, 1);
-                                const umaSemanaDepois = new Date(primeiroDiaMesSeguinte);
-                                umaSemanaDepois.setDate(umaSemanaDepois.getDate() + 7);
+                              // Filtrar alertas
+                              const filteredAlerts = alertItems.filter((alert) => {
+                                // Se exibir = 1, sempre mostrar
+                                if (alert.exibir === 1 || alert.exibir === "1") {
+                                  return true;
+                                }
                                 
+                                // Se exibir = 0, não mostrar
+                                if (alert.exibir === 0 || alert.exibir === "0") {
+                                  return false;
+                                }
+                                
+                                // Filtrar pacientes que têm todas as datas e guias "ok"
                                 if (!alert.datas || !Array.isArray(alert.datas)) {
-                                  return Infinity; // Sem datas, vai para o final
+                                  return true; // Mostrar se não tem datas (erro)
                                 }
                                 
-                                const datasFiltradas = alert.datas
-                                  .map((dataItem) => {
-                                    const [day, month, year] = dataItem.data.split('/');
-                                    const dataObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-                                    dataObj.setHours(0, 0, 0, 0);
-                                    return dataObj;
-                                  })
-                                  .filter((dataObj) => dataObj >= hoje && dataObj <= umaSemanaDepois);
+                                // Verificar se todas as guias estão "ok"
+                                const todasGuiasOk = alert.datas && alert.datas.every(dataItem => dataItem.guia === "ok");
                                 
-                                if (datasFiltradas.length === 0) {
-                                  return Infinity; // Sem datas futuras, vai para o final
+                                // Se todas as guias estão ok, não mostrar
+                                if (todasGuiasOk) {
+                                  return false;
                                 }
                                 
-                                // Retornar a data mais próxima (mais antiga)
-                                return Math.min(...datasFiltradas.map(d => d.getTime()));
-                              };
+                                return true; // Mostrar se tem pelo menos uma guia com problema
+                              });
                               
-                              return alertItems
-                                .filter((alert) => {
-                                  // Se exibir = 1, sempre mostrar
-                                  if (alert.exibir === 1 || alert.exibir === "1") {
-                                    return true;
-                                  }
-                                  
-                                  // Se exibir = 0, não mostrar
-                                  if (alert.exibir === 0 || alert.exibir === "0") {
-                                    return false;
-                                  }
-                                  
-                                  // Filtrar pacientes que têm todas as datas e guias "ok"
-                                  if (!alert.datas || !Array.isArray(alert.datas)) {
-                                    return true; // Mostrar se não tem datas (erro)
-                                  }
-                                  
-                                  // Verificar se todas as guias estão "ok"
-                                  const todasGuiasOk = alert.datas && alert.datas.every(dataItem => dataItem.guia === "ok");
-                                  
-                                  // Se todas as guias estão ok, não mostrar
-                                  if (todasGuiasOk) {
-                                    return false;
-                                  }
-                                  
-                                  return true; // Mostrar se tem pelo menos uma guia com problema
-                                })
-                                .sort((a, b) => {
-                                  // Primeiro: ordenar por exibir = 1 primeiro
-                                  if (a.exibir === 1 && b.exibir !== 1) return -1;
-                                  if (a.exibir !== 1 && b.exibir === 1) return 1;
-                                  
-                                  // Segundo: ordenar pela data mais próxima de hoje para frente
-                                  const dataA = getProximaData(a);
-                                  const dataB = getProximaData(b);
-                                  
-                                  if (dataA !== dataB) {
-                                    return dataA - dataB; // Ordem crescente (hoje primeiro)
-                                  }
-                                  
-                                  // Terceiro: se mesma data, ordenar por nome
-                                  return a.paciente_nome.localeCompare(b.paciente_nome);
-                                })
-                                .map((alert, index) => {
+                              // Agrupar por dia da semana
+                              const groupedAlerts = groupAlertsByDay(filteredAlerts);
+                              
+                              return groupedAlerts.map((group) => (
+                                <div key={group.day} className="space-y-1">
+                                  {/* Cabeçalho do grupo */}
+                                  <div className="px-4 py-2 bg-blue-100 border-l-4 border-blue-500">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-blue-800 text-sm">{group.day}</span>
+                                      <span className="text-xs text-blue-600">({group.alerts.length} {group.alerts.length === 1 ? 'paciente' : 'pacientes'})</span>
+                                    </div>
+                                  </div>
+                                  {/* Alertas do grupo */}
+                                  {group.alerts.map((alert, index) => {
                               // Determinar se o alerta está ativo ou desabilitado
                               const isActive = alert.exibir === 1 || alert.exibir === "1";
                               const alertColor = isActive ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200";
@@ -463,7 +554,9 @@ const Index = () => {
                                             </div>
                                           </div>
                                         );
-                                      });
+                                      })}
+                                </div>
+                              ));
                             })()}
                             </div>
                           </CardContent>
