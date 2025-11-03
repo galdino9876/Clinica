@@ -14,6 +14,7 @@ type AlertWebhookItem = {
   patient_id?: number; // Campo opcional caso a API retorne
   motivo: string | null;
   exibir: number | string;
+  insurance_type?: string; // Tipo de plano/seguro
   datas: Array<{
     data: string; // Data no formato "DD/MM/YYYY"
     agendamento: string; // Status do agendamento ("ok", "warning", "error", etc.)
@@ -398,16 +399,16 @@ const Index = () => {
 
                           <div className="space-y-1">
                             {(() => {
-                              // Filtrar alertas
+                              // Filtrar alertas (mas incluir exibir = 0 para mostrar no final)
                               const filteredAlerts = alertItems.filter((alert) => {
                                 // Se exibir = 1, sempre mostrar
                                 if (alert.exibir === 1 || alert.exibir === "1") {
                                   return true;
                                 }
                                 
-                                // Se exibir = 0, não mostrar
+                                // Se exibir = 0, incluir para mostrar no final
                                 if (alert.exibir === 0 || alert.exibir === "0") {
-                                  return false;
+                                  return true;
                                 }
                                 
                                 // Filtrar pacientes que têm todas as datas e guias "ok"
@@ -426,16 +427,46 @@ const Index = () => {
                                 return true; // Mostrar se tem pelo menos uma guia com problema
                               });
                               
-                              // Agrupar por dia da semana
-                              const groupedAlerts = groupAlertsByDay(filteredAlerts);
+                              // Separar alertas ativos (exibir = 1) e desabilitados (exibir = 0)
+                              const alertasAtivos = filteredAlerts.filter(alert => 
+                                alert.exibir === 1 || alert.exibir === "1"
+                              );
+                              const alertasDesabilitados = filteredAlerts.filter(alert => 
+                                alert.exibir === 0 || alert.exibir === "0"
+                              );
+                              
+                              // Agrupar por dia da semana apenas os ativos
+                              const groupedAlertsAtivos = groupAlertsByDay(alertasAtivos);
+                              
+                              // Para os desabilitados, criar um único grupo "Pacientes Desabilitados"
+                              const groupedAlertsDesabilitados = alertasDesabilitados.length > 0 ? [{
+                                day: 'Pacientes Desabilitados',
+                                dayNumber: 9,
+                                alerts: alertasDesabilitados
+                              }] : [];
+                              
+                              // Combinar: ativos primeiro, depois desabilitados
+                              const groupedAlerts = [...groupedAlertsAtivos, ...groupedAlertsDesabilitados];
                               
                               return groupedAlerts.map((group) => (
                                 <div key={group.day} className="space-y-1">
                                   {/* Cabeçalho do grupo */}
-                                  <div className="px-4 py-2 bg-blue-100 border-l-4 border-blue-500">
+                                  <div className={`px-4 py-2 border-l-4 ${
+                                    group.day === 'Pacientes Desabilitados' 
+                                      ? 'bg-gray-100 border-gray-500' 
+                                      : 'bg-blue-100 border-blue-500'
+                                  }`}>
                                     <div className="flex items-center gap-2">
-                                      <span className="font-semibold text-blue-800 text-sm">{group.day}</span>
-                                      <span className="text-xs text-blue-600">({group.alerts.length} {group.alerts.length === 1 ? 'paciente' : 'pacientes'})</span>
+                                      <span className={`font-semibold text-sm ${
+                                        group.day === 'Pacientes Desabilitados' 
+                                          ? 'text-gray-800' 
+                                          : 'text-blue-800'
+                                      }`}>{group.day}</span>
+                                      <span className={`text-xs ${
+                                        group.day === 'Pacientes Desabilitados' 
+                                          ? 'text-gray-600' 
+                                          : 'text-blue-600'
+                                      }`}>({group.alerts.length} {group.alerts.length === 1 ? 'paciente' : 'pacientes'})</span>
                                     </div>
                                   </div>
                                   {/* Alertas do grupo */}
@@ -451,6 +482,9 @@ const Index = () => {
                                     <User className="h-4 w-4 text-gray-500 flex-shrink-0" />
                                     <div className="flex flex-col">
                                       <span className="font-medium truncate">{alert.paciente_nome}</span>
+                                      {alert.insurance_type && (
+                                        <span className="text-xs text-gray-500">Plano: {alert.insurance_type}</span>
+                                      )}
                                       {!isActive && (
                                         <div className="flex flex-col">
                                           <span className="text-xs text-red-600 font-medium">⚠️ Paciente Desistiu</span>
@@ -514,6 +548,9 @@ const Index = () => {
                                                                  dataItem.agendamento === "error" ? "bg-red-200 text-red-900" :
                                                                  "bg-blue-200 text-blue-900";
                                           
+                                          // Verificar se é paciente Particular (não mostrar guias)
+                                          const isParticular = alert.insurance_type === "Particular";
+                                          
                                           // Determinar cores para guia
                                           const guiaColor = dataItem.guia === "ok" ? "bg-green-200 text-green-900" : 
                                                            dataItem.guia === "falta" ? "bg-red-200 text-red-900" :
@@ -529,9 +566,11 @@ const Index = () => {
                                                 <span className={`px-2 py-1 rounded text-xs font-medium ${agendamentoColor}`}>
                                                   📅 {dataItem.agendamento === "falta" ? "falta agendamento" : dataItem.agendamento}
                                                 </span>
-                                                <span className={`px-2 py-1 rounded text-xs font-medium ${guiaColor}`}>
-                                                  📋 {dataItem.guia === "falta" ? "falta guia" : dataItem.guia}
-                                                </span>
+                                                {!isParticular && (
+                                                  <span className={`px-2 py-1 rounded text-xs font-medium ${guiaColor}`}>
+                                                    📋 {dataItem.guia === "falta" ? "falta guia" : dataItem.guia}
+                                                  </span>
+                                                )}
                                               </div>
                                             </div>
                                           );

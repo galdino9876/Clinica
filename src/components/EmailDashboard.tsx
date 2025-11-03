@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Loader2, Mail, Send, CheckCircle2 } from "lucide-react";
+import { Loader2, Mail, Send, CheckCircle2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -108,6 +108,7 @@ const EmailDashboard = () => {
   const [error, setError] = useState<string | null>(null);
   const [selectedEmails, setSelectedEmails] = useState<Set<number>>(new Set());
   const [sendingEmails, setSendingEmails] = useState(false);
+  const [notSendingEmail, setNotSendingEmail] = useState<number | null>(null);
   const [showPresential, setShowPresential] = useState(false);
   const [progressAlert, setProgressAlert] = useState({
     isVisible: false,
@@ -188,6 +189,35 @@ const EmailDashboard = () => {
       setSelectedEmails(new Set());
     } else {
       setSelectedEmails(new Set(pendingEmails.map(email => email.id)));
+    }
+  };
+
+  const handleNotSend = async (emailId: number) => {
+    try {
+      setNotSendingEmail(emailId);
+      
+      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/not_send', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: emailId
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro ao marcar como não enviar: ${response.status}`);
+      }
+
+      // Recarregar os dados após marcar como não enviar
+      await fetchEmailData();
+      
+    } catch (err) {
+      console.error('Erro ao marcar como não enviar:', err);
+      alert('Erro ao marcar como não enviar. Tente novamente.');
+    } finally {
+      setNotSendingEmail(null);
     }
   };
 
@@ -380,6 +410,9 @@ const EmailDashboard = () => {
               <div className="w-24">
                 <span>ID</span>
               </div>
+              <div className="w-32">
+                <span>Ações</span>
+              </div>
             </div>
             
             <div className="space-y-1">
@@ -424,6 +457,24 @@ const EmailDashboard = () => {
                       </div>
                       <div className="w-24 text-gray-500">
                         {email.id_patient}
+                      </div>
+                      <div className="w-32 flex items-center justify-end gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleNotSend(email.id)}
+                          disabled={notSendingEmail === email.id || sendingEmails}
+                          className="text-xs px-2 py-1 h-7 border-red-200 text-red-700 hover:bg-red-50 hover:border-red-300"
+                        >
+                          {notSendingEmail === email.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <>
+                              <X className="h-3 w-3 mr-1" />
+                              Não Enviar
+                            </>
+                          )}
+                        </Button>
                       </div>
                     </div>
                   ))}
