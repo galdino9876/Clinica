@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useId } from "react";
+import React, { useState, useId, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -74,6 +74,23 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
     formState: { errors },
     reset,
   } = formMethods;
+
+  // Atualizar valores do formulário quando o paciente mudar (para edição)
+  useEffect(() => {
+    if (patient && isEdit) {
+      console.log('Atualizando valores do formulário com paciente:', patient);
+      setValue("name", patient.name || "");
+      setValue("cpf", patient.cpf || "");
+      setValue("phone", patient.phone || "");
+      setValue("email", patient.email || "");
+      setValue("birthdate", patient.birthdate || "");
+      setValue("nome_responsavel", patient.nome_responsavel || "");
+      setValue("telefone_responsavel", patient.telefone_responsavel || "");
+      if (patient.value !== undefined) {
+        setValue("value", patient.value);
+      }
+    }
+  }, [patient, isEdit, setValue]);
 
   // Funções para formatação de moeda BRL
   const formatCurrency = (value: number): string => {
@@ -162,6 +179,11 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
   };
 
   const onSubmit = async (data: PatientFormData) => {
+    console.log('=== onSubmit CHAMADO ===');
+    console.log('Modo edição:', isEdit);
+    console.log('Dados do formulário:', data);
+    console.log('Paciente recebido:', patient);
+    
     if (!validateCPF(data.cpf)) {
       toast({
         title: "Erro",
@@ -181,45 +203,55 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
       return;
     }
 
-    // Validar se temos ID válido para edição
-    if (isEdit) {
-      const patientId = patient?.id || (patient as any)?.patient_id || (patient as any)?.ID;
-      if (!patientId || patientId === "unknown" || patientId.trim() === "") {
-        toast({
-          title: "Erro",
-          description: "ID do paciente não encontrado. Não é possível editar este paciente.",
-          variant: "destructive",
-        });
-        return;
-      }
-    }
-
     setIsLoading(true);
 
     try {
       // Determinar o ID válido do paciente para edição
-      let patientId: string | undefined = undefined;
+      let patientId: string | number | undefined = undefined;
       if (isEdit && patient) {
-        // Verificar diferentes campos possíveis de ID
-        patientId = patient.id || (patient as any).patient_id || (patient as any).ID;
+        // Verificar diferentes campos possíveis de ID e formatos
+        const possibleId = patient.id || (patient as any).patient_id || (patient as any).ID || (patient as any).Id;
         
-        // Validar que o ID não seja "unknown" ou vazio
-        if (patientId === "unknown" || !patientId || patientId.trim() === "") {
-          patientId = undefined;
+        // Converter para string se for número
+        if (possibleId !== undefined && possibleId !== null) {
+          const idString = String(possibleId).trim();
+          
+          // Validar que o ID não seja "unknown" ou vazio
+          if (idString !== "" && idString !== "unknown" && idString !== "null" && idString !== "undefined") {
+            patientId = idString;
+          }
         }
       }
 
       // Preparar dados para envio
-      const requestData = {
+      const requestData: any = {
         ...data,
-        ...(isEdit && patientId && { id: patientId }), // Incluir ID se for edição e ID válido
       };
+
+      // Incluir ID apenas se for edição e tiver ID válido
+      if (isEdit) {
+        if (!patientId) {
+          console.error('Erro: Tentando editar paciente sem ID válido');
+          console.error('Dados do paciente recebido:', patient);
+          toast({
+            title: "Erro",
+            description: "ID do paciente não encontrado. Não é possível editar este paciente.",
+            variant: "destructive",
+          });
+          setIsLoading(false);
+          return;
+        }
+        requestData.id = patientId;
+      }
 
       const url = isEdit 
         ? "https://webhook.essenciasaudeintegrada.com.br/webhook/patients_edit"
         : "https://webhook.essenciasaudeintegrada.com.br/webhook/create-patient";
 
-      console.log('Enviando dados do paciente:', requestData);
+      console.log('=== ENVIANDO DADOS PARA API ===');
+      console.log('URL:', url);
+      console.log('Modo edição:', isEdit);
+      console.log('Dados do paciente:', requestData);
       console.log('Paciente original:', patient);
       console.log('ID do paciente determinado:', patientId);
       console.log('Arquivo PDF selecionado:', identityPdfFile);

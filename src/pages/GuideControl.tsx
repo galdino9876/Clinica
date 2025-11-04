@@ -183,8 +183,12 @@ const GuideControl: React.FC = () => {
       // Verificar se alguma data do prestador está no mês selecionado
       // IMPORTANTE: Só considera datas que têm o numero_prestador IGUAL ao prestador atual
       const hasDataInSelectedMonth = patient.datas?.some(data => {
+        // Converter ambos para string para comparação consistente
+        const prestadorStr = String(prestador.numero_prestador);
+        const dataPrestadorStr = String(data.numero_prestador || '');
+        
         // Verifica se o numero_prestador da data corresponde ao prestador atual
-        const dataMatchesPrestador = data.numero_prestador === prestador.numero_prestador;
+        const dataMatchesPrestador = dataPrestadorStr === prestadorStr && dataPrestadorStr !== '' && dataPrestadorStr !== 'null';
         return dataMatchesPrestador && isDateInSelectedMonth(data.data);
       });
       
@@ -193,26 +197,27 @@ const GuideControl: React.FC = () => {
   };
 
   // Função para filtrar datas que pertencem a um prestador específico
-  const filterDatasByPrestador = (prestadorNumero: number, datas: GuideData[]): GuideData[] => {
+  const filterDatasByPrestador = (prestadorNumero: number | string, datas: GuideData[]): GuideData[] => {
     return datas.filter(data => {
-      // Se o numero_prestador da data for um número, compara diretamente
-      if (typeof data.numero_prestador === 'number') {
-        return data.numero_prestador === prestadorNumero;
-      }
-      // Se for null ou "null", não inclui essa data (ela não pertence a nenhum prestador específico)
-      return false;
+      // Converter ambos para string para comparação consistente
+      const prestadorStr = String(prestadorNumero);
+      const dataPrestadorStr = String(data.numero_prestador || '');
+      
+      // Comparar como strings para evitar problemas de tipo
+      return dataPrestadorStr === prestadorStr && dataPrestadorStr !== '' && dataPrestadorStr !== 'null';
     });
   };
 
   // Função para obter todas as datas que devem ser exibidas para um prestador
   // Inclui as datas do prestador + datas do mês selecionado que estão sem prestador (como sugestões)
-  const getAllDatasForPrestador = (prestadorNumero: number, datas: GuideData[]): GuideData[] => {
+  const getAllDatasForPrestador = (prestadorNumero: number | string, datas: GuideData[]): GuideData[] => {
     // Primeiro pega as datas que pertencem ao prestador
     const prestadorDatas = filterDatasByPrestador(prestadorNumero, datas);
     
     // Depois pega as datas do mês selecionado que estão sem prestador (numero_prestador null ou "null")
     const datasSemPrestadorNoMes = datas.filter(data => {
-      const isNullPrestador = data.numero_prestador === null || data.numero_prestador === "null";
+      const prestadorStr = String(data.numero_prestador || '');
+      const isNullPrestador = !prestadorStr || prestadorStr === 'null' || prestadorStr === '';
       const isInSelectedMonth = isDateInSelectedMonth(data.data);
       return isNullPrestador && isInSelectedMonth;
     });
@@ -413,6 +418,24 @@ const GuideControl: React.FC = () => {
       }
       
       const data: PatientData[] = await response.json();
+      
+      // Debug: verificar estrutura dos dados recebidos
+      console.log('=== DADOS RECEBIDOS DA API ===');
+      console.log('Total de pacientes:', data.length);
+      if (data.length > 0) {
+        console.log('Primeiro paciente:', data[0]);
+        console.log('Datas do primeiro paciente:', data[0].datas);
+        console.log('Prestadores do primeiro paciente:', data[0].prestadores);
+        if (data[0].prestadores) {
+          try {
+            const prestadoresParsed = JSON.parse(data[0].prestadores);
+            console.log('Prestadores parseados:', prestadoresParsed);
+          } catch (e) {
+            console.error('Erro ao parsear prestadores:', e);
+          }
+        }
+      }
+      
       setPatientsData(data);
       
       // Restaurar posição de scroll após carregar dados (apenas após o primeiro carregamento)
@@ -1477,15 +1500,19 @@ const GuideControl: React.FC = () => {
                                         )}
                                       </div>
                                       <div className="flex flex-wrap gap-2">
-                                        {getAllDatasForPrestador(prestador.numero_prestador, patient.datas || [])
-                                          .map((data, dataIdx) => {
+                                        {(() => {
+                                          const datasDoPrestador = getAllDatasForPrestador(prestador.numero_prestador, patient.datas || []);
+                                          console.log(`Prestador ${prestador.numero_prestador} - Datas encontradas:`, datasDoPrestador);
+                                          console.log(`Todas as datas do paciente:`, patient.datas);
+                                          return datasDoPrestador.map((data, dataIdx) => {
                                             const colorClass = getDateColor(data, patient, 'agendamentos');
                                             return (
                                               <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${colorClass}`}>
                                                 {data.data}
                                               </span>
                                             );
-                                          })}
+                                          });
+                                        })()}
                                       </div>
                                     </div>
 
@@ -1496,15 +1523,17 @@ const GuideControl: React.FC = () => {
                                         <span className="font-semibold text-gray-800">Guias:</span>
                                       </div>
                                       <div className="flex flex-wrap gap-2">
-                                        {getAllDatasForPrestador(prestador.numero_prestador, patient.datas || [])
-                                          .map((data, dataIdx) => {
+                                        {(() => {
+                                          const datasDoPrestador = getAllDatasForPrestador(prestador.numero_prestador, patient.datas || []);
+                                          return datasDoPrestador.map((data, dataIdx) => {
                                             const colorClass = getDateColor(data, patient, 'guias');
                                             return (
                                               <span key={dataIdx} className={`px-3 py-1 rounded-lg text-sm font-medium ${colorClass}`}>
                                                 {data.data}
                                               </span>
                                             );
-                                          })}
+                                          });
+                                        })()}
                                       </div>
                                     </div>
                                   </>

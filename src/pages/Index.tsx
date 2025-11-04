@@ -71,11 +71,19 @@ const getDayOfWeekNumber = (dateString: string): number => {
 const groupAlertsByDay = (alerts: AlertWebhookItem[]): Array<{ day: string; dayNumber: number; alerts: AlertWebhookItem[] }> => {
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
-  const mesAtual = hoje.getMonth();
+  
+  // Calcular início do mês atual e fim (mês atual + 1 semana do mês seguinte)
   const anoAtual = hoje.getFullYear();
+  const mesAtual = hoje.getMonth();
+  const primeiroDiaMes = new Date(anoAtual, mesAtual, 1);
+  primeiroDiaMes.setHours(0, 0, 0, 0);
+  
+  // Primeiro dia do mês seguinte
   const primeiroDiaMesSeguinte = new Date(anoAtual, mesAtual + 1, 1);
+  // 1 semana depois (7 dias)
   const umaSemanaDepois = new Date(primeiroDiaMesSeguinte);
   umaSemanaDepois.setDate(umaSemanaDepois.getDate() + 7);
+  umaSemanaDepois.setHours(23, 59, 59, 999);
   
   const grouped = alerts.reduce((acc, alert) => {
     // Encontrar a data mais próxima do alerta
@@ -94,7 +102,7 @@ const groupAlertsByDay = (alerts: AlertWebhookItem[]): Array<{ day: string; dayN
       return acc;
     }
     
-    // Filtrar datas futuras
+    // Filtrar apenas datas do mês atual + 1 semana do mês seguinte
     const datasFiltradas = alert.datas
       .map((dataItem) => {
         const [day, month, year] = dataItem.data.split('/');
@@ -102,10 +110,10 @@ const groupAlertsByDay = (alerts: AlertWebhookItem[]): Array<{ day: string; dayN
         dataObj.setHours(0, 0, 0, 0);
         return { dataObj, dataItem };
       })
-      .filter(({ dataObj }) => dataObj >= hoje && dataObj <= umaSemanaDepois);
+      .filter(({ dataObj }) => dataObj >= primeiroDiaMes && dataObj <= umaSemanaDepois); // Mês atual + 1 semana do mês seguinte
     
     if (datasFiltradas.length === 0) {
-      // Sem datas futuras, adicionar ao grupo "Sem data"
+      // Sem datas no período, adicionar ao grupo "Sem data"
       const noDateGroup = acc.find(g => g.day === 'Sem data');
       if (noDateGroup) {
         noDateGroup.alerts.push(alert);
@@ -119,7 +127,7 @@ const groupAlertsByDay = (alerts: AlertWebhookItem[]): Array<{ day: string; dayN
       return acc;
     }
     
-    // Pegar a data mais próxima
+    // Pegar a data mais próxima (primeira do mês)
     const dataMaisProxima = datasFiltradas.sort((a, b) => a.dataObj.getTime() - b.dataObj.getTime())[0];
     const dataStr = dataMaisProxima.dataItem.data;
     const dayOfWeek = getDayOfWeek(dataStr);
@@ -582,29 +590,45 @@ const Index = () => {
                                   <div className="flex items-center gap-2 flex-1 min-w-0">
                                     <div className="flex flex-col gap-1">
                                       {alert.datas && Array.isArray(alert.datas) ? (() => {
-                                        // Calcular data limite: mês atual + 1 semana do mês seguinte
+                                        // Debug: verificar dados recebidos
+                                        console.log('=== DEBUG ALERTAS - PROCESSANDO DATAS ===');
+                                        console.log('Paciente:', alert.paciente_nome);
+                                        console.log('Todas as datas recebidas:', alert.datas);
+                                        
+                                        // Calcular data de hoje para comparação
                                         const hoje = new Date();
                                         hoje.setHours(0, 0, 0, 0);
-                                        const mesAtual = hoje.getMonth();
+                                        
+                                        // Calcular início do mês atual e fim (mês atual + 1 semana do mês seguinte)
                                         const anoAtual = hoje.getFullYear();
+                                        const mesAtual = hoje.getMonth();
+                                        const primeiroDiaMes = new Date(anoAtual, mesAtual, 1);
+                                        primeiroDiaMes.setHours(0, 0, 0, 0);
                                         
                                         // Primeiro dia do mês seguinte
                                         const primeiroDiaMesSeguinte = new Date(anoAtual, mesAtual + 1, 1);
                                         // 1 semana depois (7 dias)
                                         const umaSemanaDepois = new Date(primeiroDiaMesSeguinte);
                                         umaSemanaDepois.setDate(umaSemanaDepois.getDate() + 7);
+                                        umaSemanaDepois.setHours(23, 59, 59, 999);
                                         
-                                        // Filtrar datas: a partir de hoje até 1 semana do mês seguinte
+                                        // Filtrar datas: mostrar todas as datas do mês atual + 1 semana do mês seguinte
                                         const datasFiltradas = alert.datas.filter((dataItem) => {
                                           const [day, month, year] = dataItem.data.split('/');
                                           const dataObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
                                           dataObj.setHours(0, 0, 0, 0);
                                           
-                                          // Incluir apenas datas de hoje para frente, até 1 semana do mês seguinte
-                                          return dataObj >= hoje && dataObj <= umaSemanaDepois;
+                                          // Incluir datas do mês atual até 1 semana do mês seguinte
+                                          const isIncluded = dataObj >= primeiroDiaMes && dataObj <= umaSemanaDepois;
+                                          
+                                          console.log(`Data ${dataItem.data}: ${dataObj.toISOString()} está no período (${mesAtual + 1}/${anoAtual} até +1 semana do mês seguinte) = ${isIncluded}`);
+                                          
+                                          return isIncluded;
                                         });
                                         
-                                        // Ordenar datas de hoje para frente (ordem cronológica crescente)
+                                        console.log('Datas filtradas (mês atual + 1 semana do mês seguinte):', datasFiltradas);
+                                        
+                                        // Ordenar datas (ordem cronológica crescente)
                                         const datasOrdenadas = datasFiltradas.sort((a, b) => {
                                           const [dayA, monthA, yearA] = a.data.split('/');
                                           const [dayB, monthB, yearB] = b.data.split('/');
@@ -612,6 +636,8 @@ const Index = () => {
                                           const dataObjB = new Date(parseInt(yearB), parseInt(monthB) - 1, parseInt(dayB));
                                           return dataObjA.getTime() - dataObjB.getTime();
                                         });
+                                        
+                                        console.log('Datas ordenadas:', datasOrdenadas);
                                         
                                         return datasOrdenadas.map((dataItem, idx) => {
                                           // Converter data para comparação
