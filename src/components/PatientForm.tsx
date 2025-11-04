@@ -181,13 +181,38 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
       return;
     }
 
+    // Validar se temos ID válido para edição
+    if (isEdit) {
+      const patientId = patient?.id || (patient as any)?.patient_id || (patient as any)?.ID;
+      if (!patientId || patientId === "unknown" || patientId.trim() === "") {
+        toast({
+          title: "Erro",
+          description: "ID do paciente não encontrado. Não é possível editar este paciente.",
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     setIsLoading(true);
 
     try {
+      // Determinar o ID válido do paciente para edição
+      let patientId: string | undefined = undefined;
+      if (isEdit && patient) {
+        // Verificar diferentes campos possíveis de ID
+        patientId = patient.id || (patient as any).patient_id || (patient as any).ID;
+        
+        // Validar que o ID não seja "unknown" ou vazio
+        if (patientId === "unknown" || !patientId || patientId.trim() === "") {
+          patientId = undefined;
+        }
+      }
+
       // Preparar dados para envio
       const requestData = {
         ...data,
-        ...(isEdit && patient && { id: patient.id }), // Incluir ID se for edição
+        ...(isEdit && patientId && { id: patientId }), // Incluir ID se for edição e ID válido
       };
 
       const url = isEdit 
@@ -195,6 +220,8 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
         : "https://webhook.essenciasaudeintegrada.com.br/webhook/create-patient";
 
       console.log('Enviando dados do paciente:', requestData);
+      console.log('Paciente original:', patient);
+      console.log('ID do paciente determinado:', patientId);
       console.log('Arquivo PDF selecionado:', identityPdfFile);
 
       const response = await fetch(url, {
