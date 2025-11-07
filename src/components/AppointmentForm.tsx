@@ -25,6 +25,15 @@ interface AppointmentFormProps {
   selectedDate: Date;
   onClose: () => void;
   onAppointmentCreated?: () => void; // Nova prop para notificar criação
+  // Props opcionais para pré-preenchimento
+  initialPatientId?: string;
+  initialPsychologistId?: string;
+  initialDate?: Date;
+  initialStartTime?: string;
+  initialEndTime?: string;
+  initialPaymentMethod?: string;
+  initialInsuranceType?: string;
+  initialAppointmentType?: "presential" | "online";
 }
 
 interface WorkingHour {
@@ -33,15 +42,29 @@ interface WorkingHour {
   end_time: string;
 }
 
-const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCreated }: AppointmentFormProps) => {
+const AppointmentForm = ({ 
+  selectedDate: initialDate, 
+  onClose, 
+  onAppointmentCreated,
+  initialPatientId,
+  initialPsychologistId,
+  initialDate: propInitialDate,
+  initialStartTime,
+  initialEndTime,
+  initialPaymentMethod,
+  initialInsuranceType,
+  initialAppointmentType
+}: AppointmentFormProps) => {
   const { toast } = useToast();
   const [isPatientFormOpen, setIsPatientFormOpen] = React.useState(false);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [rooms, setRooms] = useState<ConsultingRoom[]>([]);
   const [psychologists, setPsychologists] = useState<{ id: string; name: string }[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true); // Estado de carregamento
-  const [selectedDate, setSelectedDate] = useState<Date>(initialDate); // Estado local para a data
-  const [selectedDates, setSelectedDates] = useState<Date[]>([]); // Estado para múltiplas datas
+  // Usar propInitialDate se fornecido, senão usar initialDate
+  const dateToUse = propInitialDate || initialDate;
+  const [selectedDate, setSelectedDate] = useState<Date>(dateToUse); // Estado local para a data
+  const [selectedDates, setSelectedDates] = useState<Date[]>(propInitialDate ? [propInitialDate] : []); // Estado para múltiplas datas
   
   // Novos estados para horários do psicólogo
   const [psychologistWorkingHours, setPsychologistWorkingHours] = useState<WorkingHour[]>([]);
@@ -65,15 +88,15 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
   const formMethods: UseFormReturn<AppointmentFormData> = useForm<AppointmentFormData>({
     resolver: zodResolver(appointmentSchema),
     defaultValues: {
-      patientId: "",
-      psychologistId: "",
-      appointmentType: "presential",
+      patientId: initialPatientId || "",
+      psychologistId: initialPsychologistId ? String(initialPsychologistId) : "",
+      appointmentType: initialAppointmentType || "presential",
       roomId: "",
-      startTime: "09:00",
-      endTime: "10:00",
+      startTime: initialStartTime || "09:00",
+      endTime: initialEndTime || "10:00",
       value: 200.0,
-      paymentMethod: "",
-      insuranceType: "",
+      paymentMethod: initialPaymentMethod || "",
+      insuranceType: initialInsuranceType || "",
       numeroPrestador: "",
       quantidadeAutorizada: 1,
     },
@@ -179,29 +202,32 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
         timeSlots.sort((a, b) => a.localeCompare(b));
         setAvailableTimeSlots(timeSlots);
         
-        // Preencher automaticamente os campos de horário com o primeiro e segundo horário disponível
-        if (timeSlots.length >= 2) {
-          setValue("startTime", timeSlots[0]);
-          setValue("endTime", timeSlots[1]);
-        } else if (timeSlots.length === 1) {
-          setValue("startTime", timeSlots[0]);
-          const startHour = parseInt(timeSlots[0].split(':')[0]);
-          const startMinute = timeSlots[0].includes(':30') ? 30 : 0;
-          
-          if (startMinute === 0) {
-            // Se início é 20:00, término será 20:30
-            const endTime = `${startHour.toString().padStart(2, '0')}:30`;
-            setValue("endTime", endTime);
-          } else {
-            // Se início é 20:30, término será 21:00
-            const endHour = startHour + 1;
-            const endTime = `${endHour.toString().padStart(2, '0')}:00`;
-            setValue("endTime", endTime);
+        // Preencher automaticamente os campos de horário apenas se não houver horários iniciais
+        const currentStartTime = watch("startTime");
+        const currentEndTime = watch("endTime");
+        
+        // Só preencher automaticamente se não houver valores iniciais definidos
+        if (!initialStartTime && !currentStartTime) {
+          if (timeSlots.length >= 2) {
+            setValue("startTime", timeSlots[0]);
+            setValue("endTime", timeSlots[1]);
+          } else if (timeSlots.length === 1) {
+            setValue("startTime", timeSlots[0]);
+            const startHour = parseInt(timeSlots[0].split(':')[0]);
+            const startMinute = timeSlots[0].includes(':30') ? 30 : 0;
+            
+            if (startMinute === 0) {
+              // Se início é 20:00, término será 20:30
+              const endTime = `${startHour.toString().padStart(2, '0')}:30`;
+              setValue("endTime", endTime);
+            } else {
+              // Se início é 20:30, término será 21:00
+              const endHour = startHour + 1;
+              const endTime = `${endHour.toString().padStart(2, '0')}:00`;
+              setValue("endTime", endTime);
+            }
           }
         }
-        
-        console.log('Horários do psicólogo carregados:', fetchedWorkingHours);
-        console.log('Slots de horário disponíveis:', timeSlots);
       } else {
         console.error('Erro ao buscar horários do psicólogo:', response.status);
         setPsychologistWorkingHours([]);
@@ -261,14 +287,41 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
       // Limpar horários quando nenhum psicólogo estiver selecionado
       setPsychologistWorkingHours([]);
       setAvailableTimeSlots([]);
-      // Resetar para valores padrão
-      setValue("startTime", "09:00");
-      setValue("endTime", "10:00");
-      // Limpar datas selecionadas
-      setSelectedDates([]);
-      setSelectedDate(null);
+      // Resetar para valores padrão apenas se não houver valores iniciais
+      if (!initialStartTime) {
+        setValue("startTime", "09:00");
+      }
+      if (!initialEndTime) {
+        setValue("endTime", "10:00");
+      }
+      // Limpar datas selecionadas apenas se não houver data inicial
+      if (!propInitialDate) {
+        setSelectedDates([]);
+        setSelectedDate(null);
+      }
     }
-  }, [selectedPsychologistId, setValue]);
+  }, [selectedPsychologistId, setValue, initialStartTime, initialEndTime, propInitialDate]);
+  
+  // useEffect adicional para garantir que o psicólogo inicial seja aplicado após os dados carregarem
+  useEffect(() => {
+    if (initialPsychologistId && psychologists.length > 0) {
+      // Verificar se o psicólogo existe na lista (comparar como string)
+      const psychologistExists = psychologists.some(p => String(p.id) === String(initialPsychologistId));
+      const currentValue = watch("psychologistId");
+      
+      // Aplicar apenas se não estiver já selecionado ou se o valor atual for diferente
+      if (psychologistExists && String(currentValue) !== String(initialPsychologistId)) {
+        const valueToSet = String(initialPsychologistId);
+        setValue("psychologistId", valueToSet, { shouldValidate: true, shouldDirty: true });
+        setTimeout(() => {
+          fetchPsychologistWorkingHours(valueToSet);
+        }, 100);
+      } else if (psychologistExists && String(currentValue) === String(initialPsychologistId)) {
+        fetchPsychologistWorkingHours(String(initialPsychologistId));
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialPsychologistId, psychologists, setValue]);
 
 
 
@@ -276,41 +329,6 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
   useEffect(() => {
     if (selectedPsychologistId && psychologistWorkingHours.length > 0) {
       // Não definir data automaticamente - deixar o usuário escolher
-      // Verificar se a data atual é um dia disponível para o psicólogo
-      // const currentDayOfWeek = selectedDate.getDay();
-      // const isCurrentDayAvailable = psychologistWorkingHours.some(wh => wh.day_of_week === currentDayOfWeek);
-      
-      // console.log('Verificando disponibilidade da data inicial:', selectedDate);
-      // console.log('Dia da semana da data inicial:', currentDayOfWeek);
-      // console.log('Horários disponíveis para este dia:', psychologistWorkingHours.filter(wh => wh.day_of_week === currentDayOfWeek));
-      // console.log('Data inicial é disponível?', isCurrentDayAvailable);
-      
-      // Se a data atual não for disponível, encontrar a próxima data disponível
-      // if (!isCurrentDayAvailable) {
-      //   console.log('Data inicial não é disponível, procurando próxima data disponível...');
-      //   const today = new Date();
-      //   let nextAvailableDate = new Date(today);
-      //   
-      //   // Procurar pelos próximos 30 dias, começando pela data atual
-      //   for (let i = 0; i < 30; i++) {
-      //     const checkDate = new Date(today);
-      //     checkDate.setDate(today.getDate() + i);
-      //     
-      //     const dayOfWeek = checkDate.getDay();
-      //     const isWorkingDay = psychologistWorkingHours.some(wh => wh.day_of_week === dayOfWeek);
-      //     
-      //     if (isWorkingDay) {
-      //       nextAvailableDate = checkDate;
-      //       console.log(`Encontrada data disponível no dia ${i + 1}:`, nextAvailableDate);
-      //       break;
-      //     }
-      //   }
-      //   
-      //   // Atualizar a data selecionada para o próximo dia disponível
-      //   setSelectedDate(nextAvailableDate);
-      //   
-      //   console.log('Data inicial ajustada para próximo dia disponível:', nextAvailableDate);
-      // }
     }
   }, [selectedPsychologistId, psychologistWorkingHours]);
 
@@ -321,23 +339,13 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
       const selectedDayOfWeek = selectedDate.getDay();
       const isSelectedDayAvailable = psychologistWorkingHours.some(wh => wh.day_of_week === selectedDayOfWeek);
       
-      console.log('Verificando disponibilidade da nova data:', selectedDate);
-      console.log('Dia da semana da nova data:', selectedDayOfWeek);
-      console.log('Horários disponíveis para este dia:', psychologistWorkingHours.filter(wh => wh.day_of_week === selectedDayOfWeek));
-      console.log('Nova data é disponível?', isSelectedDayAvailable);
-      
       if (!isSelectedDayAvailable) {
         // Se a data selecionada não for disponível, não definir automaticamente
         // Deixar o usuário escolher uma data válida
-        console.log('Data selecionada não é disponível. Usuário deve escolher uma data válida.');
         return;
       } else {
         // A data selecionada é disponível, usar ela normalmente
         const dayWorkingHours = psychologistWorkingHours.filter(wh => wh.day_of_week === selectedDayOfWeek);
-        
-        console.log('Data mudou para:', selectedDate);
-        console.log('Novo dia da semana:', selectedDayOfWeek);
-        console.log('Horários de trabalho para este dia:', dayWorkingHours);
         
         // Regenerar horários quando a data mudar
         const timeSlots: string[] = [];
@@ -389,8 +397,6 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
           setValue("startTime", "09:00");
           setValue("endTime", "10:00");
         }
-        
-        console.log('Horários atualizados para a nova data:', timeSlots);
       }
     }
   }, [selectedDate, psychologistWorkingHours, selectedPsychologistId, setValue]);
@@ -409,9 +415,15 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
 
   // Inicializar selectedDates quando o componente montar
   useEffect(() => {
-    // Não inicializar com a data atual, deixar vazio para o usuário selecionar
-    setSelectedDates([]);
-  }, []);
+    // Se houver data inicial fornecida via prop, usar ela
+    if (propInitialDate) {
+      setSelectedDates([propInitialDate]);
+      setSelectedDate(propInitialDate);
+    } else {
+      // Não inicializar com a data atual, deixar vazio para o usuário selecionar
+      setSelectedDates([]);
+    }
+  }, [propInitialDate]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -441,7 +453,6 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
             active: patient.active === 1,
           }));
           setPatients(fetchedPatients);
-          console.log("Pacientes carregados:", fetchedPatients); // Verifica os pacientes mapeados
         } else {
           console.error("Erro API pacientes:", patientsResponse.status, await patientsResponse.text());
         }
@@ -453,7 +464,6 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
         });
         if (roomsResponse.ok) {
           const data = await roomsResponse.json();
-          console.log("Resposta API consultórios (detalhada):", JSON.stringify(data, null, 2));
           const fetchedRooms: ConsultingRoom[] = data.map((room: any) => ({
             id: String(room.id),
             name: room.name,
@@ -462,7 +472,6 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
             updatedAt: room.updated_at ? new Date(room.updated_at) : null,
           }));
           setRooms(fetchedRooms);
-          console.log("Consultórios carregados:", fetchedRooms);
         } else {
           console.error("Erro API consultórios:", roomsResponse.status, await roomsResponse.text());
         }
@@ -474,18 +483,75 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
         });
         if (usersResponse.ok) {
           const data = await usersResponse.json();
-          console.log("Resposta API usuários (detalhada):", JSON.stringify(data, null, 2));
           const fetchedPsychologists = data
             .filter((user: any) => user.role === "psychologist")
             .map((user: any) => ({ id: String(user.id), name: user.name }));
           setPsychologists(fetchedPsychologists);
-          console.log("Psicólogos carregados:", fetchedPsychologists);
         } else {
           console.error("Erro API usuários:", usersResponse.status, await usersResponse.text());
         }
 
         // Carregar planos de pagamento
-        await fetchPaymentPlans();
+        let loadedPlans: Array<{id: number, plano: string, valor: number}> = [];
+        try {
+          const plansResponse = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/recurrence_type");
+          if (plansResponse.ok) {
+            const plansData = await plansResponse.json();
+            loadedPlans = Array.isArray(plansData) ? plansData : [];
+            setPaymentPlans(loadedPlans);
+          }
+        } catch (error) {
+          console.error('Erro ao buscar planos de pagamento:', error);
+        }
+        
+        // Aplicar valores iniciais após carregar os dados
+        if (initialPatientId) {
+          setValue("patientId", initialPatientId);
+        }
+        if (initialPsychologistId) {
+          // Garantir que seja string para corresponder ao formato das opções
+          const psychologistIdStr = String(initialPsychologistId);
+          const psychologistExists = psychologists.some(p => String(p.id) === psychologistIdStr);
+          if (psychologistExists) {
+            setValue("psychologistId", psychologistIdStr, { shouldValidate: true, shouldDirty: true });
+            // Forçar busca dos horários do psicólogo imediatamente
+            fetchPsychologistWorkingHours(psychologistIdStr);
+          }
+        }
+        if (initialStartTime) {
+          setValue("startTime", initialStartTime);
+        }
+        if (initialEndTime) {
+          setValue("endTime", initialEndTime);
+        }
+        if (initialPaymentMethod) {
+          // Se for plano de saúde, precisamos encontrar o ID do plano
+          if (initialPaymentMethod === "insurance" && initialInsuranceType) {
+            const selectedPlan = loadedPlans.find(plan => plan.plano === initialInsuranceType);
+            if (selectedPlan) {
+              // Usar o formato "insurance_{id}" que o formulário espera
+              setValue("paymentMethod", `insurance_${selectedPlan.id}`);
+              setValue("value", selectedPlan.valor);
+              setValue("insuranceType", initialInsuranceType);
+            } else {
+              // Se não encontrar o plano, usar apenas "insurance"
+              setValue("paymentMethod", "insurance");
+              setValue("insuranceType", initialInsuranceType);
+            }
+          } else if (initialPaymentMethod === "private") {
+            setValue("paymentMethod", "private");
+            setValue("value", 200.0);
+            setValue("insuranceType", "Particular");
+          } else {
+            setValue("paymentMethod", initialPaymentMethod);
+          }
+        }
+        if (initialInsuranceType) {
+          setValue("insuranceType", initialInsuranceType);
+        }
+        if (initialAppointmentType) {
+          setValue("appointmentType", initialAppointmentType);
+        }
       } catch (err) {
         console.error("Erro ao carregar dados:", err);
       } finally {
@@ -584,9 +650,7 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
               body: JSON.stringify(guiaData),
             });
 
-            if (guiaResponse.ok) {
-              console.log("Guia enviada com sucesso:", guiaData);
-            } else {
+            if (!guiaResponse.ok) {
               console.error("Erro ao enviar guia:", guiaResponse.status);
             }
 
@@ -609,7 +673,6 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
                 });
 
                 if (pdfResponse.ok) {
-                  console.log("PDF da guia autorizada enviado com sucesso");
                   // Limpar o arquivo após sucesso
                   setPdfFile(null);
                   const fileInput = document.getElementById('pdf-file-input') as HTMLInputElement;
@@ -626,8 +689,6 @@ const AppointmentForm = ({ selectedDate: initialDate, onClose, onAppointmentCrea
           } catch (error) {
             console.error("Erro ao enviar dados da guia:", error);
           }
-        } else {
-          console.log("Campos de guia não preenchidos. Pulando envio para API de guias.");
         }
       }
 

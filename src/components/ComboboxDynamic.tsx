@@ -60,8 +60,8 @@ export const ComboboxDynamic = forwardRef<HTMLButtonElement, ComboboxDynamicProp
     const [open, setOpen] = useState(false);
     const [searchValue, setSearchValue] = useState("");
 
-    // Encontrar a opção selecionada
-    const selectedOption = options.find(opt => opt.id === value);
+    // Encontrar a opção selecionada (comparar como string para evitar problemas de tipo)
+    const selectedOption = options.find(opt => String(opt.id) === String(value));
 
     const handleSelect = (optionId: string | number) => {
       onChange(optionId);
@@ -169,7 +169,7 @@ export const ComboboxDynamic = forwardRef<HTMLButtonElement, ComboboxDynamicProp
                         <Check
                           className={cn(
                             "mr-2 h-4 w-4",
-                            value === option.id ? "opacity-100" : "opacity-0"
+                            String(value) === String(option.id) ? "opacity-100" : "opacity-0"
                           )}
                         />
                         {option.label}

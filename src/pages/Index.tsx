@@ -2,16 +2,19 @@ import AppointmentCalendar from "@/components/AppointmentCalendar";
 import Layout from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import React, { useEffect, useState } from "react";
 import { X, AlertTriangle, Calendar, ClipboardList, User, Edit, BarChart3 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import PsychologistAvailabilityDashboard from "@/components/PsychologistAvailabilityDashboard";
+import AppointmentForm from "@/components/AppointmentForm";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 type AlertWebhookItem = {
   paciente_nome: string;
   patient_id?: number; // Campo opcional caso a API retorne
+  appointment_id?: number; // ID do agendamento relacionado
   motivo: string | null;
   exibir: number | string;
   insurance_type?: string; // Tipo de plano/seguro
@@ -178,6 +181,8 @@ const Index = () => {
   const [alertError, setAlertError] = useState<string | null>(null);
   const [alertItems, setAlertItems] = useState<AlertWebhookItem[]>([]);
   const [patientsBirthdates, setPatientsBirthdates] = useState<Map<number, string>>(new Map());
+  // Mapa para armazenar horário do último agendamento: patientId -> {start_time, end_time}
+  const [lastAppointmentTimes, setLastAppointmentTimes] = useState<Map<number, { start_time: string; end_time: string }>>(new Map());
   
   // Estados para o modal de edição
   const [showEditModal, setShowEditModal] = useState(false);
@@ -185,6 +190,19 @@ const Index = () => {
   const [editExibir, setEditExibir] = useState(true);
   const [editMotivo, setEditMotivo] = useState("");
   const [savingAlert, setSavingAlert] = useState(false);
+  
+  // Estados para o formulário de agendamento pré-preenchido
+  const [showAppointmentForm, setShowAppointmentForm] = useState(false);
+  const [appointmentFormData, setAppointmentFormData] = useState<{
+    patientId?: string;
+    psychologistId?: string;
+    date?: Date;
+    startTime?: string;
+    endTime?: string;
+    paymentMethod?: string;
+    insuranceType?: string;
+    appointmentType?: "presential" | "online";
+  } | null>(null);
 
   // Verificação de permissões do usuário
   const isAdmin = user?.role === "admin";
@@ -213,13 +231,6 @@ const Index = () => {
       
       const data = await response.json();
       
-      // Debug: verificar estrutura dos dados da API
-      console.log('=== DEBUG ALERTAS API ===');
-      console.log('Dados recebidos da API:', data);
-      if (Array.isArray(data) && data.length > 0) {
-        console.log('Primeiro item da array:', data[0]);
-        console.log('Campos disponíveis:', Object.keys(data[0]));
-      }
       
       // Processar o novo formato da API
       let alertItems: AlertWebhookItem[] = [];
@@ -232,13 +243,51 @@ const Index = () => {
       
       setAlertItems(alertItems);
       
-      // Buscar datas de nascimento dos pacientes que têm patient_id
-      const patientIds = alertItems
-        .map(alert => alert.patient_id)
-        .filter((id): id is number => id !== undefined && id !== null);
+      // Buscar patient_ids que faltam e depois buscar dados adicionais
+      const alertsWithIds: number[] = [];
+      const alertsWithoutIds: AlertWebhookItem[] = [];
       
-      if (patientIds.length > 0) {
-        fetchPatientsBirthdates(patientIds);
+      alertItems.forEach(alert => {
+        if (alert.patient_id) {
+          alertsWithIds.push(alert.patient_id);
+        } else {
+          alertsWithoutIds.push(alert);
+        }
+      });
+      
+      // Buscar patient_ids pelos nomes para os que não têm
+      if (alertsWithoutIds.length > 0) {
+        const fetchedIds = await Promise.all(
+          alertsWithoutIds.map(alert => getPatientIdByName(alert.paciente_nome))
+        );
+        
+        fetchedIds.forEach((id, index) => {
+          if (id) {
+            alertsWithIds.push(id);
+            // Atualizar o alerta com o patient_id encontrado
+            if (alertsWithoutIds[index]) {
+              alertsWithoutIds[index].patient_id = id;
+            }
+          }
+        });
+        
+        // Atualizar os alertas com os IDs encontrados
+        setAlertItems(alertItems.map(alert => {
+          const foundAlert = alertsWithoutIds.find(a => a.paciente_nome === alert.paciente_nome);
+          if (foundAlert && foundAlert.patient_id) {
+            return { ...alert, patient_id: foundAlert.patient_id };
+          }
+          return alert;
+        }));
+      }
+      
+      // Remover duplicatas
+      const uniquePatientIds = [...new Set(alertsWithIds)];
+      
+      if (uniquePatientIds.length > 0) {
+        fetchPatientsBirthdates(uniquePatientIds);
+        // Buscar horário do último agendamento para cada paciente
+        fetchLastAppointmentTimes(uniquePatientIds);
       }
       
     } catch (e: any) {
@@ -299,6 +348,180 @@ const Index = () => {
     }
   };
 
+  // Função para buscar agendamentos anteriores do paciente
+  const fetchPatientAppointments = async (patientId: number) => {
+    try {
+      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/apointment_patient', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id: patientId })
+      });
+
+      if (!response.ok) {
+        console.error('Erro ao buscar agendamentos:', response.status);
+        return [];
+      }
+
+      const data = await response.json();
+      // Filtrar objetos vazios e ordenar por data (mais recente primeiro)
+      const validAppointments = Array.isArray(data) 
+        ? data.filter(appointment => 
+            appointment && 
+            Object.keys(appointment).length > 0 && 
+            appointment.date
+          )
+        : [];
+      
+      // Ordenar por data (mais recente primeiro)
+      return validAppointments.sort((a: any, b: any) => {
+        const dateA = new Date(a.date);
+        const dateB = new Date(b.date);
+        return dateB.getTime() - dateA.getTime();
+      });
+    } catch (error) {
+      console.error('Erro ao buscar agendamentos do paciente:', error);
+      return [];
+    }
+  };
+
+  // Função para buscar agendamento completo pelo ID (para obter psychologist_id)
+  const fetchAppointmentById = async (appointmentId: number) => {
+    try {
+      // Buscar todos os agendamentos e filtrar pelo ID
+      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/appointmens', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        console.error('Erro ao buscar agendamentos:', response.status);
+        return null;
+      }
+
+      const data = await response.json();
+      const appointments = Array.isArray(data) ? data : [];
+      
+      // Encontrar o agendamento pelo ID
+      const appointment = appointments.find((apt: any) => apt.id === appointmentId || String(apt.id) === String(appointmentId));
+      
+      return appointment || null;
+    } catch (error) {
+      console.error('Erro ao buscar agendamento por ID:', error);
+      return null;
+    }
+  };
+
+  // Função para abrir formulário de agendamento pré-preenchido
+  const handleOpenAppointmentForm = async (
+    alert: AlertWebhookItem,
+    dataItem: { data: string; agendamento: string; guia: string; numero_prestador: number | string | null }
+  ) => {
+    try {
+      // Buscar patient_id
+      let patientId = alert.patient_id;
+      if (!patientId) {
+        patientId = await getPatientIdByName(alert.paciente_nome);
+      }
+
+      if (!patientId) {
+        alert("Não foi possível encontrar o ID do paciente.");
+        return;
+      }
+
+      // Tentar buscar psychologist_id do appointment_id do alerta
+      let psychologistId: number | null = null;
+      
+      if (alert.appointment_id) {
+        const appointment = await fetchAppointmentById(alert.appointment_id);
+        if (appointment) {
+          psychologistId = appointment.psychologist_id || appointment.psychologistId || null;
+        }
+      }
+      
+      // Se não encontrou pelo appointment_id, buscar nos agendamentos anteriores do paciente
+      if (!psychologistId) {
+        const appointments = await fetchPatientAppointments(patientId);
+        const lastAppointment = appointments.length > 0 ? appointments[0] : null;
+        
+        if (lastAppointment) {
+          // Tentar diferentes formatos de psychologist_id
+          psychologistId = lastAppointment.psychologist_id || lastAppointment.psychologistId || null;
+        }
+      }
+      
+      // Buscar agendamentos anteriores do paciente para outros dados (horários, tipo, etc)
+      const appointments = await fetchPatientAppointments(patientId);
+      const lastAppointment = appointments.length > 0 ? appointments[0] : null;
+
+      // Converter data do formato DD/MM/YYYY para Date
+      const [day, month, year] = dataItem.data.split('/');
+      const appointmentDate = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+
+      // Determinar método de pagamento baseado no insurance_type
+      const paymentMethod = alert.insurance_type === "Particular" ? "private" : "insurance";
+      
+      // Preparar dados do formulário
+      const formData = {
+        patientId: String(patientId),
+        psychologistId: psychologistId ? String(psychologistId) : undefined,
+        date: appointmentDate,
+        startTime: lastAppointment?.start_time || lastAppointment?.startTime || undefined,
+        endTime: lastAppointment?.end_time || lastAppointment?.endTime || undefined,
+        paymentMethod: paymentMethod,
+        insuranceType: alert.insurance_type || undefined,
+        appointmentType: lastAppointment?.appointment_type || lastAppointment?.appointmentType || "presential" as "presential" | "online",
+      };
+
+
+      setAppointmentFormData(formData);
+      setShowAppointmentForm(true);
+    } catch (error) {
+      console.error('Erro ao abrir formulário de agendamento:', error);
+      alert("Erro ao preparar formulário de agendamento. Tente novamente.");
+    }
+  };
+
+  // Função para buscar horário do último agendamento de cada paciente
+  const fetchLastAppointmentTimes = async (patientIds: number[]) => {
+    try {
+      const timesMap = new Map<number, { start_time: string; end_time: string }>();
+      
+      // Buscar último agendamento para cada paciente
+      await Promise.all(patientIds.map(async (patientId) => {
+        try {
+          const appointments = await fetchPatientAppointments(patientId);
+          
+          // Pegar o primeiro agendamento (já está ordenado por data, mais recente primeiro)
+          if (appointments.length > 0) {
+            const lastAppointment = appointments[0];
+            
+            if (lastAppointment.start_time && lastAppointment.end_time) {
+              // Formatar horário (remover segundos se houver)
+              const startTime = lastAppointment.start_time.includes(':') 
+                ? lastAppointment.start_time.substring(0, 5) 
+                : lastAppointment.start_time;
+              const endTime = lastAppointment.end_time.includes(':') 
+                ? lastAppointment.end_time.substring(0, 5) 
+                : lastAppointment.end_time;
+              
+              timesMap.set(patientId, { start_time: startTime, end_time: endTime });
+            }
+          }
+        } catch (error) {
+          console.error(`Erro ao buscar horário para paciente ${patientId}:`, error);
+        }
+      }));
+      
+      setLastAppointmentTimes(timesMap);
+    } catch (error) {
+      console.error('Erro ao buscar horários dos agendamentos:', error);
+    }
+  };
+
   // Função para buscar data de nascimento dos pacientes
   const fetchPatientsBirthdates = async (patientIds: number[]) => {
     try {
@@ -354,21 +577,13 @@ const Index = () => {
       // Se não temos patient_id, tentar buscar pelo nome
       let patientId = editingAlert.patient_id;
       if (!patientId) {
-        console.log('Buscando patient_id para:', editingAlert.paciente_nome);
         patientId = await getPatientIdByName(editingAlert.paciente_nome);
         if (patientId) {
           requestBody.patient_id = patientId;
-          console.log('patient_id encontrado:', patientId);
-        } else {
-          console.warn('patient_id não encontrado para:', editingAlert.paciente_nome);
         }
       } else {
         requestBody.patient_id = patientId;
       }
-
-      console.log('=== DEBUG SAVE ALERT ===');
-      console.log('editingAlert:', editingAlert);
-      console.log('requestBody:', requestBody);
       
       const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/alter_alerta", {
         method: "POST",
@@ -575,6 +790,20 @@ const Index = () => {
                                       {alert.insurance_type && (
                                         <span className="text-xs text-gray-500">Plano: {alert.insurance_type}</span>
                                       )}
+                                      {alert.patient_id && (() => {
+                                        const timeInfo = lastAppointmentTimes.get(alert.patient_id);
+                                        if (timeInfo) {
+                                          return (
+                                            <span className="text-xs">
+                                              <span className="text-black">Horário:</span>{' '}
+                                              <span className="text-sm font-bold text-purple-600">
+                                                {timeInfo.start_time} - {timeInfo.end_time}
+                                              </span>
+                                            </span>
+                                          );
+                                        }
+                                        return null;
+                                      })()}
                                       {!isActive && (
                                         <div className="flex flex-col">
                                           <span className="text-xs text-red-600 font-medium">⚠️ Paciente Desistiu</span>
@@ -590,11 +819,6 @@ const Index = () => {
                                   <div className="flex items-center gap-2 flex-1 min-w-0">
                                     <div className="flex flex-col gap-1">
                                       {alert.datas && Array.isArray(alert.datas) ? (() => {
-                                        // Debug: verificar dados recebidos
-                                        console.log('=== DEBUG ALERTAS - PROCESSANDO DATAS ===');
-                                        console.log('Paciente:', alert.paciente_nome);
-                                        console.log('Todas as datas recebidas:', alert.datas);
-                                        
                                         // Calcular data de hoje para comparação
                                         const hoje = new Date();
                                         hoje.setHours(0, 0, 0, 0);
@@ -621,12 +845,8 @@ const Index = () => {
                                           // Incluir datas do mês atual até 1 semana do mês seguinte
                                           const isIncluded = dataObj >= primeiroDiaMes && dataObj <= umaSemanaDepois;
                                           
-                                          console.log(`Data ${dataItem.data}: ${dataObj.toISOString()} está no período (${mesAtual + 1}/${anoAtual} até +1 semana do mês seguinte) = ${isIncluded}`);
-                                          
                                           return isIncluded;
                                         });
-                                        
-                                        console.log('Datas filtradas (mês atual + 1 semana do mês seguinte):', datasFiltradas);
                                         
                                         // Ordenar datas (ordem cronológica crescente)
                                         const datasOrdenadas = datasFiltradas.sort((a, b) => {
@@ -636,8 +856,6 @@ const Index = () => {
                                           const dataObjB = new Date(parseInt(yearB), parseInt(monthB) - 1, parseInt(dayB));
                                           return dataObjA.getTime() - dataObjB.getTime();
                                         });
-                                        
-                                        console.log('Datas ordenadas:', datasOrdenadas);
                                         
                                         return datasOrdenadas.map((dataItem, idx) => {
                                           // Converter data para comparação
@@ -671,9 +889,22 @@ const Index = () => {
                                                 {isHoje && <span className="ml-1 text-blue-600">●</span>}
                                               </span>
                                               <div className="flex gap-1">
-                                                <span className={`px-2 py-1 rounded text-xs font-medium ${agendamentoColor}`}>
-                                                  📅 {dataItem.agendamento === "falta" ? "falta agendamento" : dataItem.agendamento}
-                                                </span>
+                                                {dataItem.agendamento === "falta" ? (
+                                                  <span 
+                                                    className={`px-2 py-1 rounded text-xs font-medium ${agendamentoColor} cursor-pointer hover:opacity-80 transition-opacity`}
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      handleOpenAppointmentForm(alert, dataItem);
+                                                    }}
+                                                    title="Clique para criar agendamento"
+                                                  >
+                                                    📅 falta agendamento
+                                                  </span>
+                                                ) : (
+                                                  <span className={`px-2 py-1 rounded text-xs font-medium ${agendamentoColor}`}>
+                                                    📅 {dataItem.agendamento}
+                                                  </span>
+                                                )}
                                                 {!isParticular && (
                                                 <span className={`px-2 py-1 rounded text-xs font-medium ${guiaColor}`}>
                                                   📋 {dataItem.guia === "falta" ? "falta guia" : dataItem.guia}
@@ -812,6 +1043,35 @@ const Index = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Modal de Formulário de Agendamento Pré-preenchido */}
+      {showAppointmentForm && appointmentFormData && (
+        <Dialog open={showAppointmentForm} onOpenChange={setShowAppointmentForm}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <AppointmentForm
+              selectedDate={appointmentFormData.date || new Date()}
+              onClose={() => {
+                setShowAppointmentForm(false);
+                setAppointmentFormData(null);
+                // Recarregar alertas após criar agendamento
+                fetchAlerts();
+              }}
+              onAppointmentCreated={() => {
+                // Recarregar alertas após criar agendamento
+                fetchAlerts();
+              }}
+              initialPatientId={appointmentFormData.patientId}
+              initialPsychologistId={appointmentFormData.psychologistId}
+              initialDate={appointmentFormData.date}
+              initialStartTime={appointmentFormData.startTime}
+              initialEndTime={appointmentFormData.endTime}
+              initialPaymentMethod={appointmentFormData.paymentMethod}
+              initialInsuranceType={appointmentFormData.insuranceType}
+              initialAppointmentType={appointmentFormData.appointmentType}
+            />
+          </DialogContent>
+        </Dialog>
       )}
     </Layout>
   );
