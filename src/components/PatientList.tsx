@@ -192,7 +192,7 @@ const PatientsTable = () => {
         setSelectedPatient(patient);
         setIsContinuityOpen(true);
       },
-      visible: canViewRecords, // Apenas admin e psicólogos podem gerar pedido de continuidade
+      visible: canViewRecords || isReceptionist, // Admin, psicólogos e recepcionistas podem gerar pedido de continuidade
     },
     {
       id: "reactivate",
@@ -477,7 +477,7 @@ const PatientsTable = () => {
                   Novo Paciente
                 </button>
               )}
-              {canViewRecords && (
+              {(canViewRecords || isReceptionist) && (
                 <button
                   onClick={handleBulkContinuityRequest}
                   disabled={bulkContinuityLoading || filteredPatients.length === 0}
@@ -529,7 +529,28 @@ const PatientsTable = () => {
                   <tr key={patient.id || index} className={`hover:bg-gray-50 ${patient.status === "Inativo" ? "bg-gray-50" : ""}`}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{patient.name || patient.nome || "N/A"}</td>
                     {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.cpf || "N/A"}</td> */}
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.phone || patient.telefone || "N/A"}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {(patient.phone || patient.telefone) ? (
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => openWhatsApp(patient.phone || patient.telefone)}
+                            className="text-blue-600 hover:text-blue-800 hover:underline transition-colors cursor-pointer"
+                            title="Abrir WhatsApp"
+                          >
+                            {patient.phone || patient.telefone}
+                          </button>
+                          <button
+                            onClick={() => openWhatsApp(patient.phone || patient.telefone)}
+                            className="text-green-600 hover:text-green-700 transition-colors"
+                            title="Abrir WhatsApp"
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        "N/A"
+                      )}
+                    </td>
                     {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.email || "N/A"}</td> */}
                     {isAdmin && (
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.psychologist_name || patient.nome_responsavel || "N/A"}</td>
