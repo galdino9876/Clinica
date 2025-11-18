@@ -227,51 +227,113 @@ const FinanceCharts = () => {
 
   const loadPaymentBatches = async () => {
     try {
-
+      console.log('=== CARREGANDO LOTES DE PAGAMENTO ===');
       
+      // Forçar nova requisição sem cache
       const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/payments_get", {
         method: "GET",
-        headers: { "Content-Type": "application/json" },
+        headers: { 
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+          "Pragma": "no-cache"
+        },
+        cache: "no-store" as RequestCache
       });
       
-
+      console.log('Status da resposta:', response.status);
+      console.log('Headers da resposta:', Object.fromEntries(response.headers.entries()));
       
-      if (response.ok) {
-        const data = await response.json();
-
+      if (response.ok || response.status === 304) {
+        let data;
         
+        // Se for 304, tentar usar cache ou fazer nova requisição
+        if (response.status === 304) {
+          console.warn('Resposta 304 (Not Modified) - tentando forçar nova requisição');
+          // Fazer nova requisição com timestamp para evitar cache
+          const freshResponse = await fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/payments_get?t=${Date.now()}`, {
+            method: "GET",
+            headers: { 
+              "Content-Type": "application/json",
+              "Cache-Control": "no-cache"
+            },
+            cache: "no-store" as RequestCache
+          });
+          data = await freshResponse.json();
+        } else {
+          data = await response.json();
+        }
+        
+        console.log('Dados brutos recebidos da API:', data);
+        console.log('Tipo dos dados:', Array.isArray(data) ? 'Array' : typeof data);
+        console.log('Quantidade de itens:', Array.isArray(data) ? data.length : 1);
+
         // Converter para array se for um objeto único
         const dataArray = Array.isArray(data) ? data : [data];
+        console.log('Primeiro item do array:', dataArray[0]);
+        console.log('Campos do primeiro item:', dataArray[0] ? Object.keys(dataArray[0]) : 'N/A');
 
-        
+        // Verificar se os dados têm o formato esperado
+        if (dataArray.length > 0 && !dataArray[0].hasOwnProperty('control') && !dataArray[0].hasOwnProperty('payment_id')) {
+          console.error('⚠️ FORMATO DE DADOS INCORRETO!');
+          console.error('A API está retornando dados que não são lotes de pagamento.');
+          console.error('Campos esperados: control, payment_id, psychologist_id, psychologist_name, etc.');
+          console.error('Campos recebidos:', Object.keys(dataArray[0]));
+          toast({
+            title: "Erro no formato de dados",
+            description: "A API retornou dados em formato incorreto. Verifique o console para mais detalhes.",
+            variant: "destructive",
+          });
+          setPaymentLots([]);
+          return;
+        }
+
         // Filtrar lotes com control: 'payments_created' OU 'payments_finish'
         const filteredLots = dataArray.filter((lot: any) => {
           const hasValidControl = lot.control === 'payments_created' || lot.control === 'payments_finish';
-
+          console.log(`Item com control "${lot.control}":`, hasValidControl, lot);
           return hasValidControl;
         });
         
+        console.log('Lotes filtrados:', filteredLots);
+        console.log('Quantidade de lotes filtrados:', filteredLots.length);
+        console.log('=== FIM CARREGAMENTO ===');
 
         setPaymentLots(filteredLots);
       } else {
         console.error('Erro na resposta da API de lotes:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('Corpo da resposta de erro:', errorText);
+        toast({
+          title: "Erro ao carregar lotes",
+          description: `Erro ${response.status}: ${response.statusText}`,
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error("Erro ao carregar lotes de pagamento:", error);
+      toast({
+        title: "Erro ao carregar lotes",
+        description: "Não foi possível carregar os lotes de pagamento. Verifique o console para mais detalhes.",
+        variant: "destructive",
+      });
     }
   };
 
   // Função para agrupar lotes por payment_id e calcular totais
   const getGroupedPaymentLots = () => {
-
+    console.log('=== AGRUPANDO LOTES ===');
+    console.log('paymentLots recebidos:', paymentLots);
+    console.log('Quantidade de paymentLots:', paymentLots.length);
     
     const grouped: { [key: string]: any } = {};
     
     paymentLots.forEach((lot, index) => {
+      console.log(`Processando lote ${index + 1}:`, lot);
       const key = lot.payment_id; // Usar payment_id para agrupar
+      console.log(`payment_id (chave): ${key}`);
       
       if (!grouped[key]) {
-
+        console.log(`Criando novo grupo para payment_id: ${key}`);
         grouped[key] = {
           id: lot.payment_id,
           payment_id: lot.payment_id, // Manter payment_id para exclusão
@@ -289,47 +351,50 @@ const FinanceCharts = () => {
       const appointment = {
         patient_name: lot.name, // Usar 'name' em vez de 'patient_name'
         date: lot.date,
-        value: parseFloat(lot.value), // Converter string para number
-        commission: parseFloat(lot.value) * 0.5, // 50% de comissão
+        value: parseFloat(lot.value || 0), // Converter string para number
+        commission: parseFloat(lot.value || 0) * 0.5, // 50% de comissão
         insurance_type: lot.insurance_type || 'Particular',
         appointment_type: lot.appointment_type || 'presential',
         patient_id: lot.patient_id,
         appointment_id: lot.appointment_id
       };
       
-
+      console.log(`Adicionando atendimento ao grupo ${key}:`, appointment);
       grouped[key].appointments.push(appointment);
-      grouped[key].total_value += parseFloat(lot.value);
-
+      grouped[key].total_value += parseFloat(lot.value || 0);
     });
     
     const result = Object.values(grouped);
+    console.log('Lotes agrupados (resultado):', result);
+    console.log('Quantidade de grupos:', result.length);
+    console.log('=== FIM AGRUPAMENTO ===');
 
     return result;
   };
 
   // Função para filtrar lotes de pagamento por psicólogo
   const getPsychologistPaymentLots = (psychologistId: string) => {
-
+    console.log('=== FILTRANDO LOTES POR PSICÓLOGO ===');
+    console.log('psychologistId recebido:', psychologistId);
+    console.log('Tipo do psychologistId:', typeof psychologistId);
     
     const allLots = getGroupedPaymentLots();
-    allLots.forEach((lot, index) => {
-    });
+    console.log('Total de lotes agrupados:', allLots.length);
+    console.log('Lotes agrupados:', allLots);
     
     const filteredLots = allLots.filter(lot => {
-      // console.log(`Comparando lot.psychologist_id (${lot.psychologist_id}) com psychologistId (${psychologistId})`);
-      // console.log(`Tipo lot.psychologist_id: ${typeof lot.psychologist_id}`);
-      // console.log(`Tipo psychologistId: ${typeof psychologistId}`);
-      // console.log(`Status do lote: ${lot.status}`);
+      console.log(`Comparando lot.psychologist_id (${lot.psychologist_id}, tipo: ${typeof lot.psychologist_id}) com psychologistId (${psychologistId}, tipo: ${typeof psychologistId})`);
+      console.log(`Status do lote: ${lot.status}`);
+      console.log(`Lote completo:`, lot);
       
       const matches = String(lot.psychologist_id) === String(psychologistId);
-      // console.log(`Match: ${matches}`);
+      console.log(`Match: ${matches}`);
       return matches;
     });
     
-    // console.log('Lotes filtrados para o psicólogo:', filteredLots);
-    // console.log('Quantidade de lotes filtrados:', filteredLots.length);
-    // console.log('=== FIM FILTRO POR PSICÓLOGO ===');
+    console.log('Lotes filtrados para o psicólogo:', filteredLots);
+    console.log('Quantidade de lotes filtrados:', filteredLots.length);
+    console.log('=== FIM FILTRO POR PSICÓLOGO ===');
     
     return filteredLots;
   };
@@ -436,7 +501,7 @@ const FinanceCharts = () => {
 
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedAppointments(filteredAppointments.map(app => app.id));
+      setSelectedAppointments(filteredAppointments.map(app => String(app.id)));
     } else {
       setSelectedAppointments([]);
     }
@@ -704,8 +769,36 @@ const FinanceCharts = () => {
 
     // Filtro simplificado - mesma lógica que funciona para admin
     const filtered = transactions.filter((appointment) => {
-      const appointmentDate = new Date(appointment.date);
-      const matchesDate = appointmentDate >= startDate && appointmentDate <= endDate;
+      // Normalizar data do atendimento para evitar problemas de timezone
+      let appointmentDate: Date;
+      
+      if (typeof appointment.date === 'string') {
+        // Se a data vem como string "YYYY-MM-DD", criar Date sem timezone
+        const appointmentDateStr = appointment.date;
+        const appointmentDateParts = appointmentDateStr.split('-');
+        
+        if (appointmentDateParts.length === 3) {
+          // Formato YYYY-MM-DD
+          appointmentDate = new Date(
+            parseInt(appointmentDateParts[0]), // ano
+            parseInt(appointmentDateParts[1]) - 1, // mês (0-indexed)
+            parseInt(appointmentDateParts[2]) // dia
+          );
+        } else {
+          // Tentar parsear como Date normal
+          appointmentDate = new Date(appointmentDateStr);
+        }
+      } else {
+        // Se já é um Date object
+        appointmentDate = new Date(appointment.date);
+      }
+      
+      // Normalizar startDate e endDate para comparação (remover horas)
+      const startDateNormalized = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+      const endDateNormalized = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+      const appointmentDateNormalized = new Date(appointmentDate.getFullYear(), appointmentDate.getMonth(), appointmentDate.getDate());
+      
+      const matchesDate = appointmentDateNormalized >= startDateNormalized && appointmentDateNormalized <= endDateNormalized;
       const matchesPsychologist = effectivePsychologist === "all" || String(appointment.psychologist_id) === effectivePsychologist;
 
       return matchesDate && matchesPsychologist;
