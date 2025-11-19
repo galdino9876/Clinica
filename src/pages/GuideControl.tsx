@@ -95,6 +95,15 @@ const GuideControl: React.FC = () => {
     currentStep: '',
     currentGuide: ''
   });
+  const [downloadingSignedGuides, setDownloadingSignedGuides] = useState(false);
+  const [downloadSignedGuidesProgress, setDownloadSignedGuidesProgress] = useState({
+    total: 0,
+    completed: 0,
+    failed: 0,
+    remaining: 0,
+    currentStep: '',
+    currentGuide: ''
+  });
   const [showDownloadComplete, setShowDownloadComplete] = useState(false);
   const [downloadResult, setDownloadResult] = useState({
     completed: 0,
@@ -921,6 +930,160 @@ const GuideControl: React.FC = () => {
     }
   };
 
+  // Função para baixar guias assinadas (existe_guia_assinada === 1, existe_guia_assinada_psicologo === 0, faturado === 0)
+  const handleDownloadSignedGuides = async () => {
+    // Filtrar prestadores com guia assinada mas não assinada pelo psicólogo e não faturados
+    const guidesToDownload: Array<{numero_prestador: number, paciente_nome: string}> = [];
+    
+    // Filtrar apenas pacientes com planos de saúde (excluir "Particular")
+    const patientsWithInsurance = patientsData.filter(patient => 
+      patient.insurance_type !== "Particular"
+    );
+    
+    patientsWithInsurance.forEach(patient => {
+      if (patient.prestadores) {
+        try {
+          const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
+          prestadoresData.forEach(prestador => {
+            if (prestador.existe_guia_assinada === 1 && 
+                prestador.existe_guia_assinada_psicologo === 0 && 
+                prestador.faturado === 0) {
+              guidesToDownload.push({
+                numero_prestador: prestador.numero_prestador,
+                paciente_nome: patient.paciente_nome
+              });
+            }
+          });
+        } catch (error) {
+          console.error('Erro ao parsear prestadores:', error);
+        }
+      }
+    });
+
+    if (guidesToDownload.length === 0) {
+      alert('Nenhuma guia assinada (não assinada pelo psicólogo) não faturada encontrada para download');
+      return;
+    }
+
+    // Total de requests (1 por numero_prestador)
+    const totalRequests = guidesToDownload.length;
+
+    setDownloadingSignedGuides(true);
+    setDownloadSignedGuidesProgress({
+      total: totalRequests,
+      completed: 0,
+      failed: 0,
+      remaining: totalRequests,
+      currentStep: 'Iniciando downloads...',
+      currentGuide: ''
+    });
+
+    let completed = 0;
+    let failed = 0;
+
+    try {
+      for (let i = 0; i < guidesToDownload.length; i++) {
+        const guide = guidesToDownload[i];
+
+        setDownloadSignedGuidesProgress(prev => ({
+          ...prev,
+          currentGuide: guide.paciente_nome,
+          currentStep: `Processando prestador ${i + 1} de ${guidesToDownload.length}`
+        }));
+
+        // Request: Guia assinada
+        try {
+          setDownloadSignedGuidesProgress(prev => ({
+            ...prev,
+            currentStep: `Baixando guia assinada - ${guide.paciente_nome}`
+          }));
+
+          const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/get_guia_completed', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              numero_prestador: guide.numero_prestador,
+              command: 'Guia-assinada'
+            })
+          });
+
+          if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            const contentDisposition = response.headers.get('Content-Disposition');
+            const filename = contentDisposition 
+              ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') 
+              : `Guia-Assinada-${guide.paciente_nome}-${guide.numero_prestador}.pdf`;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+            completed++;
+          } else {
+            failed++;
+          }
+        } catch (error) {
+          console.error('Erro ao baixar guia assinada:', error);
+          failed++;
+        }
+
+        setDownloadSignedGuidesProgress(prev => ({
+          ...prev,
+          completed: completed,
+          failed: failed,
+          remaining: totalRequests - completed - failed
+        }));
+
+        // Pequeno delay entre prestadores para não sobrecarregar
+        if (i < guidesToDownload.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+
+      setDownloadingSignedGuides(false);
+
+      // Mostrar resultado final com toast
+      let message = '';
+      if (failed === 0) {
+        message = `Download concluído! ${completed} arquivos baixados com sucesso.`;
+      } else if (completed === 0) {
+        message = `Falha no download! ${failed} arquivos falharam.`;
+      } else {
+        message = `Download parcial! ${completed} arquivos baixados, ${failed} falharam.`;
+      }
+      
+      setDownloadResult({
+        completed,
+        failed,
+        message
+      });
+      setShowDownloadComplete(true);
+      
+      // Esconder toast após 5 segundos
+      setTimeout(() => {
+        setShowDownloadComplete(false);
+      }, 5000);
+      
+    } catch (error) {
+      console.error('Erro geral no download:', error);
+      setDownloadResult({
+        completed: 0,
+        failed: 0,
+        message: 'Erro durante o download. Tente novamente.'
+      });
+      setShowDownloadComplete(true);
+      setDownloadingSignedGuides(false);
+      
+      // Esconder toast após 5 segundos
+      setTimeout(() => {
+        setShowDownloadComplete(false);
+      }, 5000);
+    }
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -944,11 +1107,19 @@ const GuideControl: React.FC = () => {
             </div>
             <Button 
               onClick={handleDownloadEverything} 
-              disabled={loading || downloadingEverything}
+              disabled={loading || downloadingEverything || downloadingSignedGuides}
               className="flex items-center gap-2 bg-green-600 hover:bg-green-700 cursor-pointer [&>*]:cursor-pointer"
             >
               <Upload className="h-4 w-4 mr-2" />
-              {downloadingEverything ? 'Baixando...' : 'Baixar Tudo'}
+              {downloadingEverything ? 'Baixando...' : 'Baixar Guias Prontas'}
+            </Button>
+            <Button 
+              onClick={handleDownloadSignedGuides} 
+              disabled={loading || downloadingSignedGuides || downloadingEverything}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 cursor-pointer [&>*]:cursor-pointer"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              {downloadingSignedGuides ? 'Baixando...' : 'Baixar Guias Assinadas'}
             </Button>
             <Button onClick={fetchData} variant="outline" disabled={loading} className="cursor-pointer [&>*]:cursor-pointer">
               <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -1953,6 +2124,64 @@ const GuideControl: React.FC = () => {
                 </div>
                 <div className="text-center">
                   <div className="font-semibold text-blue-600">{downloadEverythingProgress.remaining}</div>
+                  <div className="text-gray-500">Restantes</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Progresso do Download de Guias Assinadas */}
+      {downloadingSignedGuides && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-blue-100 rounded-full">
+                <Upload className="h-5 w-5 text-blue-600" />
+              </div>
+              <h3 className="text-lg font-semibold text-gray-800">
+                Baixando Guias Assinadas
+              </h3>
+            </div>
+            
+            <div className="space-y-4">
+              <div className="text-sm text-gray-600">
+                {downloadSignedGuidesProgress.currentStep}
+              </div>
+              
+              {downloadSignedGuidesProgress.currentGuide && (
+                <div className="text-sm font-medium text-blue-600">
+                  Paciente: {downloadSignedGuidesProgress.currentGuide}
+                </div>
+              )}
+              
+              <div className="space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Progresso:</span>
+                  <span>{downloadSignedGuidesProgress.completed} de {downloadSignedGuidesProgress.total}</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div 
+                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                    style={{ 
+                      width: `${downloadSignedGuidesProgress.total > 0 ? (downloadSignedGuidesProgress.completed / downloadSignedGuidesProgress.total) * 100 : 0}%` 
+                    }}
+                  ></div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="text-center">
+                  <div className="font-semibold text-green-600">{downloadSignedGuidesProgress.completed}</div>
+                  <div className="text-gray-500">Concluídos</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-semibold text-red-600">{downloadSignedGuidesProgress.failed}</div>
+                  <div className="text-gray-500">Falhas</div>
+                </div>
+                <div className="text-center">
+                  <div className="font-semibold text-blue-600">{downloadSignedGuidesProgress.remaining}</div>
                   <div className="text-gray-500">Restantes</div>
                 </div>
               </div>

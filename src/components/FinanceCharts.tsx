@@ -1044,7 +1044,7 @@ const FinanceCharts = () => {
     doc.text(`Valor Total: R$ ${lotDetails.total_value.toFixed(2)}`, 14, 44);
     // Set text color to green for "Valor a Receber -6%"
     doc.setTextColor(0, 128, 0);
-    doc.text(`Valor a Receber -6% (Imposto): R$ ${((lotDetails.total_value * 0.5) * 0.94).toFixed(2)}`, 14, 51);
+    doc.text(`Valor a Receber -6% (Imposto): R$ ${((lotDetails.total_value * 0.94) * 0.5).toFixed(2)}`, 14, 51);
     // Reset text color to black
     doc.setTextColor(0, 0, 0);
     doc.text(`Total de Consultas: ${lotDetails.appointments.length}`, 14, 58);
@@ -1619,7 +1619,7 @@ const FinanceCharts = () => {
                         <TableRow>
                           <TableHead>Psicólogo</TableHead>
                           <TableHead>Data Criação</TableHead>
-                          <TableHead>Valor Total Bruto</TableHead>
+                          <TableHead>Valor A receber</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Ações/Comprovante</TableHead>
                         </TableRow>
@@ -1641,7 +1641,7 @@ const FinanceCharts = () => {
                               <TableCell>
                                 {format(new Date(lot.payment_created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                               </TableCell>
-                              <TableCell>R$ {lot.total_value.toFixed(2)}</TableCell>
+                              <TableCell>R$ {((lot.total_value * 0.94) * 0.5).toFixed(2)}</TableCell>
                               <TableCell>
                                 <Badge className={
                                   lot.status === 'payments_created' 
@@ -2543,7 +2543,7 @@ const FinanceCharts = () => {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Valor a Receber -6% (Imposto)</p>
-                  <p className="font-medium text-green-600">R$ {((selectedLotDetails.total_value * 0.5) * 0.94).toFixed(2)}</p>
+                  <p className="font-medium text-green-600">R$ {((selectedLotDetails.total_value * 0.94) * 0.5).toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Total de Consultas</p>
