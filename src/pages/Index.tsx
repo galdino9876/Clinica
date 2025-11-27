@@ -75,18 +75,20 @@ const groupAlertsByDay = (alerts: AlertWebhookItem[]): Array<{ day: string; dayN
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);
   
-  // Calcular início do mês atual e fim (mês atual + 1 semana do mês seguinte)
+  // Calcular data inicial (primeiro dia do mês atual) e fim (primeira semana completa do mês seguinte)
   const anoAtual = hoje.getFullYear();
   const mesAtual = hoje.getMonth();
+  
+  // Data inicial: primeiro dia do mês atual (mostra todo o mês atual)
   const primeiroDiaMes = new Date(anoAtual, mesAtual, 1);
   primeiroDiaMes.setHours(0, 0, 0, 0);
   
   // Primeiro dia do mês seguinte
   const primeiroDiaMesSeguinte = new Date(anoAtual, mesAtual + 1, 1);
-  // 1 semana depois (7 dias)
-  const umaSemanaDepois = new Date(primeiroDiaMesSeguinte);
-  umaSemanaDepois.setDate(umaSemanaDepois.getDate() + 7);
-  umaSemanaDepois.setHours(23, 59, 59, 999);
+  // Fim da primeira semana do mês seguinte (dia 7)
+  const fimPrimeiraSemanaMesSeguinte = new Date(primeiroDiaMesSeguinte);
+  fimPrimeiraSemanaMesSeguinte.setDate(7); // Dia 7 do mês seguinte
+  fimPrimeiraSemanaMesSeguinte.setHours(23, 59, 59, 999);
   
   const grouped = alerts.reduce((acc, alert) => {
     // Encontrar a data mais próxima do alerta
@@ -105,7 +107,7 @@ const groupAlertsByDay = (alerts: AlertWebhookItem[]): Array<{ day: string; dayN
       return acc;
     }
     
-    // Filtrar apenas datas do mês atual + 1 semana do mês seguinte
+    // Filtrar apenas datas: todo o mês atual (semana 1 até última semana) + 1 semana do mês seguinte
     const datasFiltradas = alert.datas
       .map((dataItem) => {
         const [day, month, year] = dataItem.data.split('/');
@@ -113,7 +115,7 @@ const groupAlertsByDay = (alerts: AlertWebhookItem[]): Array<{ day: string; dayN
         dataObj.setHours(0, 0, 0, 0);
         return { dataObj, dataItem };
       })
-      .filter(({ dataObj }) => dataObj >= primeiroDiaMes && dataObj <= umaSemanaDepois); // Mês atual + 1 semana do mês seguinte
+      .filter(({ dataObj }) => dataObj >= primeiroDiaMes && dataObj <= fimPrimeiraSemanaMesSeguinte); // Todo o mês atual + 1 semana do mês seguinte
     
     if (datasFiltradas.length === 0) {
       // Sem datas no período, adicionar ao grupo "Sem data"
@@ -210,6 +212,90 @@ const Index = () => {
   const isPsychologist = user?.role === "psychologist";
   const canViewAlerts = isAdmin || isReceptionist; // Apenas admin e recepcionista podem ver alertas
 
+  // Função auxiliar para corrigir status de agendamento baseado nos appointments reais
+  const correctAppointmentStatus = async (alertItems: AlertWebhookItem[]): Promise<AlertWebhookItem[]> => {
+    try {
+      const appointmentsResponse = await fetch(
+        "https://webhook.essenciasaudeintegrada.com.br/webhook/appointmens",
+        {
+          method: "GET",
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+      
+      if (!appointmentsResponse.ok) {
+        return alertItems; // Retornar sem alterações se falhar
+      }
+      
+      const appointments = await appointmentsResponse.json();
+      
+      // Criar um mapa de appointments por patient_id e data
+      // Formato: Map<patient_id, Map<date_YYYY-MM-DD, appointment>>
+      const appointmentsMap = new Map<number, Map<string, any>>();
+      
+      if (Array.isArray(appointments)) {
+        appointments.forEach((apt: any) => {
+          if (apt.patient_id && apt.date) {
+            if (!appointmentsMap.has(apt.patient_id)) {
+              appointmentsMap.set(apt.patient_id, new Map());
+            }
+            const patientAppointments = appointmentsMap.get(apt.patient_id)!;
+            // Armazenar por data no formato YYYY-MM-DD
+            patientAppointments.set(apt.date, apt);
+          }
+        });
+      }
+      
+      // Corrigir status de agendamento nos alertas
+      return alertItems.map(alert => {
+        const patientId = alert.patient_id;
+        
+        // Se não tem patient_id, não podemos verificar
+        if (!patientId) {
+          return alert;
+        }
+        
+        // Verificar se há appointments para este paciente
+        const patientAppointments = appointmentsMap.get(patientId);
+        if (!patientAppointments) {
+          return alert;
+        }
+        
+        // Atualizar datas do alerta
+        if (alert.datas && Array.isArray(alert.datas)) {
+          const updatedDatas = alert.datas.map(dataItem => {
+            // Converter data de DD/MM/YYYY para YYYY-MM-DD
+            const [day, month, year] = dataItem.data.split('/');
+            const dateFormatted = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            
+            // Verificar se há appointment para esta data
+            const appointment = patientAppointments.get(dateFormatted);
+            
+            // Se há appointment e o status está como "falta", corrigir para "ok"
+            if (appointment && dataItem.agendamento === "falta") {
+              return {
+                ...dataItem,
+                agendamento: "ok"
+              };
+            }
+            
+            return dataItem;
+          });
+          
+          return {
+            ...alert,
+            datas: updatedDatas
+          };
+        }
+        
+        return alert;
+      });
+    } catch (error) {
+      console.error('Erro ao corrigir status de agendamento:', error);
+      return alertItems; // Retornar sem alterações se falhar
+    }
+  };
+
   // Função para buscar alertas da API
   const fetchAlerts = async () => {
     try {
@@ -240,6 +326,9 @@ const Index = () => {
       } else if (data && typeof data === 'object') {
         alertItems = [data];
       }
+      
+      // Corrigir status de agendamento baseado nos appointments reais
+      alertItems = await correctAppointmentStatus(alertItems);
       
       setAlertItems(alertItems);
       
@@ -272,13 +361,18 @@ const Index = () => {
         });
         
         // Atualizar os alertas com os IDs encontrados
-        setAlertItems(alertItems.map(alert => {
+        let updatedAlertItems = alertItems.map(alert => {
           const foundAlert = alertsWithoutIds.find(a => a.paciente_nome === alert.paciente_nome);
           if (foundAlert && foundAlert.patient_id) {
             return { ...alert, patient_id: foundAlert.patient_id };
           }
           return alert;
-        }));
+        });
+        
+        // Se encontramos novos patient_ids, corrigir novamente os status de agendamento
+        updatedAlertItems = await correctAppointmentStatus(updatedAlertItems);
+        
+        setAlertItems(updatedAlertItems);
       }
       
       // Remover duplicatas
@@ -622,20 +716,20 @@ const Index = () => {
           onClick={() => setShowAlertModal(false)}
         >
           <div
-            className="bg-white rounded-xl shadow-2xl w-full max-w-6xl mt-8 max-h-[90vh] overflow-hidden"
+            className="bg-white rounded-xl shadow-2xl w-full max-w-6xl mt-4 md:mt-8 max-h-[95vh] md:max-h-[90vh] overflow-hidden mx-2 md:mx-0"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white p-4 flex items-center justify-between">
-              <h2 className="text-xl font-bold">Alertas do Sistema</h2>
+            <div className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white p-3 md:p-4 flex items-center justify-between">
+              <h2 className="text-lg md:text-xl font-bold">Alertas do Sistema</h2>
               <button
                 onClick={() => setShowAlertModal(false)}
                 className="p-1 rounded-full hover:bg-white/20 transition"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5 md:w-6 md:h-6" />
               </button>
             </div>
 
-            <div className="p-6 max-h-[calc(90vh-120px)] overflow-y-auto">
+            <div className="p-3 md:p-6 max-h-[calc(95vh-100px)] md:max-h-[calc(90vh-120px)] overflow-y-auto">
               <Tabs defaultValue="alerts" className="w-full">
                 <TabsList className="grid w-full grid-cols-2">
                   <TabsTrigger value="alerts" className="flex items-center gap-2">
@@ -670,8 +764,8 @@ const Index = () => {
                           </CardTitle>
                         </CardHeader>
                         <CardContent className="px-0 pb-0">
-                          {/* Cabeçalho da tabela */}
-                          <div className="flex items-center px-4 py-2 bg-gray-100 text-sm font-medium text-gray-700 mb-1">
+                          {/* Cabeçalho da tabela - oculto em mobile */}
+                          <div className="hidden md:flex items-center px-4 py-2 bg-gray-100 text-sm font-medium text-gray-700 mb-1">
                             <div className="flex items-center gap-2 flex-1">
                               <User className="h-4 w-4" />
                               <span>Paciente</span>
@@ -764,20 +858,20 @@ const Index = () => {
                               const alertColor = isActive ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200";
                               
                               return (
-                                <div key={index} className={`flex items-center px-4 py-3 rounded text-sm hover:bg-opacity-80 transition-colors border-l-4 ${alertColor}`}>
+                                <div key={index} className={`flex flex-col md:flex-row md:items-center gap-3 md:gap-0 px-3 md:px-4 py-3 rounded text-sm hover:bg-opacity-80 transition-colors border-l-4 ${alertColor}`}>
                                   {/* Nome do Paciente */}
-                                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                                    <User className="h-4 w-4 text-gray-500 flex-shrink-0" />
-                                    <div className="flex flex-col">
-                                      <div className="flex items-center gap-2">
-                                      <span className="font-medium truncate">{alert.paciente_nome}</span>
+                                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                                    <User className="h-4 w-4 text-gray-500 flex-shrink-0 mt-0.5" />
+                                    <div className="flex flex-col gap-1 flex-1 min-w-0">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="font-medium break-words">{alert.paciente_nome}</span>
                                         {(() => {
                                           // Tentar usar birthdate do alert, ou buscar do cache se tiver patient_id
                                           const birthdate = alert.birthdate || (alert.patient_id ? patientsBirthdates.get(alert.patient_id) : undefined);
                                           const categoria = getCategoriaEtaria(birthdate);
                                           
                                           return categoria ? (
-                                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${
                                               categoria === "Criança" 
                                                 ? "bg-orange-100 text-orange-700" 
                                                 : "bg-blue-100 text-blue-700"
@@ -813,37 +907,39 @@ const Index = () => {
                                         </div>
                                       )}
                                     </div>
-                                      </div>
+                                  </div>
                                   
                                   {/* Datas e Status */}
-                                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                                    <div className="flex flex-col gap-1">
+                                  <div className="flex flex-col gap-2 flex-1 min-w-0 md:items-start">
+                                    <div className="flex flex-col gap-2 w-full">
                                       {alert.datas && Array.isArray(alert.datas) ? (() => {
                                         // Calcular data de hoje para comparação
                                         const hoje = new Date();
                                         hoje.setHours(0, 0, 0, 0);
                                         
-                                        // Calcular início do mês atual e fim (mês atual + 1 semana do mês seguinte)
+                                        // Calcular data inicial (primeiro dia do mês atual) e fim (primeira semana completa do mês seguinte)
                                         const anoAtual = hoje.getFullYear();
                                         const mesAtual = hoje.getMonth();
+                                        
+                                        // Data inicial: primeiro dia do mês atual (mostra todo o mês atual)
                                         const primeiroDiaMes = new Date(anoAtual, mesAtual, 1);
                                         primeiroDiaMes.setHours(0, 0, 0, 0);
                                         
                                         // Primeiro dia do mês seguinte
                                         const primeiroDiaMesSeguinte = new Date(anoAtual, mesAtual + 1, 1);
-                                        // 1 semana depois (7 dias)
-                                        const umaSemanaDepois = new Date(primeiroDiaMesSeguinte);
-                                        umaSemanaDepois.setDate(umaSemanaDepois.getDate() + 7);
-                                        umaSemanaDepois.setHours(23, 59, 59, 999);
+                                        // Fim da primeira semana do mês seguinte (dia 7)
+                                        const fimPrimeiraSemanaMesSeguinte = new Date(primeiroDiaMesSeguinte);
+                                        fimPrimeiraSemanaMesSeguinte.setDate(7); // Dia 7 do mês seguinte
+                                        fimPrimeiraSemanaMesSeguinte.setHours(23, 59, 59, 999);
                                         
-                                        // Filtrar datas: mostrar todas as datas do mês atual + 1 semana do mês seguinte
+                                        // Filtrar datas: todo o mês atual (semana 1 até última semana) + 1 semana do mês seguinte
                                         const datasFiltradas = alert.datas.filter((dataItem) => {
                                           const [day, month, year] = dataItem.data.split('/');
                                           const dataObj = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
                                           dataObj.setHours(0, 0, 0, 0);
                                           
-                                          // Incluir datas do mês atual até 1 semana do mês seguinte
-                                          const isIncluded = dataObj >= primeiroDiaMes && dataObj <= umaSemanaDepois;
+                                          // Incluir datas: todo o mês atual + 1 semana do mês seguinte
+                                          const isIncluded = dataObj >= primeiroDiaMes && dataObj <= fimPrimeiraSemanaMesSeguinte;
                                           
                                           return isIncluded;
                                         });
@@ -883,15 +979,15 @@ const Index = () => {
                                                            "bg-blue-200 text-blue-900";
                                           
                                           return (
-                                            <div key={idx} className={`flex items-center gap-2 ${isHoje ? 'ring-2 ring-blue-500 ring-offset-1 rounded-md px-1' : ''}`}>
-                                              <span className={`text-xs font-medium min-w-[80px] ${isHoje ? 'font-bold text-blue-700' : 'text-gray-600'}`}>
+                                            <div key={idx} className={`flex flex-col sm:flex-row sm:items-center gap-2 p-2 rounded-md ${isHoje ? 'ring-2 ring-blue-500 ring-offset-1 bg-blue-50/50' : 'bg-gray-50/50'}`}>
+                                              <span className={`text-xs font-medium min-w-[90px] sm:min-w-[80px] ${isHoje ? 'font-bold text-blue-700' : 'text-gray-600'}`}>
                                                 {dataItem.data}
                                                 {isHoje && <span className="ml-1 text-blue-600">●</span>}
                                               </span>
-                                              <div className="flex gap-1">
+                                              <div className="flex flex-wrap gap-1.5 sm:gap-1">
                                                 {dataItem.agendamento === "falta" ? (
                                                   <span 
-                                                    className={`px-2 py-1 rounded text-xs font-medium ${agendamentoColor} cursor-pointer hover:opacity-80 transition-opacity`}
+                                                    className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${agendamentoColor} cursor-pointer hover:opacity-80 transition-opacity`}
                                                     onClick={(e) => {
                                                       e.stopPropagation();
                                                       handleOpenAppointmentForm(alert, dataItem);
@@ -901,12 +997,12 @@ const Index = () => {
                                                     📅 falta agendamento
                                                   </span>
                                                 ) : (
-                                                  <span className={`px-2 py-1 rounded text-xs font-medium ${agendamentoColor}`}>
+                                                  <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${agendamentoColor}`}>
                                                     📅 {dataItem.agendamento}
                                                   </span>
                                                 )}
                                                 {!isParticular && (
-                                                <span className={`px-2 py-1 rounded text-xs font-medium ${guiaColor}`}>
+                                                <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${guiaColor}`}>
                                                   📋 {dataItem.guia === "falta" ? "falta guia" : dataItem.guia}
                                                 </span>
                                                 )}
@@ -920,19 +1016,19 @@ const Index = () => {
                                     </div>
                                   </div>
                                             
-                                            {/* Botão Editar */}
-                                  <div className="flex items-center gap-2 w-20">
-                                              <button
+                                  {/* Botão Editar */}
+                                  <div className="flex items-center justify-end md:justify-start gap-2 md:w-20 mt-2 md:mt-0">
+                                    <button
                                       onClick={() => handleEditAlert(alert)}
-                                                className="p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
-                                                title="Editar alerta"
-                                              >
-                                                <Edit className="h-4 w-4" />
-                                              </button>
-                                            </div>
-                                          </div>
-                                        );
-                                      })}
+                                      className="p-2 md:p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                      title="Editar alerta"
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
                                 </div>
                               ));
                             })()}
