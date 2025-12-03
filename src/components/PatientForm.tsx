@@ -274,8 +274,8 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
           description: isEdit ? "Paciente atualizado com sucesso." : "Paciente cadastrado com sucesso.",
         });
 
-        // Segundo submit: Enviar documento PDF (apenas para novos cadastros)
-        if (identityPdfFile && !isEdit) {
+        // Segundo submit: Enviar documento PDF (novos cadastros e edições com novo arquivo)
+        if (identityPdfFile) {
           try {
             console.log('Enviando PDF para insert_documento_pessoal');
             
@@ -307,7 +307,9 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
               console.error('Erro ao enviar documento pessoal:', pdfResponse.status, errorText);
               toast({
                 title: "Aviso",
-                description: "Paciente cadastrado, mas houve erro ao enviar documento de identidade.",
+                description: isEdit 
+                  ? "Paciente atualizado, mas houve erro ao enviar documento de identidade."
+                  : "Paciente cadastrado, mas houve erro ao enviar documento de identidade.",
                 variant: "destructive"
               });
             }
@@ -315,7 +317,9 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
             console.error('Erro ao enviar documento pessoal:', pdfError);
             toast({
               title: "Aviso",
-              description: "Paciente cadastrado, mas houve erro ao enviar documento de identidade.",
+              description: isEdit
+                ? "Paciente atualizado, mas houve erro ao enviar documento de identidade."
+                : "Paciente cadastrado, mas houve erro ao enviar documento de identidade.",
               variant: "destructive"
             });
           }
