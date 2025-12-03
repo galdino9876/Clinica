@@ -484,7 +484,7 @@ const PatientForm = ({ onSave, onCancel, open = false, patient, isEdit = false }
             required={!isEdit}
           />
           <p className="text-xs text-gray-500 mt-1">
-            Tamanho máximo: 10MB
+            Apenas arquivos PDF são aceitos. Tamanho máximo: 10MB
           </p>
           {identityPdfFile && (
             <p className="text-sm text-green-600 mt-1">
