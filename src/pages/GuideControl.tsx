@@ -699,7 +699,9 @@ const GuideControl: React.FC = () => {
       if (patient.prestadores) {
         try {
           const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
-          prestadoresData.forEach(prestador => {
+          // Filtrar prestadores pelo mês selecionado (mesma lógica do dashboard)
+          const prestadoresDoMes = filterPrestadoresByMonth(prestadoresData, patient);
+          prestadoresDoMes.forEach(prestador => {
             if (prestador.existe_guia_assinada_psicologo === 1 && prestador.faturado === 0) {
               guidesToDownload.push({
                 numero_prestador: prestador.numero_prestador,
@@ -944,7 +946,9 @@ const GuideControl: React.FC = () => {
       if (patient.prestadores) {
         try {
           const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
-          prestadoresData.forEach(prestador => {
+          // Filtrar prestadores pelo mês selecionado (mesma lógica do dashboard)
+          const prestadoresDoMes = filterPrestadoresByMonth(prestadoresData, patient);
+          prestadoresDoMes.forEach(prestador => {
             if (prestador.existe_guia_assinada === 1 && 
                 prestador.existe_guia_assinada_psicologo === 0 && 
                 prestador.faturado === 0) {
