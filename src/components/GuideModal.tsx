@@ -35,9 +35,13 @@ const GuideModal: React.FC<GuideModalProps> = ({
 }) => {
   const [numeroPrestador, setNumeroPrestador] = useState<string>("");
   const [selectedDates, setSelectedDates] = useState<Date[]>([]);
+  const [dataValidade, setDataValidade] = useState<Date | undefined>(undefined);
+  const [dataVencimento, setDataVencimento] = useState<Date | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  const [validadeCalendarOpen, setValidadeCalendarOpen] = useState(false);
+  const [vencimentoCalendarOpen, setVencimentoCalendarOpen] = useState(false);
 
   // Filtrar datas que precisam de guias - usar as datas exatas da API
   const datesNeedingGuides = (patient.datas || [])
@@ -92,7 +96,9 @@ const GuideModal: React.FC<GuideModalProps> = ({
         date_2: "",
         date_3: "",
         date_4: "",
-        date_5: ""
+        date_5: "",
+        data_validade: dataValidade ? format(dataValidade, "yyyy-MM-dd") : "",
+        data_vencimento: dataVencimento ? format(dataVencimento, "yyyy-MM-dd") : ""
       };
 
       // Preencher as datas selecionadas
@@ -129,8 +135,12 @@ const GuideModal: React.FC<GuideModalProps> = ({
   const handleClose = () => {
     setNumeroPrestador("");
     setSelectedDates([]);
+    setDataValidade(undefined);
+    setDataVencimento(undefined);
     setError(null);
     setCalendarOpen(false);
+    setValidadeCalendarOpen(false);
+    setVencimentoCalendarOpen(false);
     onClose();
   };
 
@@ -156,6 +166,70 @@ const GuideModal: React.FC<GuideModalProps> = ({
               onChange={(e) => setNumeroPrestador(e.target.value)}
               disabled={loading}
             />
+          </div>
+
+          {/* Data de Validade */}
+          <div className="space-y-2">
+            <Label>Data de Validade</Label>
+            <Popover open={validadeCalendarOpen} onOpenChange={setValidadeCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !dataValidade && "text-muted-foreground"
+                  )}
+                  disabled={loading}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dataValidade ? format(dataValidade, "dd/MM/yyyy", { locale: ptBR }) : "Selecione a data de validade"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dataValidade}
+                  onSelect={(date) => {
+                    setDataValidade(date);
+                    setValidadeCalendarOpen(false);
+                  }}
+                  locale={ptBR}
+                  className="rounded-md"
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+
+          {/* Data de Vencimento */}
+          <div className="space-y-2">
+            <Label>Data de Vencimento</Label>
+            <Popover open={vencimentoCalendarOpen} onOpenChange={setVencimentoCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn(
+                    "w-full justify-start text-left font-normal",
+                    !dataVencimento && "text-muted-foreground"
+                  )}
+                  disabled={loading}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {dataVencimento ? format(dataVencimento, "dd/MM/yyyy", { locale: ptBR }) : "Selecione a data de vencimento"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={dataVencimento}
+                  onSelect={(date) => {
+                    setDataVencimento(date);
+                    setVencimentoCalendarOpen(false);
+                  }}
+                  locale={ptBR}
+                  className="rounded-md"
+                />
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* Seletor de datas */}

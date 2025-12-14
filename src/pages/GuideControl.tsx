@@ -49,6 +49,8 @@ interface PrestadorData {
   existe_guia_assinada_psicologo: number;
   date_faturado: string | null;
   faturado: number;
+  data_vencimento: string | null;
+  data_validade: string | null;
 }
 
 interface GuideData {
@@ -142,6 +144,23 @@ const GuideControl: React.FC = () => {
         });
       }, 50);
     });
+  };
+
+  // Função para normalizar dados dos prestadores após o parse do JSON
+  const normalizePrestadoresData = (parsed: any): PrestadorData[] => {
+    if (!Array.isArray(parsed)) return [];
+    
+    return parsed.map((p: any) => ({
+      numero_prestador: p.numero_prestador,
+      datas: p.datas || [],
+      existe_guia_autorizada: p.existe_guia_autorizada || 0,
+      existe_guia_assinada: p.existe_guia_assinada || 0,
+      existe_guia_assinada_psicologo: p.existe_guia_assinada_psicologo || 0,
+      date_faturado: p.date_faturado || null,
+      faturado: p.faturado || 0,
+      data_vencimento: p.data_vencimento || p.date_vencimento || null,
+      data_validade: p.data_validade || p.date_validade || null,
+    }));
   };
 
   // Função para determinar a cor da data baseada nas regras de negócio
@@ -263,7 +282,8 @@ const GuideControl: React.FC = () => {
       // Verificar se tem prestadores com guia
       if (patient.prestadores) {
         try {
-          const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
+          const parsed = JSON.parse(patient.prestadores);
+          const prestadoresData: PrestadorData[] = normalizePrestadoresData(parsed);
           hasGuide = prestadoresData.length > 0;
           
           // Filtrar prestadores pelo mês selecionado
@@ -314,7 +334,8 @@ const GuideControl: React.FC = () => {
   const hasPrestadoresWithSignedGuideInMonth = (patient: PatientData): boolean => {
     if (!patient.prestadores) return false;
     try {
-      const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
+      const parsed = JSON.parse(patient.prestadores);
+      const prestadoresData: PrestadorData[] = normalizePrestadoresData(parsed);
       const prestadoresNoMes = filterPrestadoresByMonth(prestadoresData, patient);
       return prestadoresNoMes.some(prestador => prestador.existe_guia_assinada_psicologo === 1);
     } catch (error) {
@@ -345,7 +366,8 @@ const GuideControl: React.FC = () => {
         // Pacientes sem número de guia (sem prestadores)
         if (!patient.prestadores) return true;
         try {
-          const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
+          const parsed = JSON.parse(patient.prestadores);
+          const prestadoresData: PrestadorData[] = normalizePrestadoresData(parsed);
           return prestadoresData.length === 0;
         } catch (error) {
           return true;
@@ -362,7 +384,8 @@ const GuideControl: React.FC = () => {
         // Pacientes com TODAS as guias sem assinatura pelo psicólogo (nenhuma com existe_guia_assinada_psicologo === 1)
         if (!patient.prestadores) return false;
         try {
-          const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
+          const parsed = JSON.parse(patient.prestadores);
+          const prestadoresData: PrestadorData[] = normalizePrestadoresData(parsed);
           // Retorna true apenas se TODAS as guias têm existe_guia_assinada_psicologo === 0
           return prestadoresData.length > 0 && prestadoresData.every(prestador => prestador.existe_guia_assinada_psicologo === 0);
         } catch (error) {
@@ -374,7 +397,8 @@ const GuideControl: React.FC = () => {
         // Pacientes com guias assinadas pelo psicólogo e prontas para faturar (não faturadas) no mês selecionado
         if (!patient.prestadores) return false;
         try {
-          const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
+          const parsed = JSON.parse(patient.prestadores);
+          const prestadoresData: PrestadorData[] = normalizePrestadoresData(parsed);
           const prestadoresNoMes = filterPrestadoresByMonth(prestadoresData, patient);
           return prestadoresNoMes.some(prestador => prestador.existe_guia_assinada_psicologo === 1 && prestador.faturado === 0);
         } catch (error) {
@@ -386,7 +410,8 @@ const GuideControl: React.FC = () => {
         // Pacientes com guias faturadas no mês selecionado
         if (!patient.prestadores) return false;
         try {
-          const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
+          const parsed = JSON.parse(patient.prestadores);
+          const prestadoresData: PrestadorData[] = normalizePrestadoresData(parsed);
           const prestadoresNoMes = filterPrestadoresByMonth(prestadoresData, patient);
           return prestadoresNoMes.some(prestador => prestador.faturado === 1);
         } catch (error) {
@@ -698,7 +723,8 @@ const GuideControl: React.FC = () => {
     patientsWithInsurance.forEach(patient => {
       if (patient.prestadores) {
         try {
-          const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
+          const parsed = JSON.parse(patient.prestadores);
+          const prestadoresData: PrestadorData[] = normalizePrestadoresData(parsed);
           // Filtrar prestadores pelo mês selecionado (mesma lógica do dashboard)
           const prestadoresDoMes = filterPrestadoresByMonth(prestadoresData, patient);
           prestadoresDoMes.forEach(prestador => {
@@ -945,7 +971,8 @@ const GuideControl: React.FC = () => {
     patientsWithInsurance.forEach(patient => {
       if (patient.prestadores) {
         try {
-          const prestadoresData: PrestadorData[] = JSON.parse(patient.prestadores);
+          const parsed = JSON.parse(patient.prestadores);
+          const prestadoresData: PrestadorData[] = normalizePrestadoresData(parsed);
           // Filtrar prestadores pelo mês selecionado (mesma lógica do dashboard)
           const prestadoresDoMes = filterPrestadoresByMonth(prestadoresData, patient);
           prestadoresDoMes.forEach(prestador => {
@@ -1385,11 +1412,14 @@ const GuideControl: React.FC = () => {
                 // Parse dos prestadores do JSON string
                 let prestadoresData: PrestadorData[] = [];
                 try {
-                  prestadoresData = patient.prestadores ? JSON.parse(patient.prestadores) : [];
+                  const parsed = patient.prestadores ? JSON.parse(patient.prestadores) : [];
+                  prestadoresData = normalizePrestadoresData(parsed);
                   
                   // Debug: verificar formato das datas dos prestadores
                   prestadoresData.forEach((prestador, idx) => {
                     console.log(`Prestador ${idx} - Datas:`, prestador.datas);
+                    console.log(`Prestador ${idx} - Data Vencimento:`, prestador.data_vencimento);
+                    console.log(`Prestador ${idx} - Data Validade:`, prestador.data_validade);
                     prestador.datas.forEach((data, dataIdx) => {
                       console.log(`  Data ${dataIdx}:`, data, '-> Date:', new Date(data));
                     });
@@ -1527,8 +1557,32 @@ const GuideControl: React.FC = () => {
                                   </div>
                                 </div>
                                 
+                                {/* Datas de Vencimento e Validade */}
+                                <div className="mt-4 flex flex-wrap gap-4">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-gray-700">Data Vencimento:</span>
+                                    {prestador.data_vencimento ? (
+                                      <span className="text-sm font-semibold text-gray-800">
+                                        {format(normalizeDate(prestador.data_vencimento), 'dd/MM/yyyy')}
+                                      </span>
+                                    ) : (
+                                      <span className="text-sm font-semibold text-red-600">Sem data</span>
+                                    )}
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-gray-700">Data Validade:</span>
+                                    {prestador.data_validade ? (
+                                      <span className="text-sm font-semibold text-gray-800">
+                                        {format(normalizeDate(prestador.data_validade), 'dd/MM/yyyy')}
+                                      </span>
+                                    ) : (
+                                      <span className="text-sm font-semibold text-red-600">Sem data</span>
+                                    )}
+                                  </div>
+                                </div>
+                                
                                 {/* Botões de Ação */}
-                                <div className="flex items-center gap-2 flex-wrap">
+                                <div className="flex items-center gap-2 flex-wrap mt-4">
                                   {/* Botão Guia Autorizada */}
                                   <div className="relative">
                                     {prestador.existe_guia_autorizada === 1 ? (
