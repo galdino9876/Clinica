@@ -119,7 +119,7 @@ const GuideControl: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingPrestador, setEditingPrestador] = useState<PrestadorData | null>(null);
   const [scrollPosition, setScrollPosition] = useState(0);
-  const [filterType, setFilterType] = useState<'all' | 'no-guide' | 'no-appointment' | 'guias-nao-assinadas' | 'guias-assinadas' | 'faturado'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'no-guide' | 'no-appointment' | 'guias-nao-assinadas' | 'guias-assinadas' | 'faturado' | 'falta-importar-guia'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     // Inicializar com o mês atual no formato YYYY-MM
@@ -274,6 +274,7 @@ const GuideControl: React.FC = () => {
     let totalGuiasSemAssinatura = 0;
     let totalGuiasAssinadasPsicologo = 0; // Prontas para faturar (assinadas mas não faturadas)
     let totalGuiasFaturadas = 0;
+    let totalFaltaImportarGuia = 0;
 
     patientsWithInsurance.forEach(patient => {
       let hasGuide = false;
@@ -299,6 +300,10 @@ const GuideControl: React.FC = () => {
             }
             if (prestador.faturado === 1) {
               totalGuiasFaturadas++; // Conta as faturadas
+            }
+            // Contar guias que faltam importar (existe_guia_assinada === 0 e tem número de prestador)
+            if (prestador.existe_guia_assinada === 0 && prestador.numero_prestador) {
+              totalFaltaImportarGuia++;
             }
           });
         } catch (error) {
@@ -326,7 +331,8 @@ const GuideControl: React.FC = () => {
       withoutAppointment: patientsWithoutAppointment,
       totalGuiasSemAssinatura: totalGuiasSemAssinatura,
       totalGuiasAssinadasPsicologo: totalGuiasAssinadasPsicologo, // Prontas para faturar
-      totalGuiasFaturadas: totalGuiasFaturadas
+      totalGuiasFaturadas: totalGuiasFaturadas,
+      totalFaltaImportarGuia: totalFaltaImportarGuia
     };
   };
 
@@ -414,6 +420,21 @@ const GuideControl: React.FC = () => {
           const prestadoresData: PrestadorData[] = normalizePrestadoresData(parsed);
           const prestadoresNoMes = filterPrestadoresByMonth(prestadoresData, patient);
           return prestadoresNoMes.some(prestador => prestador.faturado === 1);
+        } catch (error) {
+          return false;
+        }
+      }
+
+      if (filterType === 'falta-importar-guia') {
+        // Pacientes com prestadores que têm existe_guia_assinada === 0 e número de prestador
+        if (!patient.prestadores) return false;
+        try {
+          const parsed = JSON.parse(patient.prestadores);
+          const prestadoresData: PrestadorData[] = normalizePrestadoresData(parsed);
+          const prestadoresNoMes = filterPrestadoresByMonth(prestadoresData, patient);
+          return prestadoresNoMes.some(prestador => 
+            prestador.existe_guia_assinada === 0 && prestador.numero_prestador
+          );
         } catch (error) {
           return false;
         }
@@ -1190,7 +1211,7 @@ const GuideControl: React.FC = () => {
 
         {/* Dashboard de Estatísticas */}
         {!loading && !error && patientsData.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3 mb-6">
             {/* Card Total de Pacientes */}
             <Card 
               className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${
@@ -1200,15 +1221,13 @@ const GuideControl: React.FC = () => {
               }`}
               onClick={() => setFilterType('all')}
             >
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Total de Pacientes</p>
-                    <p className="text-3xl font-bold text-gray-900">{getDashboardStats().total}</p>
+              <CardContent className="p-3">
+                <div className="flex flex-col items-center justify-center text-center gap-1">
+                  <div className="p-2 bg-blue-100 rounded-full mb-1">
+                    <User className="h-4 w-4 text-blue-600" />
                   </div>
-                  <div className="p-3 bg-blue-100 rounded-full">
-                    <User className="h-6 w-6 text-blue-600" />
-                  </div>
+                  <p className="text-xs font-medium text-gray-600 leading-tight">Total</p>
+                  <p className="text-xl sm:text-2xl font-bold text-gray-900">{getDashboardStats().total}</p>
                 </div>
               </CardContent>
             </Card>
@@ -1222,15 +1241,13 @@ const GuideControl: React.FC = () => {
               }`}
               onClick={() => setFilterType('no-guide')}
             >
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Sem Número de Guia</p>
-                    <p className="text-3xl font-bold text-red-600">{getDashboardStats().withoutGuide}</p>
+              <CardContent className="p-3">
+                <div className="flex flex-col items-center justify-center text-center gap-1">
+                  <div className="p-2 bg-red-100 rounded-full mb-1">
+                    <AlertTriangle className="h-4 w-4 text-red-600" />
                   </div>
-                  <div className="p-3 bg-red-100 rounded-full">
-                    <AlertTriangle className="h-6 w-6 text-red-600" />
-                  </div>
+                  <p className="text-xs font-medium text-gray-600 leading-tight">Sem Guia</p>
+                  <p className="text-xl sm:text-2xl font-bold text-red-600">{getDashboardStats().withoutGuide}</p>
                 </div>
               </CardContent>
             </Card>
@@ -1244,15 +1261,13 @@ const GuideControl: React.FC = () => {
               }`}
               onClick={() => setFilterType('no-appointment')}
             >
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Sem Agendamento</p>
-                    <p className="text-3xl font-bold text-orange-600">{getDashboardStats().withoutAppointment}</p>
+              <CardContent className="p-3">
+                <div className="flex flex-col items-center justify-center text-center gap-1">
+                  <div className="p-2 bg-orange-100 rounded-full mb-1">
+                    <Calendar className="h-4 w-4 text-orange-600" />
                   </div>
-                  <div className="p-3 bg-orange-100 rounded-full">
-                    <Calendar className="h-6 w-6 text-orange-600" />
-                  </div>
+                  <p className="text-xs font-medium text-gray-600 leading-tight">Sem Agend.</p>
+                  <p className="text-xl sm:text-2xl font-bold text-orange-600">{getDashboardStats().withoutAppointment}</p>
                 </div>
               </CardContent>
             </Card>
@@ -1266,22 +1281,47 @@ const GuideControl: React.FC = () => {
               }`}
               onClick={() => setFilterType('guias-nao-assinadas')}
             >
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Total de guias sem assinatura</p>
-                    <p className="text-3xl font-bold text-green-600">{getDashboardStats().totalGuiasSemAssinatura}</p>
-                  </div>
+              <CardContent className="p-3">
+                <div className="flex flex-col items-center justify-center text-center gap-1">
                   <div 
-                    className={`p-3 rounded-full transition-all duration-200 ${
+                    className={`p-2 rounded-full transition-all duration-200 mb-1 ${
                       filterType === 'guias-nao-assinadas' 
                         ? 'bg-green-200 ring-2 ring-green-500' 
                         : 'bg-green-100'
                     }`}
                     title="Clique para filtrar guias sem assinatura"
                   >
-                    <FileText className="h-6 w-6 text-green-600" />
+                    <FileText className="h-4 w-4 text-green-600" />
                   </div>
+                  <p className="text-xs font-medium text-gray-600 leading-tight">Falta Ass. Psic.</p>
+                  <p className="text-xl sm:text-2xl font-bold text-green-600">{getDashboardStats().totalGuiasSemAssinatura}</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Card Falta Importar Guia */}
+            <Card 
+              className={`cursor-pointer transition-all duration-200 hover:shadow-lg hover:bg-gray-50 ${
+                filterType === 'falta-importar-guia' 
+                  ? 'ring-2 ring-amber-500 bg-amber-50' 
+                  : 'hover:bg-gray-50'
+              }`}
+              onClick={() => setFilterType('falta-importar-guia')}
+            >
+              <CardContent className="p-3">
+                <div className="flex flex-col items-center justify-center text-center gap-1">
+                  <div 
+                    className={`p-2 rounded-full transition-all duration-200 mb-1 ${
+                      filterType === 'falta-importar-guia' 
+                        ? 'bg-amber-200 ring-2 ring-amber-500' 
+                        : 'bg-amber-100'
+                    }`}
+                    title="Clique para filtrar guias que faltam importar"
+                  >
+                    <Upload className="h-4 w-4 text-amber-600" />
+                  </div>
+                  <p className="text-xs font-medium text-gray-600 leading-tight">Falta Importar</p>
+                  <p className="text-xl sm:text-2xl font-bold text-amber-600">{getDashboardStats().totalFaltaImportarGuia}</p>
                 </div>
               </CardContent>
             </Card>
@@ -1295,22 +1335,20 @@ const GuideControl: React.FC = () => {
               }`}
               onClick={() => setFilterType('guias-assinadas')}
             >
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">Guias Assinadas pelo Psicólogo</p>
-                    <p className="text-3xl font-bold text-purple-600">{getDashboardStats().totalGuiasAssinadasPsicologo}</p>
-                  </div>
+              <CardContent className="p-3">
+                <div className="flex flex-col items-center justify-center text-center gap-1">
                   <div 
-                    className={`p-3 rounded-full transition-all duration-200 ${
+                    className={`p-2 rounded-full transition-all duration-200 mb-1 ${
                       filterType === 'guias-assinadas' 
                         ? 'bg-purple-200 ring-2 ring-purple-500' 
                         : 'bg-purple-100'
                     }`}
                     title="Clique para filtrar guias prontas para faturar"
                   >
-                    <CheckCircle className="h-6 w-6 text-purple-600" />
+                    <CheckCircle className="h-4 w-4 text-purple-600" />
                   </div>
+                  <p className="text-xs font-medium text-gray-600 leading-tight">Pronto Faturar</p>
+                  <p className="text-xl sm:text-2xl font-bold text-purple-600">{getDashboardStats().totalGuiasAssinadasPsicologo}</p>
                 </div>
               </CardContent>
             </Card>
@@ -1324,22 +1362,20 @@ const GuideControl: React.FC = () => {
               }`}
               onClick={() => setFilterType('faturado')}
             >
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600">FATURADO</p>
-                    <p className="text-3xl font-bold text-emerald-600">{getDashboardStats().totalGuiasFaturadas}</p>
-                  </div>
+              <CardContent className="p-3">
+                <div className="flex flex-col items-center justify-center text-center gap-1">
                   <div 
-                    className={`p-3 rounded-full transition-all duration-200 ${
+                    className={`p-2 rounded-full transition-all duration-200 mb-1 ${
                       filterType === 'faturado' 
                         ? 'bg-emerald-200 ring-2 ring-emerald-500' 
                         : 'bg-emerald-100'
                     }`}
                     title="Clique para filtrar guias faturadas"
                   >
-                    <DollarSign className="h-6 w-6 text-emerald-600" />
+                    <DollarSign className="h-4 w-4 text-emerald-600" />
                   </div>
+                  <p className="text-xs font-medium text-gray-600 leading-tight">FATURADO</p>
+                  <p className="text-xl sm:text-2xl font-bold text-emerald-600">{getDashboardStats().totalGuiasFaturadas}</p>
                 </div>
               </CardContent>
             </Card>
@@ -1384,6 +1420,7 @@ const GuideControl: React.FC = () => {
                     {filterType === 'guias-nao-assinadas' && <FileText className="h-8 w-8 text-gray-400" />}
                     {filterType === 'guias-assinadas' && <CheckCircle className="h-8 w-8 text-gray-400" />}
                     {filterType === 'faturado' && <DollarSign className="h-8 w-8 text-gray-400" />}
+                    {filterType === 'falta-importar-guia' && <Upload className="h-8 w-8 text-gray-400" />}
                   </div>
                   <h3 className="text-lg font-medium text-gray-700 mb-2">
                     {filterType === 'no-guide' && 'Nenhum paciente sem guia encontrado'}
@@ -1391,6 +1428,7 @@ const GuideControl: React.FC = () => {
                     {filterType === 'guias-nao-assinadas' && 'Nenhuma guia sem assinatura encontrada'}
                     {filterType === 'guias-assinadas' && 'Nenhuma guia pronta para faturar encontrada'}
                     {filterType === 'faturado' && 'Nenhuma guia faturada encontrada'}
+                    {filterType === 'falta-importar-guia' && 'Nenhuma guia para importar encontrada'}
                   </h3>
                   <p className="text-gray-500 mb-4">
                     {filterType === 'no-guide' && 'Todos os pacientes possuem número de guia.'}
@@ -1398,6 +1436,7 @@ const GuideControl: React.FC = () => {
                     {filterType === 'guias-nao-assinadas' && 'Todas as guias foram assinadas pelo psicólogo.'}
                     {filterType === 'guias-assinadas' && 'Não há guias prontas para faturar no momento.'}
                     {filterType === 'faturado' && 'Não há guias faturadas no período selecionado.'}
+                    {filterType === 'falta-importar-guia' && 'Todas as guias assinadas já foram importadas.'}
                   </p>
                   <Button 
                     variant="outline" 
@@ -1513,6 +1552,10 @@ const GuideControl: React.FC = () => {
                               // Se o filtro "faturado" estiver ativo, mostrar apenas prestadores faturados
                               if (filterType === 'faturado') {
                                 return prestador.faturado === 1;
+                              }
+                              // Se o filtro "falta-importar-guia" estiver ativo, mostrar apenas prestadores com existe_guia_assinada === 0 e número de prestador
+                              if (filterType === 'falta-importar-guia') {
+                                return prestador.existe_guia_assinada === 0 && prestador.numero_prestador;
                               }
                               return true;
                             })
