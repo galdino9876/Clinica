@@ -1160,7 +1160,7 @@ const GuideControl: React.FC = () => {
             <Button 
               onClick={handleDownloadEverything} 
               disabled={loading || downloadingEverything || downloadingSignedGuides}
-              className="flex items-center gap-2 bg-green-600 hover:bg-green-700 cursor-pointer [&>*]:cursor-pointer"
+              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 cursor-pointer [&>*]:cursor-pointer"
             >
               <Upload className="h-4 w-4 mr-2" />
               {downloadingEverything ? 'Baixando...' : 'Baixar Guias Prontas'}
@@ -1245,6 +1245,7 @@ const GuideControl: React.FC = () => {
                 <div className="flex flex-col items-center justify-center text-center gap-1">
                   <div className="p-2 bg-red-100 rounded-full mb-1">
                     <AlertTriangle className="h-4 w-4 text-red-600" />
+                    
                   </div>
                   <p className="text-xs font-medium text-gray-600 leading-tight">Sem Guia</p>
                   <p className="text-xl sm:text-2xl font-bold text-red-600">{getDashboardStats().withoutGuide}</p>
