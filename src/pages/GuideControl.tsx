@@ -301,8 +301,8 @@ const GuideControl: React.FC = () => {
             if (prestador.faturado === 1) {
               totalGuiasFaturadas++; // Conta as faturadas
             }
-            // Contar guias que faltam importar (existe_guia_assinada === 0 e tem número de prestador)
-            if (prestador.existe_guia_assinada === 0 && prestador.numero_prestador) {
+            // Contar guias que faltam importar (existe_guia_assinada === 0, tem número de prestador e não está faturado)
+            if (prestador.existe_guia_assinada === 0 && prestador.numero_prestador && prestador.faturado !== 1) {
               totalFaltaImportarGuia++;
             }
           });
@@ -426,14 +426,14 @@ const GuideControl: React.FC = () => {
       }
 
       if (filterType === 'falta-importar-guia') {
-        // Pacientes com prestadores que têm existe_guia_assinada === 0 e número de prestador
+        // Pacientes com prestadores que têm existe_guia_assinada === 0, número de prestador e não estão faturados
         if (!patient.prestadores) return false;
         try {
           const parsed = JSON.parse(patient.prestadores);
           const prestadoresData: PrestadorData[] = normalizePrestadoresData(parsed);
           const prestadoresNoMes = filterPrestadoresByMonth(prestadoresData, patient);
           return prestadoresNoMes.some(prestador => 
-            prestador.existe_guia_assinada === 0 && prestador.numero_prestador
+            prestador.existe_guia_assinada === 0 && prestador.numero_prestador && prestador.faturado !== 1
           );
         } catch (error) {
           return false;
@@ -1160,10 +1160,10 @@ const GuideControl: React.FC = () => {
             <Button 
               onClick={handleDownloadEverything} 
               disabled={loading || downloadingEverything || downloadingSignedGuides}
-              className="flex items-center gap-2 bg-purple-600 hover:bg-purple-700 cursor-pointer [&>*]:cursor-pointer"
+              className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-700 cursor-pointer [&>*]:cursor-pointer"
             >
               <Upload className="h-4 w-4 mr-2" />
-              {downloadingEverything ? 'Baixando...' : 'Baixar Guias Prontas'}
+              {downloadingEverything ? 'Baixando...' : 'Todas Guias para PSI assinar'}
             </Button>
             <Button 
               onClick={handleDownloadSignedGuides} 
@@ -1171,7 +1171,7 @@ const GuideControl: React.FC = () => {
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 cursor-pointer [&>*]:cursor-pointer"
             >
               <Upload className="h-4 w-4 mr-2" />
-              {downloadingSignedGuides ? 'Baixando...' : 'Baixar Guias Assinadas'}
+              {downloadingSignedGuides ? 'Baixando...' : 'Todas faturar+documentos'}
             </Button>
             <Button onClick={fetchData} variant="outline" disabled={loading} className="cursor-pointer [&>*]:cursor-pointer">
               <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
@@ -1273,33 +1273,6 @@ const GuideControl: React.FC = () => {
               </CardContent>
             </Card>
 
-            {/* Card Total de Guias sem Assinatura */}
-            <Card 
-              className={`cursor-pointer transition-all duration-200 hover:shadow-lg hover:bg-gray-50 ${
-                filterType === 'guias-nao-assinadas' 
-                  ? 'ring-2 ring-green-500 bg-green-50' 
-                  : 'hover:bg-gray-50'
-              }`}
-              onClick={() => setFilterType('guias-nao-assinadas')}
-            >
-              <CardContent className="p-3">
-                <div className="flex flex-col items-center justify-center text-center gap-1">
-                  <div 
-                    className={`p-2 rounded-full transition-all duration-200 mb-1 ${
-                      filterType === 'guias-nao-assinadas' 
-                        ? 'bg-green-200 ring-2 ring-green-500' 
-                        : 'bg-green-100'
-                    }`}
-                    title="Clique para filtrar guias sem assinatura"
-                  >
-                    <FileText className="h-4 w-4 text-green-600" />
-                  </div>
-                  <p className="text-xs font-medium text-gray-600 leading-tight">Falta Ass. Psic.</p>
-                  <p className="text-xl sm:text-2xl font-bold text-green-600">{getDashboardStats().totalGuiasSemAssinatura}</p>
-                </div>
-              </CardContent>
-            </Card>
-
             {/* Card Falta Importar Guia */}
             <Card 
               className={`cursor-pointer transition-all duration-200 hover:shadow-lg hover:bg-gray-50 ${
@@ -1323,6 +1296,33 @@ const GuideControl: React.FC = () => {
                   </div>
                   <p className="text-xs font-medium text-gray-600 leading-tight">Falta Importar</p>
                   <p className="text-xl sm:text-2xl font-bold text-amber-600">{getDashboardStats().totalFaltaImportarGuia}</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Card Total de Guias sem Assinatura */}
+            <Card 
+              className={`cursor-pointer transition-all duration-200 hover:shadow-lg hover:bg-gray-50 ${
+                filterType === 'guias-nao-assinadas' 
+                  ? 'ring-2 ring-green-500 bg-green-50' 
+                  : 'hover:bg-gray-50'
+              }`}
+              onClick={() => setFilterType('guias-nao-assinadas')}
+            >
+              <CardContent className="p-3">
+                <div className="flex flex-col items-center justify-center text-center gap-1">
+                  <div 
+                    className={`p-2 rounded-full transition-all duration-200 mb-1 ${
+                      filterType === 'guias-nao-assinadas' 
+                        ? 'bg-green-200 ring-2 ring-purple-500' 
+                        : 'bg-green-100'
+                    }`}
+                    title="Clique para filtrar guias sem assinatura"
+                  >
+                    <FileText className="h-4 w-4 text-green-600" />
+                  </div>
+                  <p className="text-xs font-medium text-gray-600 leading-tight">Falta Ass. Psic.</p>
+                  <p className="text-xl sm:text-2xl font-bold text-purple-600">{getDashboardStats().totalGuiasSemAssinatura}</p>
                 </div>
               </CardContent>
             </Card>
@@ -1554,9 +1554,9 @@ const GuideControl: React.FC = () => {
                               if (filterType === 'faturado') {
                                 return prestador.faturado === 1;
                               }
-                              // Se o filtro "falta-importar-guia" estiver ativo, mostrar apenas prestadores com existe_guia_assinada === 0 e número de prestador
+                              // Se o filtro "falta-importar-guia" estiver ativo, mostrar apenas prestadores com existe_guia_assinada === 0, número de prestador e não faturados
                               if (filterType === 'falta-importar-guia') {
-                                return prestador.existe_guia_assinada === 0 && prestador.numero_prestador;
+                                return prestador.existe_guia_assinada === 0 && prestador.numero_prestador && prestador.faturado !== 1;
                               }
                               return true;
                             })
