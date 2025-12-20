@@ -1619,7 +1619,7 @@ const FinanceCharts = () => {
                         <TableRow>
                           <TableHead>Psicólogo</TableHead>
                           <TableHead>Data Criação</TableHead>
-                          <TableHead>Valor A receber</TableHead>
+                          <TableHead>Valor A receber (-6%)</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Ações/Comprovante</TableHead>
                         </TableRow>
@@ -1783,7 +1783,7 @@ const FinanceCharts = () => {
                           <TableRow>
                             <TableHead>Data Criação</TableHead>
                             <TableHead>Valor Total</TableHead>
-                            <TableHead>Comissão (50%)</TableHead>
+                            <TableHead>Valor A receber (-6%)</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Atendimentos</TableHead>
                             <TableHead>Ações/Comprovante</TableHead>
@@ -1799,7 +1799,7 @@ const FinanceCharts = () => {
                                 {format(new Date(lot.payment_created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                               </TableCell>
                               <TableCell>R$ {lot.total_value.toFixed(2)}</TableCell>
-                              <TableCell>R$ {(lot.total_value * 0.5).toFixed(2)}</TableCell>
+                              <TableCell>R$ {((lot.total_value * 0.94) * 0.5).toFixed(2)}</TableCell>
                               <TableCell>
                                 <Badge className={
                                   lot.status === 'payments_created' 
