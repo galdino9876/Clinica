@@ -1163,7 +1163,7 @@ const GuideControl: React.FC = () => {
               className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-700 cursor-pointer [&>*]:cursor-pointer"
             >
               <Upload className="h-4 w-4 mr-2" />
-              {downloadingEverything ? 'Baixando...' : 'Todas Guias para PSI assinar'}
+              {downloadingEverything ? 'Baixando...' : 'Todas faturar+documentos'}
             </Button>
             <Button 
               onClick={handleDownloadSignedGuides} 
@@ -1171,7 +1171,7 @@ const GuideControl: React.FC = () => {
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 cursor-pointer [&>*]:cursor-pointer"
             >
               <Upload className="h-4 w-4 mr-2" />
-              {downloadingSignedGuides ? 'Baixando...' : 'Todas faturar+documentos'}
+              {downloadingSignedGuides ? 'Baixando...' : 'Todas Guias para PSI assinar'}
             </Button>
             <Button onClick={fetchData} variant="outline" disabled={loading} className="cursor-pointer [&>*]:cursor-pointer">
               <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
