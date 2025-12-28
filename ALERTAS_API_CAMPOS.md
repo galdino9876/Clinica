@@ -11,7 +11,7 @@
    - Exemplo: `"ANA CLARA VIANA DE ASSUNÇÃO"`
    - Localização no código: Linha 453, 275, 283
 
-2. **`exibir`** (number | string)
+2. **`active`** (number | string)
    - Usado para: Controlar se o alerta está ativo (1) ou desabilitado (0)
    - Valores aceitos: `1` ou `"1"` (ativo), `0` ou `"0"` (desabilitado)
    - Localização no código: Linhas 404, 409, 444, 276
@@ -29,9 +29,9 @@
    - Recomendação: Incluir se possível para evitar busca adicional
 
 5. **`motivo`** (string | null)
-   - Usado para: Exibir motivo quando paciente desistiu (quando `exibir = 0`)
+   - Usado para: Exibir motivo quando paciente desistiu (quando `active = 0`)
    - Localização no código: Linhas 457-459, 236, 277
-   - Recomendação: Incluir quando `exibir = 0`
+   - Recomendação: Incluir quando `active = 0`
 
 ---
 
@@ -69,7 +69,7 @@
 [
   {
     "paciente_nome": "ANA CLARA VIANA DE ASSUNÇÃO",
-    "exibir": 1,
+    "active": 1,
     "datas": [
       {
         "data": "03/11/2025",
@@ -85,7 +85,7 @@
   },
   {
     "paciente_nome": "MARCELA GOMES MIGUEL",
-    "exibir": 0,
+    "active": 0,
     "motivo": "Paciente solicitou cancelamento",
     "datas": [
       {
@@ -105,7 +105,7 @@
   {
     "paciente_nome": "ANA CLARA VIANA DE ASSUNÇÃO",
     "patient_id": 123,
-    "exibir": 1,
+    "active": 1,
     "motivo": null,
     "datas": [
       {
@@ -137,8 +137,8 @@
 AlertWebhookItem {
   ✅ paciente_nome: string         (OBRIGATÓRIO)
   ⚪ patient_id?: number           (OPCIONAL - mas recomendado)
-  ⚪ motivo?: string | null        (OPCIONAL - mas recomendado quando exibir=0)
-  ✅ exibir: number | string       (OBRIGATÓRIO)
+  ⚪ motivo?: string | null        (OPCIONAL - mas recomendado quando active=0)
+  ✅ active: number | string       (OBRIGATÓRIO)
   ✅ datas: Array<{                (OBRIGATÓRIO - pode ser array vazio)
     ✅ data: string                (OBRIGATÓRIO - formato "DD/MM/YYYY")
     ✅ agendamento: string         (OBRIGATÓRIO)
@@ -154,7 +154,7 @@ AlertWebhookItem {
 
 1. O campo `datas` **DEVE** ser um array, mesmo que vazio (`[]`)
 2. O formato da data **DEVE** ser `"DD/MM/YYYY"` (não aceita `"YYYY-MM-DD"`)
-3. O campo `exibir` aceita tanto `number` (1, 0) quanto `string` ("1", "0")
+3. O campo `active` aceita tanto `number` (1, 0) quanto `string` ("1", "0")
 4. O array `datas` é filtrado para mostrar apenas datas futuras (de hoje em diante)
 5. Se `datas` for `null` ou `undefined`, o código trata como se não houvesse datas
 

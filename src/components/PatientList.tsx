@@ -128,12 +128,28 @@ const PatientsTable = () => {
       (isAdmin && patient.psychologist_name ? patient.psychologist_name.toLowerCase().includes(searchTerm.toLowerCase()) : false)
   );
 
-  // Ordena alfabeticamente pelo nome (considera name ou nome), case-insensitive e locale PT
+  // Ordena: primeiro pacientes ativos (active === 1 ou true), depois inativos (active === 0 ou false)
+  // Dentro de cada grupo, ordena alfabeticamente pelo nome
   const sortedFilteredPatients = [...filteredPatients].sort((a, b) => {
+    // Verifica se o paciente está ativo (considera active como 0/1 ou boolean)
+    // Se active === 0 ou false, está inativo; caso contrário, está ativo
+    const aActive = a.active !== 0 && a.active !== false;
+    const bActive = b.active !== 0 && b.active !== false;
+    
+    // Se um é ativo e o outro não, o ativo vem primeiro
+    if (aActive && !bActive) return -1;
+    if (!aActive && bActive) return 1;
+    
+    // Se ambos têm o mesmo status, ordena alfabeticamente pelo nome
     const nameA = (a.name || a.nome || "").toString();
     const nameB = (b.name || b.nome || "").toString();
     return nameA.localeCompare(nameB, "pt", { sensitivity: "base" });
   });
+
+  // Calcula os contadores
+  const totalPatients = filteredPatients.length;
+  const activePatients = filteredPatients.filter(p => p.active !== 0 && p.active !== false).length;
+  const inactivePatients = filteredPatients.filter(p => p.active === 0 || p.active === false).length;
 
   const actions = [
     {
@@ -466,7 +482,12 @@ const PatientsTable = () => {
       <div className="bg-white shadow-lg rounded-lg overflow-hidden">
         <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
           <div className="flex justify-between items-center">
-            <h2 className="text-xl font-semibold text-gray-800">Pacientes ({filteredPatients.length})</h2>
+            <div>
+              <h2 className="text-xl font-semibold text-gray-800">Pacientes</h2>
+              <div className="text-sm text-gray-600 mt-1">
+                Total: {totalPatients} | Ativos: {activePatients}
+              </div>
+            </div>
             <div className="flex gap-2">
               {canManagePatients && (
                 <button
@@ -525,23 +546,43 @@ const PatientsTable = () => {
                   <td colSpan={isAdmin ? 6 : 5} className="px-6 py-4 text-center text-gray-500">Nenhum paciente encontrado</td>
                 </tr>
               ) : (
-                sortedFilteredPatients.map((patient, index) => (
-                  <tr key={patient.id || index} className={`hover:bg-gray-50 ${patient.status === "Inativo" ? "bg-gray-50" : ""}`}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{patient.name || patient.nome || "N/A"}</td>
+                sortedFilteredPatients.map((patient, index) => {
+                  // Verifica se o paciente está inativo (active === 0 ou false)
+                  const isInactive = patient.active === 0 || patient.active === false;
+                  // Verifica se é o primeiro paciente inativo (para adicionar o contador)
+                  // É o primeiro inativo se: é inativo E (é o primeiro da lista OU o anterior era ativo)
+                  const isFirstInactive = isInactive && (
+                    index === 0 || 
+                    (sortedFilteredPatients[index - 1].active !== 0 && sortedFilteredPatients[index - 1].active !== false)
+                  );
+                  
+                  return (
+                    <>
+                      {isFirstInactive && inactivePatients > 0 && (
+                        <tr key={`inactive-header-${index}`} className="bg-gray-100">
+                          <td colSpan={isAdmin ? 6 : 5} className="px-6 py-3 text-center">
+                            <div className="text-sm font-semibold text-gray-700">
+                              Pacientes Inativos: {inactivePatients}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      <tr key={patient.id || index} className={`hover:bg-gray-50 ${isInactive ? "bg-gray-200 opacity-75" : ""}`}>
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isInactive ? "text-gray-500" : "text-gray-900"}`}>{patient.name || patient.nome || "N/A"}</td>
                     {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.cpf || "N/A"}</td> */}
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isInactive ? "text-gray-500" : "text-gray-900"}`}>
                       {(patient.phone || patient.telefone) ? (
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => openWhatsApp(patient.phone || patient.telefone)}
-                            className="text-blue-600 hover:text-blue-800 hover:underline transition-colors cursor-pointer"
+                            className={`${isInactive ? "text-gray-400 hover:text-gray-600" : "text-blue-600 hover:text-blue-800"} hover:underline transition-colors cursor-pointer`}
                             title="Abrir WhatsApp"
                           >
                             {patient.phone || patient.telefone}
                           </button>
                           <button
                             onClick={() => openWhatsApp(patient.phone || patient.telefone)}
-                            className="text-green-600 hover:text-green-700 transition-colors"
+                            className={`${isInactive ? "text-gray-400 hover:text-gray-600" : "text-green-600 hover:text-green-700"} transition-colors`}
                             title="Abrir WhatsApp"
                           >
                             <MessageCircle className="h-4 w-4" />
@@ -553,7 +594,7 @@ const PatientsTable = () => {
                     </td>
                     {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.email || "N/A"}</td> */}
                     {isAdmin && (
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.psychologist_name || patient.nome_responsavel || "N/A"}</td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isInactive ? "text-gray-500" : "text-gray-900"}`}>{patient.psychologist_name || patient.nome_responsavel || "N/A"}</td>
                     )}
                     <td className="px-6 py-4 whitespace-nowrap">{renderStatus(patient.status || "Ativo")}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
@@ -588,14 +629,18 @@ const PatientsTable = () => {
                       </div>
                     </td>
                   </tr>
-                ))
+                    </>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
 
         <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
-          <div className="text-sm text-gray-700">Total de pacientes: {filteredPatients.length}</div>
+          <div className="text-sm text-gray-700">
+            Total de pacientes: {totalPatients} | Ativos: {activePatients} | Inativos: {inactivePatients}
+          </div>
         </div>
       </div>
 

@@ -16,7 +16,7 @@ type AlertWebhookItem = {
   patient_id?: number; // Campo opcional caso a API retorne
   appointment_id?: number; // ID do agendamento relacionado
   motivo: string | null;
-  exibir: number | string;
+  active: number | string;
   insurance_type?: string; // Tipo de plano/seguro
   birthdate?: string; // Data de nascimento para calcular se é adulto ou criança
   datas: Array<{
@@ -165,9 +165,9 @@ const groupAlertsByDay = (alerts: AlertWebhookItem[]): Array<{ day: string; dayN
   // Dentro de cada grupo, ordenar os alertas
   grouped.forEach(group => {
     group.alerts.sort((a, b) => {
-      // Primeiro: ordenar por exibir = 1 primeiro
-      if (a.exibir === 1 && b.exibir !== 1) return -1;
-      if (a.exibir !== 1 && b.exibir === 1) return 1;
+      // Primeiro: ordenar por active = 1 primeiro
+      if (a.active === 1 && b.active !== 1) return -1;
+      if (a.active !== 1 && b.active === 1) return 1;
       // Segundo: ordenar por nome
       return a.paciente_nome.localeCompare(b.paciente_nome);
     });
@@ -189,7 +189,7 @@ const Index = () => {
   // Estados para o modal de edição
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingAlert, setEditingAlert] = useState<AlertWebhookItem | null>(null);
-  const [editExibir, setEditExibir] = useState(true);
+  const [editActive, setEditActive] = useState(true);
   const [editMotivo, setEditMotivo] = useState("");
   const [savingAlert, setSavingAlert] = useState(false);
   
@@ -412,7 +412,7 @@ const Index = () => {
   // Função para abrir modal de edição
   const handleEditAlert = (alert: AlertWebhookItem) => {
     setEditingAlert(alert);
-    setEditExibir(alert.exibir === 1 || alert.exibir === "1");
+    setEditActive(alert.active === 1 || alert.active === "1");
     setEditMotivo(alert.motivo || "");
     setShowEditModal(true);
   };
@@ -664,7 +664,7 @@ const Index = () => {
       
       const requestBody: any = {
         paciente_nome: editingAlert.paciente_nome,
-        exibir: editExibir ? "1" : "0",
+        active: editActive ? "1" : "0",
         motivo: editMotivo
       };
 
@@ -781,15 +781,15 @@ const Index = () => {
 
                           <div className="space-y-1">
                             {(() => {
-                              // Filtrar alertas (mas incluir exibir = 0 para mostrar no final)
+                              // Filtrar alertas (mas incluir active = 0 para mostrar no final)
                               const filteredAlerts = alertItems.filter((alert) => {
-                                // Se exibir = 1, sempre mostrar
-                                if (alert.exibir === 1 || alert.exibir === "1") {
+                                // Se active = 1, sempre mostrar
+                                if (alert.active === 1 || alert.active === "1") {
                                   return true;
                                 }
                                 
-                                // Se exibir = 0, incluir para mostrar no final
-                                if (alert.exibir === 0 || alert.exibir === "0") {
+                                // Se active = 0, incluir para mostrar no final
+                                if (alert.active === 0 || alert.active === "0") {
                                   return true;
                                 }
                                 
@@ -809,12 +809,12 @@ const Index = () => {
                                 return true; // Mostrar se tem pelo menos uma guia com problema
                               });
                               
-                              // Separar alertas ativos (exibir = 1) e desabilitados (exibir = 0)
+                              // Separar alertas ativos (active = 1) e desabilitados (active = 0)
                               const alertasAtivos = filteredAlerts.filter(alert => 
-                                alert.exibir === 1 || alert.exibir === "1"
+                                alert.active === 1 || alert.active === "1"
                               );
                               const alertasDesabilitados = filteredAlerts.filter(alert => 
-                                alert.exibir === 0 || alert.exibir === "0"
+                                alert.active === 0 || alert.active === "0"
                               );
                               
                               // Agrupar por dia da semana apenas os ativos
@@ -854,7 +854,7 @@ const Index = () => {
                                   {/* Alertas do grupo */}
                                   {group.alerts.map((alert, index) => {
                               // Determinar se o alerta está ativo ou desabilitado
-                              const isActive = alert.exibir === 1 || alert.exibir === "1";
+                              const isActive = alert.active === 1 || alert.active === "1";
                               const alertColor = isActive ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200";
                               
                               return (
@@ -1092,12 +1092,12 @@ const Index = () => {
                 <div className="flex items-center space-x-2">
                   <input
                     type="checkbox"
-                    id="exibir"
-                    checked={editExibir}
-                    onChange={(e) => setEditExibir(e.target.checked)}
+                    id="active"
+                    checked={editActive}
+                    onChange={(e) => setEditActive(e.target.checked)}
                     className="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500"
                   />
-                  <label htmlFor="exibir" className="text-sm font-medium text-gray-700">
+                  <label htmlFor="active" className="text-sm font-medium text-gray-700">
                     Alerta ativo
                   </label>
                 </div>
