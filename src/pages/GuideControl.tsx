@@ -194,12 +194,26 @@ const GuideControl: React.FC = () => {
 
   // Função para converter data DD/MM/YYYY para formato Date
   const parseDate = (dateStr: string): Date => {
-    const [day, month, year] = dateStr.split('/');
-    return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    // Se a data está no formato YYYY-MM-DD, usar diretamente
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return new Date(dateStr + 'T00:00:00');
+    }
+    // Se a data está no formato DD/MM/YYYY
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateStr)) {
+      const [day, month, year] = dateStr.split('/');
+      return new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
+    }
+    // Tentar parsear normalmente
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) {
+      return new Date();
+    }
+    return date;
   };
 
   // Função para verificar se uma data está no mês selecionado
   const isDateInSelectedMonth = (dateStr: string): boolean => {
+    if (!dateStr || !selectedMonth) return false;
     const date = parseDate(dateStr);
     const [year, month] = selectedMonth.split('-');
     return date.getFullYear() === parseInt(year) && date.getMonth() === parseInt(month) - 1;
@@ -453,9 +467,10 @@ const GuideControl: React.FC = () => {
       setLoading(true);
       setError(null);
       
-      // Extrair o mês do selectedMonth (formato YYYY-MM)
+      // Extrair o mês e ano do selectedMonth (formato YYYY-MM)
       const [year, monthStr] = selectedMonth.split('-');
       const month = parseInt(monthStr, 10); // Converte para número (1-12)
+      const yearNum = parseInt(year, 10); // Converte o ano para número
       
       const response = await fetch(
         "https://webhook.essenciasaudeintegrada.com.br/webhook/return_date_guias",
@@ -463,7 +478,8 @@ const GuideControl: React.FC = () => {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            mes: month
+            mes: month,
+            ano: yearNum
           }),
         }
       );
@@ -473,23 +489,6 @@ const GuideControl: React.FC = () => {
       }
       
       const data: PatientData[] = await response.json();
-      
-      // Debug: verificar estrutura dos dados recebidos
-      console.log('=== DADOS RECEBIDOS DA API ===');
-      console.log('Total de pacientes:', data.length);
-      if (data.length > 0) {
-        console.log('Primeiro paciente:', data[0]);
-        console.log('Datas do primeiro paciente:', data[0].datas);
-        console.log('Prestadores do primeiro paciente:', data[0].prestadores);
-        if (data[0].prestadores) {
-          try {
-            const prestadoresParsed = JSON.parse(data[0].prestadores);
-            console.log('Prestadores parseados:', prestadoresParsed);
-          } catch (e) {
-            console.error('Erro ao parsear prestadores:', e);
-          }
-        }
-      }
       
       setPatientsData(data);
       
@@ -561,7 +560,6 @@ const GuideControl: React.FC = () => {
       }
 
       const result = await response.json();
-      console.log('Guia importada com sucesso:', result);
       
       // Esconder alerta de carregamento
       setUploadingDocument(null);
@@ -646,7 +644,6 @@ const GuideControl: React.FC = () => {
       }
 
       const result = await response.json();
-      console.log('Faturamento realizado com sucesso:', result);
       
       // Recarregar dados após faturamento
       fetchData();
@@ -711,7 +708,6 @@ const GuideControl: React.FC = () => {
       }
 
       const result = await response.json();
-      console.log('Prestador excluído com sucesso:', result);
       
       // Recarregar dados após exclusão
       fetchData();
@@ -1455,15 +1451,6 @@ const GuideControl: React.FC = () => {
                   const parsed = patient.prestadores ? JSON.parse(patient.prestadores) : [];
                   prestadoresData = normalizePrestadoresData(parsed);
                   
-                  // Debug: verificar formato das datas dos prestadores
-                  prestadoresData.forEach((prestador, idx) => {
-                    console.log(`Prestador ${idx} - Datas:`, prestador.datas);
-                    console.log(`Prestador ${idx} - Data Vencimento:`, prestador.data_vencimento);
-                    console.log(`Prestador ${idx} - Data Validade:`, prestador.data_validade);
-                    prestador.datas.forEach((data, dataIdx) => {
-                      console.log(`  Data ${dataIdx}:`, data, '-> Date:', new Date(data));
-                    });
-                  });
                 } catch (error) {
                   console.error('Erro ao fazer parse dos prestadores:', error);
                   prestadoresData = [];
@@ -1532,7 +1519,29 @@ const GuideControl: React.FC = () => {
                         </div>
                       ) : (() => {
                         // Verificar se há prestadores no mês selecionado
-                        const prestadoresNoMes = filterPrestadoresByMonth(prestadoresData, patient);
+                        let prestadoresNoMes = filterPrestadoresByMonth(prestadoresData, patient);
+                        
+                        // Se não encontrou prestadores, verificar se há datas com prestador no mês selecionado
+                        // e incluir esses prestadores mesmo que não tenham sido encontrados inicialmente
+                        if (prestadoresNoMes.length === 0 && patient.datas && patient.datas.length > 0) {
+                          // Encontrar todos os numero_prestador únicos que têm datas no mês selecionado
+                          const prestadoresComDatasNoMes = new Set<string>();
+                          patient.datas.forEach(data => {
+                            const prestadorStr = String(data.numero_prestador || '');
+                            if (prestadorStr && prestadorStr !== 'null' && prestadorStr !== '' && isDateInSelectedMonth(data.data)) {
+                              prestadoresComDatasNoMes.add(prestadorStr);
+                            }
+                          });
+                          
+                          // Incluir prestadores que têm datas no mês selecionado
+                          if (prestadoresComDatasNoMes.size > 0) {
+                            prestadoresNoMes = prestadoresData.filter(prestador => {
+                              const prestadorStr = String(prestador.numero_prestador);
+                              return prestadoresComDatasNoMes.has(prestadorStr);
+                            });
+                          }
+                        }
+                        
                         // Verificar se há datas sem prestador no mês selecionado
                         const datasSemPrestadorNoMes = patient.datas?.filter(data => {
                           const isNullPrestador = data.numero_prestador === null || data.numero_prestador === "null";
@@ -1775,8 +1784,6 @@ const GuideControl: React.FC = () => {
                                       <div className="flex flex-wrap gap-2">
                                         {(() => {
                                           const datasDoPrestador = getAllDatasForPrestador(prestador.numero_prestador, patient.datas || []);
-                                          console.log(`Prestador ${prestador.numero_prestador} - Datas encontradas:`, datasDoPrestador);
-                                          console.log(`Todas as datas do paciente:`, patient.datas);
                                           return datasDoPrestador.map((data, dataIdx) => {
                                             const colorClass = getDateColor(data, patient, 'agendamentos');
                                             return (
