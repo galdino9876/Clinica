@@ -60,9 +60,12 @@ const Sidebar = ({ onClose }: SidebarProps) => {
       );
     }
 
-    baseItems.push(
-      { to: "/finance", label: "Finanças", icon: <BarChart3 className="mr-2 h-5 w-5" /> }
-    );
+    // Adiciona Finanças apenas para admin e psicólogos
+    if (userIsAdmin || userIsPsychologist) {
+      baseItems.push(
+        { to: "/finance", label: "Finanças", icon: <BarChart3 className="mr-2 h-5 w-5" /> }
+      );
+    }
 
     return baseItems;
   };
