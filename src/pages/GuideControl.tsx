@@ -1667,6 +1667,16 @@ const GuideControl: React.FC = () => {
                                 
                                 {/* Datas de Vencimento e Validade */}
                                 <div className="mt-4 flex flex-wrap gap-4">
+                                <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-gray-700">Data Autorização:</span>
+                                    {prestador.data_validade ? (
+                                      <span className="text-sm font-semibold text-gray-800">
+                                        {format(normalizeDate(prestador.data_validade), 'dd/MM/yyyy')}
+                                      </span>
+                                    ) : (
+                                      <span className="text-sm font-semibold text-red-600">Sem data</span>
+                                    )}
+                                  </div>
                                   <div className="flex items-center gap-2">
                                     <span className="text-sm font-medium text-gray-700">Data Vencimento:</span>
                                     {prestador.data_vencimento ? (
@@ -1677,16 +1687,7 @@ const GuideControl: React.FC = () => {
                                       <span className="text-sm font-semibold text-red-600">Sem data</span>
                                     )}
                                   </div>
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium text-gray-700">Data Validade:</span>
-                                    {prestador.data_validade ? (
-                                      <span className="text-sm font-semibold text-gray-800">
-                                        {format(normalizeDate(prestador.data_validade), 'dd/MM/yyyy')}
-                                      </span>
-                                    ) : (
-                                      <span className="text-sm font-semibold text-red-600">Sem data</span>
-                                    )}
-                                  </div>
+                                  
                                 </div>
                                 
                                 {/* Botões de Ação */}
