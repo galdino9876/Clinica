@@ -78,6 +78,7 @@ interface PatientData {
   date_apointments?: string; // String com datas separadas por vírgula
   prestadores: string; // JSON string que precisa ser parseado
   datas?: GuideData[]; // Array de datas com status de agendamento e guia
+  active?: number; // Campo para indicar se o paciente está ativo (1) ou desativado (0)
 }
 
 const GuideControl: React.FC = () => {
@@ -340,7 +341,9 @@ const GuideControl: React.FC = () => {
         patientsWithoutGuide++;
       }
 
-      if (!hasAppointment) {
+      // Para "Sem Agendamento", contar apenas pacientes ativos (active === 1)
+      // Excluir pacientes desativados (active === 0)
+      if (!hasAppointment && patient.active !== 0) {
         patientsWithoutAppointment++;
       }
     });
@@ -401,7 +404,9 @@ const GuideControl: React.FC = () => {
       }
 
       if (filterType === 'no-appointment') {
-        // Pacientes sem agendamento
+        // Pacientes sem agendamento e que estão ativos (active === 1)
+        // Excluir pacientes desativados (active === 0)
+        if (patient.active === 0) return false;
         if (!patient.datas || patient.datas.length === 0) return true;
         return !patient.datas.some(data => data.agendamento === "ok");
       }
@@ -1298,7 +1303,7 @@ const GuideControl: React.FC = () => {
                     <AlertTriangle className="h-4 w-4 text-red-600" />
                     
                   </div>
-                  <p className="text-xs font-medium text-gray-600 leading-tight">Sem Guia</p>
+                  <p className="text-xs font-medium text-gray-600 leading-tight">Pac. sem Guia</p>
                   <p className="text-xl sm:text-2xl font-bold text-red-600">{getDashboardStats().withoutGuide}</p>
                 </div>
               </CardContent>
@@ -1318,7 +1323,7 @@ const GuideControl: React.FC = () => {
                   <div className="p-2 bg-orange-100 rounded-full mb-1">
                     <Calendar className="h-4 w-4 text-orange-600" />
                   </div>
-                  <p className="text-xs font-medium text-gray-600 leading-tight">Sem Agend.</p>
+                  <p className="text-xs font-medium text-gray-600 leading-tight">Pac. sem Agend.</p>
                   <p className="text-xl sm:text-2xl font-bold text-orange-600">{getDashboardStats().withoutAppointment}</p>
                 </div>
               </CardContent>
@@ -1345,7 +1350,7 @@ const GuideControl: React.FC = () => {
                   >
                     <Upload className="h-4 w-4 text-amber-600" />
                   </div>
-                  <p className="text-xs font-medium text-gray-600 leading-tight">Falta Importar</p>
+                  <p className="text-xs font-medium text-gray-600 leading-tight">Falta Importar guia assinada do paciente</p>
                   <p className="text-xl sm:text-2xl font-bold text-amber-600">{getDashboardStats().totalFaltaImportarGuia}</p>
                 </div>
               </CardContent>
@@ -1372,7 +1377,7 @@ const GuideControl: React.FC = () => {
                   >
                     <FileText className="h-4 w-4 text-green-600" />
                   </div>
-                  <p className="text-xs font-medium text-gray-600 leading-tight">Falta Ass. Psic.</p>
+                  <p className="text-xs font-medium text-gray-600 leading-tight">Falta guia Ass. do Psic.</p>
                   <p className="text-xl sm:text-2xl font-bold text-purple-600">{getDashboardStats().totalGuiasSemAssinatura}</p>
                 </div>
               </CardContent>
