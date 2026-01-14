@@ -17,6 +17,10 @@ export const appointmentSchema = z.object({
   // Campos de guia (opcionais quando método de pagamento for particular)
   numeroPrestador: z.string().optional(),
   quantidadeAutorizada: z.coerce.number().optional(),
+  // Campos para solicitar guia PMDF
+  solicitarGuia: z.boolean().optional().default(false),
+  codSessao: z.string().optional(),
+  qntSessao: z.coerce.number().optional(),
 }).refine((data) => {
   // Se o tipo de atendimento for presencial, o consultório é obrigatório
   if (data.appointmentType === "presential") {

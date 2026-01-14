@@ -26,6 +26,7 @@ const normalizeDate = (dateStr: string): Date => {
 };
 import GuideModal from '@/components/GuideModal';
 import EditPrestadorModal from '@/components/EditPrestadorModal';
+import SolicitarGuiaModal from '@/components/SolicitarGuiaModal';
 import { 
   User, 
   Calendar, 
@@ -85,6 +86,11 @@ const GuideControl: React.FC = () => {
   const [patientsData, setPatientsData] = useState<PatientData[]>([]);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
   const [selectedPatient, setSelectedPatient] = useState<PatientData | null>(null);
+  const [showSolicitarGuiaModal, setShowSolicitarGuiaModal] = useState(false);
+  const [solicitarGuiaData, setSolicitarGuiaData] = useState<{
+    patient: PatientData;
+    datesToShow: string[];
+  } | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [prestadorToDelete, setPrestadorToDelete] = useState<number | null>(null);
   const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
@@ -682,6 +688,55 @@ const GuideControl: React.FC = () => {
   // Função para recarregar dados após sucesso
   const handleModalSuccess = () => {
     fetchData();
+  };
+
+  // Função para verificar se há agendamentos sem guia no mês selecionado
+  const hasAppointmentsWithoutGuideInMonth = (patient: PatientData): boolean => {
+    if (!patient.datas || patient.datas.length === 0) return false;
+    
+    return patient.datas.some(data => {
+      const hasAgendamento = data.agendamento === "ok";
+      const hasPrestador = data.numero_prestador !== null && data.numero_prestador !== "null";
+      const isInSelectedMonth = isDateInSelectedMonth(data.data);
+      
+      return hasAgendamento && !hasPrestador && isInSelectedMonth;
+    });
+  };
+
+  // Função para obter datas sem prestador no mês selecionado
+  const getDatesWithoutPrestadorInMonth = (patient: PatientData): string[] => {
+    if (!patient.datas || patient.datas.length === 0) return [];
+    
+    return patient.datas
+      .filter(data => {
+        const hasAgendamento = data.agendamento === "ok";
+        const hasPrestador = data.numero_prestador !== null && data.numero_prestador !== "null";
+        const isInSelectedMonth = isDateInSelectedMonth(data.data);
+        
+        return hasAgendamento && !hasPrestador && isInSelectedMonth;
+      })
+      .map(data => data.data); // Retorna no formato DD/MM/YYYY
+  };
+
+  // Função para abrir modal de solicitar guia
+  const handleOpenSolicitarGuiaModal = (patient: PatientData) => {
+    const datesToShow = getDatesWithoutPrestadorInMonth(patient);
+    
+    if (datesToShow.length === 0) {
+      return; // Não deveria acontecer, mas por segurança
+    }
+    
+    setSolicitarGuiaData({
+      patient,
+      datesToShow
+    });
+    setShowSolicitarGuiaModal(true);
+  };
+
+  // Função para fechar modal de solicitar guia
+  const handleCloseSolicitarGuiaModal = () => {
+    setShowSolicitarGuiaModal(false);
+    setSolicitarGuiaData(null);
   };
 
   // Função para mostrar confirmação de exclusão
@@ -1502,7 +1557,7 @@ const GuideControl: React.FC = () => {
                           }}
                         >
                           <Plus className="h-4 w-4 mr-2" />
-                          + Guias
+                          Inserir Guia
                         </Button>
                       </CardTitle>
                     </CardHeader>
@@ -1854,13 +1909,30 @@ const GuideControl: React.FC = () => {
                               {/* Se há datas sem prestador no mês, mostrar seção "Agendamentos sem GUIA" */}
                               {datasSemPrestadorNoMes.length > 0 && (
                                 <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5 shadow-sm">
-                                  <div className="flex items-center gap-3 mb-5">
-                                    <div className="p-2 bg-amber-100 rounded-full">
-                                      <AlertTriangle className="h-5 w-5 text-amber-600" />
+                                  <div className="flex items-center justify-between mb-5">
+                                    <div className="flex items-center gap-3">
+                                      <div className="p-2 bg-amber-100 rounded-full">
+                                        <AlertTriangle className="h-5 w-5 text-amber-600" />
+                                      </div>
+                                      <span className="font-bold text-lg text-amber-800">
+                                        Agendamentos sem GUIA
+                                      </span>
                                     </div>
-                                    <span className="font-bold text-lg text-amber-800">
-                                      Agendamentos sem GUIA
-                                    </span>
+                                    {/* Botão Solicitar Guia - apenas para PMDF */}
+                                    {patient.insurance_type === "PMDF" && (
+                                      <Button 
+                                        size="sm" 
+                                        variant="default"
+                                        className="bg-green-600 hover:bg-green-700 text-white cursor-pointer [&>*]:cursor-pointer animate-pulse shadow-lg shadow-green-500/50"
+                                        onClick={() => {
+                                          saveScrollPosition();
+                                          handleOpenSolicitarGuiaModal(patient);
+                                        }}
+                                      >
+                                        <FileText className="h-4 w-4 mr-2" />
+                                        Solicitar Guia
+                                      </Button>
+                                    )}
                                   </div>
                                   
                                   {/* Linha de Agendamentos */}
@@ -1922,13 +1994,30 @@ const GuideControl: React.FC = () => {
                             <div className="space-y-4">
                               {/* Seção para agendamentos sem GUIA */}
                               <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5 shadow-sm">
-                                <div className="flex items-center gap-3 mb-5">
-                                  <div className="p-2 bg-amber-100 rounded-full">
-                                    <AlertTriangle className="h-5 w-5 text-amber-600" />
+                                <div className="flex items-center justify-between mb-5">
+                                  <div className="flex items-center gap-3">
+                                    <div className="p-2 bg-amber-100 rounded-full">
+                                      <AlertTriangle className="h-5 w-5 text-amber-600" />
+                                    </div>
+                                    <span className="font-bold text-lg text-amber-800">
+                                      Agendamentos sem GUIA
+                                    </span>
                                   </div>
-                                  <span className="font-bold text-lg text-amber-800">
-                                    Agendamentos sem GUIA
-                                  </span>
+                                  {/* Botão Solicitar Guia - apenas para PMDF */}
+                                  {patient.insurance_type === "PMDF" && (
+                                    <Button 
+                                      size="sm" 
+                                      variant="default"
+                                      className="bg-green-600 hover:bg-green-700 text-white cursor-pointer [&>*]:cursor-pointer animate-pulse shadow-lg shadow-green-500/50"
+                                      onClick={() => {
+                                        saveScrollPosition();
+                                        handleOpenSolicitarGuiaModal(patient);
+                                      }}
+                                    >
+                                      <FileText className="h-4 w-4 mr-2" />
+                                      Solicitar Guia
+                                    </Button>
+                                  )}
                                 </div>
                                 
                                 {/* Linha de Agendamentos */}
@@ -1989,13 +2078,30 @@ const GuideControl: React.FC = () => {
                         <div className="space-y-4">
                           {/* Seção para agendamentos sem GUIA */}
                           <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5 shadow-sm">
-                            <div className="flex items-center gap-3 mb-5">
-                              <div className="p-2 bg-amber-100 rounded-full">
-                                <AlertTriangle className="h-5 w-5 text-amber-600" />
+                            <div className="flex items-center justify-between mb-5">
+                              <div className="flex items-center gap-3">
+                                <div className="p-2 bg-amber-100 rounded-full">
+                                  <AlertTriangle className="h-5 w-5 text-amber-600" />
+                                </div>
+                                <span className="font-bold text-lg text-amber-800">
+                                  Agendamentos sem GUIA
+                                </span>
                               </div>
-                              <span className="font-bold text-lg text-amber-800">
-                                Agendamentos sem GUIA
-                              </span>
+                              {/* Botão Solicitar Guia - apenas para PMDF */}
+                              {patient.insurance_type === "PMDF" && (
+                                <Button 
+                                  size="sm" 
+                                  variant="default"
+                                  className="bg-green-600 hover:bg-green-700 text-white cursor-pointer [&>*]:cursor-pointer animate-pulse shadow-lg shadow-green-500/50"
+                                  onClick={() => {
+                                    saveScrollPosition();
+                                    handleOpenSolicitarGuiaModal(patient);
+                                  }}
+                                >
+                                  <FileText className="h-4 w-4 mr-2" />
+                                  Solicitar Guia
+                                </Button>
+                              )}
                             </div>
                             
                             {/* Linha de Agendamentos */}
@@ -2083,6 +2189,20 @@ const GuideControl: React.FC = () => {
             paciente_nome: selectedPatient.paciente_nome,
             datas: selectedPatient.datas || []
           }}
+          onSuccess={handleModalSuccess}
+        />
+      )}
+
+      {/* Modal de Solicitar Guia */}
+      {solicitarGuiaData && (
+        <SolicitarGuiaModal
+          isOpen={showSolicitarGuiaModal}
+          onClose={handleCloseSolicitarGuiaModal}
+          patient={{
+            patient_id: solicitarGuiaData.patient.patient_id,
+            paciente_nome: solicitarGuiaData.patient.paciente_nome
+          }}
+          datesToShow={solicitarGuiaData.datesToShow}
           onSuccess={handleModalSuccess}
         />
       )}

@@ -84,6 +84,9 @@ const AppointmentForm = ({
   
   // Estado para notificar psicólogo
   const [notificarPsicologo, setNotificarPsicologo] = useState(false);
+  
+  // Estado para toggle solicitar guia PMDF
+  const [solicitarGuia, setSolicitarGuia] = useState(false);
 
   const formMethods: UseFormReturn<AppointmentFormData> = useForm<AppointmentFormData>({
     resolver: zodResolver(appointmentSchema),
@@ -99,6 +102,9 @@ const AppointmentForm = ({
       insuranceType: initialInsuranceType || "",
       numeroPrestador: "",
       quantidadeAutorizada: 1,
+      solicitarGuia: false,
+      codSessao: "",
+      qntSessao: 1,
     },
   });
 
@@ -114,6 +120,8 @@ const AppointmentForm = ({
   const selectedPsychologistId = watch("psychologistId");
   const paymentMethod = watch("paymentMethod");
   const startTime = watch("startTime");
+  const insuranceType = watch("insuranceType");
+  const codSessao = watch("codSessao");
 
   // Limpar consultório quando mudar para online
   useEffect(() => {
@@ -127,8 +135,29 @@ const AppointmentForm = ({
     if (paymentMethod === "private") {
       setValue("numeroPrestador", "");
       setValue("quantidadeAutorizada", 1);
+      setSolicitarGuia(false);
+      setValue("solicitarGuia", false);
+      setValue("codSessao", "");
+      setValue("qntSessao", 1);
     }
   }, [paymentMethod, setValue]);
+
+  // Resetar solicitarGuia quando mudar de PMDF para outro plano
+  useEffect(() => {
+    if (insuranceType !== "PMDF") {
+      setSolicitarGuia(false);
+      setValue("solicitarGuia", false);
+      setValue("codSessao", "");
+      setValue("qntSessao", 1);
+    }
+  }, [insuranceType, setValue]);
+
+  // Fixar QntSessao em 1 quando CodSessao for 50000462
+  useEffect(() => {
+    if (codSessao === "50000462") {
+      setValue("qntSessao", 1);
+    }
+  }, [codSessao, setValue]);
 
   // Atualizar automaticamente o horário de término quando o horário de início mudar
   useEffect(() => {
@@ -618,76 +647,114 @@ const AppointmentForm = ({
 
       // Enviar dados de guia para a API (apenas se os campos de guia estiverem preenchidos)
       if (successCount > 0 && data.paymentMethod && data.paymentMethod !== "private") {
-        // Verificar se os campos obrigatórios da guia estão preenchidos
-        const hasNumeroPrestador = data.numeroPrestador && data.numeroPrestador.trim().length > 0;
-        const hasQuantidadeAutorizada = data.quantidadeAutorizada && data.quantidadeAutorizada >= 1 && data.quantidadeAutorizada <= 5;
-        
-        // Só enviar para a API se ambos os campos estiverem preenchidos
-        if (hasNumeroPrestador && hasQuantidadeAutorizada) {
+        // Se for PMDF e solicitarGuia estiver ON, enviar para API de solicitar guia
+        if (data.insuranceType === "PMDF" && data.solicitarGuia && data.codSessao && data.qntSessao) {
           try {
-            // Preparar dados da guia baseados na quantidade autorizada
-            const quantidadeAutorizada = data.quantidadeAutorizada;
-            const guiaData: any = {
-              numero_prestador: Number(data.numeroPrestador),
-              id_patient: Number(data.patientId),
-              date_1: "",
-              date_2: "",
-              date_3: "",
-              date_4: "",
-              date_5: ""
+            // Preparar payload para solicitar guia
+            const solicitarGuiaPayload: any = {
+              Id_patient: Number(data.patientId),
+              CodSessao: data.codSessao,
+              QntSessao: Number(data.qntSessao),
+              Date_1: "",
+              Date_2: "",
+              Date_3: "",
+              Date_4: "",
+              Date_5: ""
             };
 
-            // Preencher as datas baseadas na quantidade autorizada e nas datas selecionadas
-            for (let i = 1; i <= quantidadeAutorizada && i <= selectedDates.length; i++) {
-              const dateKey = `date_${i}` as keyof typeof guiaData;
-              guiaData[dateKey] = format(selectedDates[i - 1], "yyyy-MM-dd");
+            // Preencher as datas baseadas na quantidade de sessão e nas datas selecionadas
+            for (let i = 1; i <= Number(data.qntSessao) && i <= selectedDates.length && i <= 5; i++) {
+              solicitarGuiaPayload[`Date_${i}`] = format(selectedDates[i - 1], "yyyy-MM-dd");
             }
 
-            // Enviar para a API de guias
-            const guiaResponse = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/insert_date_guias", {
+            // Enviar para a API de solicitar guia
+            const solicitarGuiaResponse = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/solicitar_guia_benner", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(guiaData),
+              body: JSON.stringify(solicitarGuiaPayload),
             });
 
-            if (!guiaResponse.ok) {
-              console.error("Erro ao enviar guia:", guiaResponse.status);
-            }
-
-            // Upload do PDF da guia autorizada (se houver arquivo selecionado)
-            if (pdfFile) {
-              try {
-                // Encontrar o nome do paciente selecionado
-                const selectedPatient = patients.find(patient => patient.id === data.patientId);
-                const patientName = selectedPatient ? selectedPatient.name : '';
-                
-                const formData = new FormData();
-                formData.append('file', pdfFile);
-                formData.append('numero_prestador', data.numeroPrestador);
-                formData.append('command', 'Guia-autorizada');
-                formData.append('nome_patient', patientName);
-
-                const pdfResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/insert_guia_completed', {
-                  method: 'POST',
-                  body: formData
-                });
-
-                if (pdfResponse.ok) {
-                  // Limpar o arquivo após sucesso
-                  setPdfFile(null);
-                  const fileInput = document.getElementById('pdf-file-input') as HTMLInputElement;
-                  if (fileInput) {
-                    fileInput.value = '';
-                  }
-                } else {
-                  console.error("Erro ao enviar PDF da guia:", pdfResponse.status);
-                }
-              } catch (error) {
-                console.error('Erro ao fazer upload do PDF:', error);
-              }
+            if (!solicitarGuiaResponse.ok) {
+              console.error("Erro ao solicitar guia:", solicitarGuiaResponse.status);
+            } else {
+              console.log("Guia solicitada com sucesso");
             }
           } catch (error) {
-            console.error("Erro ao enviar dados da guia:", error);
+            console.error("Erro ao solicitar guia:", error);
+          }
+        } else {
+          // Lógica original para guias normais (não PMDF ou solicitarGuia OFF)
+          // Verificar se os campos obrigatórios da guia estão preenchidos
+          const hasNumeroPrestador = data.numeroPrestador && data.numeroPrestador.trim().length > 0;
+          const hasQuantidadeAutorizada = data.quantidadeAutorizada && data.quantidadeAutorizada >= 1 && data.quantidadeAutorizada <= 5;
+          
+          // Só enviar para a API se ambos os campos estiverem preenchidos
+          if (hasNumeroPrestador && hasQuantidadeAutorizada) {
+            try {
+              // Preparar dados da guia baseados na quantidade autorizada
+              const quantidadeAutorizada = data.quantidadeAutorizada;
+              const guiaData: any = {
+                numero_prestador: Number(data.numeroPrestador),
+                id_patient: Number(data.patientId),
+                date_1: "",
+                date_2: "",
+                date_3: "",
+                date_4: "",
+                date_5: ""
+              };
+
+              // Preencher as datas baseadas na quantidade autorizada e nas datas selecionadas
+              for (let i = 1; i <= quantidadeAutorizada && i <= selectedDates.length; i++) {
+                const dateKey = `date_${i}` as keyof typeof guiaData;
+                guiaData[dateKey] = format(selectedDates[i - 1], "yyyy-MM-dd");
+              }
+
+              // Enviar para a API de guias
+              const guiaResponse = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/insert_date_guias", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(guiaData),
+              });
+
+              if (!guiaResponse.ok) {
+                console.error("Erro ao enviar guia:", guiaResponse.status);
+              }
+
+              // Upload do PDF da guia autorizada (se houver arquivo selecionado)
+              if (pdfFile) {
+                try {
+                  // Encontrar o nome do paciente selecionado
+                  const selectedPatient = patients.find(patient => patient.id === data.patientId);
+                  const patientName = selectedPatient ? selectedPatient.name : '';
+                  
+                  const formData = new FormData();
+                  formData.append('file', pdfFile);
+                  formData.append('numero_prestador', data.numeroPrestador);
+                  formData.append('command', 'Guia-autorizada');
+                  formData.append('nome_patient', patientName);
+
+                  const pdfResponse = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/insert_guia_completed', {
+                    method: 'POST',
+                    body: formData
+                  });
+
+                  if (pdfResponse.ok) {
+                    // Limpar o arquivo após sucesso
+                    setPdfFile(null);
+                    const fileInput = document.getElementById('pdf-file-input') as HTMLInputElement;
+                    if (fileInput) {
+                      fileInput.value = '';
+                    }
+                  } else {
+                    console.error("Erro ao enviar PDF da guia:", pdfResponse.status);
+                  }
+                } catch (error) {
+                  console.error('Erro ao fazer upload do PDF:', error);
+                }
+              }
+            } catch (error) {
+              console.error("Erro ao enviar dados da guia:", error);
+            }
           }
         }
       }
@@ -1109,71 +1176,164 @@ const AppointmentForm = ({
       {/* Seção de Guia - Apenas para planos de saúde */}
       {watch("paymentMethod") && watch("paymentMethod") !== "private" && (
         <div className="border-t pt-4">
-          <h3 className="text-lg font-semibold mb-4 text-blue-600">GUIA</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <InputDynamic
-                name="numeroPrestador"
-                label="Número do Prestador"
-                control={control}
-                type="text"
-                placeholder="Ex: 32113578"
-                disabled={isLoading}
-                errors={errors}
-                onClear={() => formMethods.setValue("numeroPrestador", "")}
-              />
-            </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-gray-700">
-                Quantidade Autorizada
-              </label>
-              <select
-                {...formMethods.register("quantidadeAutorizada")}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                disabled={isLoading}
-              >
-                <option value="">Selecione a quantidade</option>
-                <option value="1">1</option>
-                <option value="2">2</option>
-                <option value="3">3</option>
-                <option value="4">4</option>
-                <option value="5">5</option>
-              </select>
-              {errors.quantidadeAutorizada && (
-                <p className="text-red-500 text-xs mt-1">{errors.quantidadeAutorizada.message}</p>
-              )}
-            </div>
-          </div>
-          
-          {/* Seção de Upload de PDF */}
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-            <h4 className="text-md font-medium mb-3 text-gray-700">Upload de Guia Autorizada</h4>
-            <div className="space-y-3">
-              <div>
-                <label className="text-sm font-medium text-gray-700 mb-2 block">
-                  Selecionar Arquivo PDF
-                </label>
-                <input
-                  id="pdf-file-input"
-                  type="file"
-                  accept=".pdf"
-                  onChange={handlePdfFileSelect}
-                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  disabled={isLoading}
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-blue-600">GUIA:</h3>
+            
+            {/* Toggle Solicitar Guia - Apenas para PMDF */}
+            {insuranceType === "PMDF" && (
+              <div className="flex items-center gap-3">
+                <Label htmlFor="solicitar-guia" className="text-sm font-medium text-gray-700">
+                  solicitar nova:
+                </Label>
+                <Switch
+                  id="solicitar-guia"
+                  checked={solicitarGuia}
+                  onCheckedChange={(checked) => {
+                    setSolicitarGuia(checked);
+                    setValue("solicitarGuia", checked);
+                    if (!checked) {
+                      setValue("codSessao", "");
+                      setValue("qntSessao", 1);
+                    }
+                  }}
+                  disabled={isLoading || isSubmitting}
                 />
-                <p className="text-xs text-gray-500 mt-1">
-                  Tamanho máximo: 10MB
-                </p>
-                {pdfFile && (
-                  <p className="text-sm text-green-600 mt-1">
-                    ✓ Arquivo selecionado: {pdfFile.name}
-                  </p>
-                )}
+                <span className="text-sm text-gray-500">
+                  {solicitarGuia ? "ON" : "OFF"}
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Campos quando solicitarGuia está OFF ou não é PMDF */}
+          {(!solicitarGuia || insuranceType !== "PMDF") && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <InputDynamic
+                    name="numeroPrestador"
+                    label="Número do Prestador"
+                    control={control}
+                    type="text"
+                    placeholder="Ex: 32113578"
+                    disabled={isLoading}
+                    errors={errors}
+                    onClear={() => formMethods.setValue("numeroPrestador", "")}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Quantidade Autorizada
+                  </label>
+                  <select
+                    {...formMethods.register("quantidadeAutorizada")}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={isLoading}
+                  >
+                    <option value="">Selecione a quantidade</option>
+                    <option value="1">1</option>
+                    <option value="2">2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                  </select>
+                  {errors.quantidadeAutorizada && (
+                    <p className="text-red-500 text-xs mt-1">{errors.quantidadeAutorizada.message}</p>
+                  )}
+                </div>
+              </div>
+              
+              {/* Seção de Upload de PDF */}
+              <div className="mt-4 p-4 bg-gray-50 rounded-lg">
+                <h4 className="text-md font-medium mb-3 text-gray-700">Upload de Guia Autorizada</h4>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 mb-2 block">
+                      Selecionar Arquivo PDF
+                    </label>
+                    <input
+                      id="pdf-file-input"
+                      type="file"
+                      accept=".pdf"
+                      onChange={handlePdfFileSelect}
+                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={isLoading}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Tamanho máximo: 10MB
+                    </p>
+                    {pdfFile && (
+                      <p className="text-sm text-green-600 mt-1">
+                        ✓ Arquivo selecionado: {pdfFile.name}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Campos quando solicitarGuia está ON e é PMDF */}
+          {solicitarGuia && insuranceType === "PMDF" && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Código (CodSessao)
+                  </label>
+                  <select
+                    {...formMethods.register("codSessao")}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={isLoading}
+                    onChange={(e) => {
+                      formMethods.setValue("codSessao", e.target.value);
+                      if (e.target.value === "50000462") {
+                        formMethods.setValue("qntSessao", 1);
+                      }
+                    }}
+                  >
+                    <option value="">Selecione o código</option>
+                    <option value="50000470">50000470</option>
+                    <option value="50000462">50000462</option>
+                    <option value="50000491">50000491</option>
+                  </select>
+                  {errors.codSessao && (
+                    <p className="text-red-500 text-xs mt-1">{errors.codSessao.message}</p>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium text-gray-700">
+                    Quantidade de Sessão (QntSessao)
+                  </label>
+                  <select
+                    {...formMethods.register("qntSessao")}
+                    className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={isLoading || codSessao === "50000462"}
+                    value={codSessao === "50000462" ? "1" : watch("qntSessao") || "1"}
+                    onChange={(e) => {
+                      if (codSessao !== "50000462") {
+                        formMethods.setValue("qntSessao", Number(e.target.value));
+                      }
+                    }}
+                  >
+                    <option value="1">1</option>
+                    <option value="2" disabled={codSessao === "50000462"}>2</option>
+                    <option value="3" disabled={codSessao === "50000462"}>3</option>
+                    <option value="4" disabled={codSessao === "50000462"}>4</option>
+                    <option value="5" disabled={codSessao === "50000462"}>5</option>
+                  </select>
+                  {codSessao === "50000462" && (
+                    <p className="text-xs text-amber-600">
+                      ⚠ Quantidade fixada em 1 para este código
+                    </p>
+                  )}
+                  {errors.qntSessao && (
+                    <p className="text-red-500 text-xs mt-1">{errors.qntSessao.message}</p>
+                  )}
+                </div>
               </div>
             </div>
-          </div>
-          
-          
+          )}
         </div>
       )}
 

@@ -91,11 +91,11 @@ export const ComboboxDynamic = forwardRef<HTMLButtonElement, ComboboxDynamicProp
       const searchTerm = removeAccents(searchValue.toLowerCase().trim());
       const optionLabel = removeAccents(option.label.toLowerCase());
       
-      // Busca mais restritiva: apenas exata ou que começa com o termo
+      // Busca por trecho do nome: encontra o termo em qualquer parte do texto
       // E o termo deve ter pelo menos 2 caracteres para evitar resultados irrelevantes
       if (searchTerm.length < 2) return false;
       
-      return optionLabel === searchTerm || optionLabel.startsWith(searchTerm);
+      return optionLabel.includes(searchTerm);
     });
 
     // Resetar o valor de busca quando o popover fechar
