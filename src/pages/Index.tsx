@@ -3,11 +3,13 @@ import Layout from "@/components/Layout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
 import React, { useEffect, useState } from "react";
-import { X, AlertTriangle, Calendar, ClipboardList, User, Edit, BarChart3 } from "lucide-react";
+import { X, AlertTriangle, Calendar, ClipboardList, User, Edit, BarChart3, FileText } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import PsychologistAvailabilityDashboard from "@/components/PsychologistAvailabilityDashboard";
 import AppointmentForm from "@/components/AppointmentForm";
+import SolicitarGuiaModal from "@/components/SolicitarGuiaModal";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -206,11 +208,71 @@ const Index = () => {
     appointmentType?: "presential" | "online";
   } | null>(null);
 
+  // Estados para o modal de solicitar guia
+  const [showSolicitarGuiaModal, setShowSolicitarGuiaModal] = useState(false);
+  const [solicitarGuiaData, setSolicitarGuiaData] = useState<{
+    patient: { patient_id: number; paciente_nome: string };
+    datesToShow: string[];
+  } | null>(null);
+
   // Verificação de permissões do usuário
   const isAdmin = user?.role === "admin";
   const isReceptionist = user?.role === "receptionist";
   const isPsychologist = user?.role === "psychologist";
   const canViewAlerts = isAdmin || isReceptionist; // Apenas admin e recepcionista podem ver alertas
+
+  // Função para obter pacientes com agendamento mas sem guia
+  const getPatientsWithoutGuide = (): Array<{
+    patient: { patient_id: number; paciente_nome: string };
+    datesWithoutGuide: string[];
+  }> => {
+    const patientsMap = new Map<number, {
+      patient: { patient_id: number; paciente_nome: string };
+      datesWithoutGuide: string[];
+    }>();
+
+    alertItems.forEach(alert => {
+      // Excluir pacientes desativados (active === 0 ou "0")
+      if (alert.active === 0 || alert.active === "0") return;
+      
+      // Apenas pacientes ativos
+      if (alert.active !== 1 && alert.active !== "1") return;
+      
+      // Apenas pacientes com plano PMDF
+      if (alert.insurance_type !== "PMDF") return;
+      
+      // Verificar se tem agendamento mas não tem guia
+      if (!alert.datas || !Array.isArray(alert.datas)) return;
+
+      const datesWithoutGuide = alert.datas
+        .filter(dataItem => 
+          dataItem.agendamento === "ok" && 
+          (dataItem.guia !== "ok" && dataItem.guia !== "OK")
+        )
+        .map(dataItem => dataItem.data);
+
+      if (datesWithoutGuide.length > 0 && alert.patient_id) {
+        const patientId = alert.patient_id;
+        if (patientsMap.has(patientId)) {
+          // Adicionar datas ao paciente existente
+          const existing = patientsMap.get(patientId)!;
+          existing.datesWithoutGuide.push(...datesWithoutGuide);
+          // Remover duplicatas
+          existing.datesWithoutGuide = [...new Set(existing.datesWithoutGuide)];
+        } else {
+          patientsMap.set(patientId, {
+            patient: {
+              patient_id: patientId,
+              paciente_nome: alert.paciente_nome
+            },
+            datesWithoutGuide: datesWithoutGuide
+          });
+        }
+      }
+    });
+
+    return Array.from(patientsMap.values());
+  };
 
   // Função auxiliar para corrigir status de agendamento baseado nos appointments reais
   const correctAppointmentStatus = async (alertItems: AlertWebhookItem[]): Promise<AlertWebhookItem[]> => {
@@ -731,7 +793,7 @@ const Index = () => {
 
             <div className="p-3 md:p-6 max-h-[calc(95vh-100px)] md:max-h-[calc(90vh-120px)] overflow-y-auto">
               <Tabs defaultValue="alerts" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
+                <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'}`}>
                   <TabsTrigger value="alerts" className="flex items-center gap-2">
                     <AlertTriangle className="h-4 w-4" />
                     Alertas do Sistema
@@ -740,6 +802,12 @@ const Index = () => {
                     <BarChart3 className="h-4 w-4" />
                     Disponibilidade dos Psicólogos
                   </TabsTrigger>
+                  {isAdmin && (
+                    <TabsTrigger value="guide-request" className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Controle Solicitação GUIA
+                    </TabsTrigger>
+                  )}
                 </TabsList>
                 
                 <TabsContent value="alerts" className="mt-6">
@@ -1052,6 +1120,77 @@ const Index = () => {
                     }}
                   />
                 </TabsContent>
+
+                {/* Aba Controle Solicitação GUIA - Apenas para Admin */}
+                {isAdmin && (
+                  <TabsContent value="guide-request" className="mt-6">
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <FileText className="h-5 w-5 text-blue-600" />
+                          Controle Solicitação GUIA
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        {loadingAlerts ? (
+                          <div className="text-gray-600">Carregando...</div>
+                        ) : (
+                          (() => {
+                            const patientsWithoutGuide = getPatientsWithoutGuide();
+                            if (patientsWithoutGuide.length === 0) {
+                              return (
+                                <div className="text-gray-600 text-center py-8">
+                                  Nenhum paciente com agendamento sem guia encontrado.
+                                </div>
+                              );
+                            }
+                            return (
+                              <div className="space-y-4">
+                                {patientsWithoutGuide.map((item, index) => (
+                                  <div
+                                    key={`${item.patient.patient_id}-${index}`}
+                                    className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                                  >
+                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                      <div className="flex-1">
+                                        <p className="font-semibold text-gray-900 mb-2">
+                                          Paciente {item.patient.paciente_nome}
+                                        </p>
+                                        <div className="flex flex-wrap gap-2">
+                                          <span className="text-sm text-gray-600">Datas de agendamento sem guias:</span>
+                                          {item.datesWithoutGuide.map((date, dateIndex) => (
+                                            <span
+                                              key={dateIndex}
+                                              className="px-2 py-1 bg-orange-100 text-orange-800 rounded text-sm font-medium"
+                                            >
+                                              {date}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                      <Button
+                                        onClick={() => {
+                                          setSolicitarGuiaData({
+                                            patient: item.patient,
+                                            datesToShow: item.datesWithoutGuide
+                                          });
+                                          setShowSolicitarGuiaModal(true);
+                                        }}
+                                        className="bg-blue-600 hover:bg-blue-700 text-white"
+                                      >
+                                        Solicitar guia
+                                      </Button>
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            );
+                          })()
+                        )}
+                      </CardContent>
+                    </Card>
+                  </TabsContent>
+                )}
               </Tabs>
             </div>
           </div>
@@ -1168,6 +1307,23 @@ const Index = () => {
             />
           </DialogContent>
         </Dialog>
+      )}
+
+      {/* Modal de Solicitar Guia */}
+      {showSolicitarGuiaModal && solicitarGuiaData && (
+        <SolicitarGuiaModal
+          isOpen={showSolicitarGuiaModal}
+          onClose={() => {
+            setShowSolicitarGuiaModal(false);
+            setSolicitarGuiaData(null);
+          }}
+          patient={solicitarGuiaData.patient}
+          datesToShow={solicitarGuiaData.datesToShow}
+          onSuccess={() => {
+            // Recarregar alertas após solicitar guia
+            fetchAlerts();
+          }}
+        />
       )}
     </Layout>
   );
