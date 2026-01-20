@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { ChevronLeft, ChevronRight, Calendar, Clock, User, MapPin, X, Loader2, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Calendar, Clock, User, MapPin, X, Loader2, Plus, Trash } from 'lucide-react';
 import { useAuth } from "../context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -1119,6 +1119,9 @@ const AppointmentCalendar = () => {
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [showObservationModal, setShowObservationModal] = useState(false);
   const [observationNotes, setObservationNotes] = useState('');
+  const [selectedImages, setSelectedImages] = useState<{ id: string; file: File; url: string }[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const observationFileInputRef = useRef<HTMLInputElement | null>(null);
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editPlano, setEditPlano] = useState('');
@@ -1412,7 +1415,72 @@ const AppointmentCalendar = () => {
     // Abrir modal de observações
     setSelectedAppointment(appointment);
     setShowObservationModal(true);
+    // Limpar imagens ao abrir novo modal
+    setSelectedImages([]);
   }, []);
+
+  // Funções para upload de imagens
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    const imageFiles = files.filter(file => file.type.startsWith("image/"));
+    
+    if (imageFiles.length === 0) return;
+    
+    addImages(imageFiles);
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    
+    const imageFiles = Array.from(files).filter(file => file.type.startsWith("image/"));
+    addImages(imageFiles);
+    
+    // Limpar o input para permitir selecionar o mesmo arquivo novamente
+    if (observationFileInputRef.current) {
+      observationFileInputRef.current.value = '';
+    }
+  };
+
+  const addImages = (files: File[]) => {
+    const newImages = files
+      .slice(0, 5 - selectedImages.length) // Limitar a 5 imagens no total
+      .map(file => {
+        const url = URL.createObjectURL(file);
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        return { id, file, url };
+      });
+    
+    if (newImages.length > 0) {
+      setSelectedImages((prev) => [...prev, ...newImages]);
+    }
+  };
+
+  const removeImage = (id: string) => {
+    setSelectedImages((prev) => {
+      const imageToRemove = prev.find(img => img.id === id);
+      if (imageToRemove) {
+        URL.revokeObjectURL(imageToRemove.url);
+      }
+      return prev.filter(img => img.id !== id);
+    });
+  };
 
   const handleSaveObservations = useCallback(async () => {
     if (!selectedAppointment || !observationNotes.trim()) {
@@ -1425,31 +1493,64 @@ const AppointmentCalendar = () => {
     }
 
     try {
-      // Fazer fetch para o webhook com as observações
-      const response = await fetch(
-        'https://webhook.essenciasaudeintegrada.com.br/webhook/create-patients-records',
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            patient_id: selectedAppointment.patient_id,
-            appointment_id: selectedAppointment.id,
-            date: selectedAppointment.date || new Date().toISOString().split('T')[0],
-            notes: observationNotes,
-            created_by: selectedAppointment.psychologist_id,
-            update_status: 'completed'
-          }),
-        }
-      );
+      let response: Response;
+
+      // Enviar com imagens em binário se houver
+      if (selectedImages.length > 0) {
+        const formData = new FormData();
+        formData.append("patient_id", String(Number(selectedAppointment.patient_id)));
+        formData.append("appointment_id", String(selectedAppointment.id));
+        formData.append("date", selectedAppointment.date || new Date().toISOString().split('T')[0]);
+        formData.append("notes", String(observationNotes));
+        formData.append("created_by", String(Number(selectedAppointment.psychologist_id)));
+        formData.append("update_status", "completed");
+        
+        // Enviar imagens com nomes img1, img2, img3, img4, img5
+        selectedImages.forEach((img, index) => {
+          const imageKey = `img${index + 1}`;
+          formData.append(imageKey, img.file);
+        });
+
+        response = await fetch(
+          'https://webhook.essenciasaudeintegrada.com.br/webhook/create-patients-records',
+          {
+            method: 'POST',
+            body: formData,
+          }
+        );
+      } else {
+        // Sem imagem: mantém JSON como antes
+        const jsonRecord = {
+          patient_id: Number(selectedAppointment.patient_id),
+          appointment_id: String(selectedAppointment.id),
+          date: selectedAppointment.date || new Date().toISOString().split('T')[0],
+          notes: String(observationNotes),
+          created_by: Number(selectedAppointment.psychologist_id),
+          update_status: 'completed'
+        };
+        
+        response = await fetch(
+          'https://webhook.essenciasaudeintegrada.com.br/webhook/create-patients-records',
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(jsonRecord),
+          }
+        );
+      }
 
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.message || 'Falha ao salvar observações do atendimento');
       }
 
+      // Limpar imagens e revogar URLs
+      selectedImages.forEach((img) => URL.revokeObjectURL(img.url));
+
       // Fechar modal e limpar observações
       setShowObservationModal(false);
       setObservationNotes('');
+      setSelectedImages([]);
       setSelectedAppointment(null);
 
       // Atualizar status do agendamento para "completed"
@@ -1469,7 +1570,7 @@ const AppointmentCalendar = () => {
         variant: "destructive",
       });
     }
-  }, [selectedAppointment, observationNotes, handleStatusChange, toast]);
+  }, [selectedAppointment, observationNotes, selectedImages, handleStatusChange, toast]);
 
   const handleEditSubmit = async () => {
     if (!selectedAppointment) return;
@@ -1853,8 +1954,11 @@ const AppointmentCalendar = () => {
         <div
           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
           onClick={() => {
+            // Limpar imagens ao fechar
+            selectedImages.forEach((img) => URL.revokeObjectURL(img.url));
             setShowObservationModal(false);
             setObservationNotes('');
+            setSelectedImages([]);
             setSelectedAppointment(null);
           }} // Fechar ao clicar no backdrop
         >
@@ -1870,8 +1974,11 @@ const AppointmentCalendar = () => {
                 </h3>
                 <button
                   onClick={() => {
+                    // Limpar imagens ao fechar
+                    selectedImages.forEach((img) => URL.revokeObjectURL(img.url));
                     setShowObservationModal(false);
                     setObservationNotes('');
+                    setSelectedImages([]);
                     setSelectedAppointment(null);
                   }}
                   className="text-white hover:text-blue-200 transition-all duration-200 p-2 rounded-full hover:bg-white hover:bg-opacity-20 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600 hover:scale-110"
@@ -1903,12 +2010,97 @@ const AppointmentCalendar = () => {
                 </p>
               </div>
 
+              {/* Área de upload de imagens */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Imagens (máximo 5)
+                </label>
+                
+                {/* Área de drag and drop */}
+                <div
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  className={`w-full border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                    isDragging 
+                      ? "border-blue-500 bg-blue-50" 
+                      : "border-gray-300 bg-gray-50 hover:border-gray-400"
+                  }`}
+                >
+                  <input
+                    ref={observationFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={handleFileInputChange}
+                    className="hidden"
+                    id="observation-image-upload-input"
+                  />
+                  <label
+                    htmlFor="observation-image-upload-input"
+                    className="cursor-pointer flex flex-col items-center gap-2"
+                  >
+                    <svg
+                      className="w-12 h-12 text-gray-400"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
+                      />
+                    </svg>
+                    <p className="text-sm text-gray-600">
+                      Arraste e solte imagens aqui ou clique para selecionar
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {selectedImages.length}/5 imagens selecionadas
+                    </p>
+                  </label>
+                </div>
+
+                {/* Preview das imagens */}
+                {selectedImages.length > 0 && (
+                  <div className={`grid gap-3 mt-2 ${
+                    selectedImages.length === 1 ? 'grid-cols-1' :
+                    selectedImages.length === 2 ? 'grid-cols-2' :
+                    selectedImages.length <= 4 ? 'grid-cols-2' : 'grid-cols-3'
+                  }`}>
+                    {selectedImages.map((img, index) => (
+                      <div key={img.id} className="relative group">
+                        <img
+                          src={img.url}
+                          alt={`Preview ${index + 1}`}
+                          className="w-full h-48 md:h-56 object-cover rounded border border-gray-300"
+                        />
+                        <button
+                          onClick={() => removeImage(img.id)}
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                          title="Remover imagem"
+                        >
+                          <Trash className="h-3 w-3" />
+                        </button>
+                        <div className="absolute bottom-1 left-1 bg-black bg-opacity-50 text-white text-xs px-1 rounded">
+                          img{index + 1}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Botões de Ação */}
               <div className="flex gap-3 justify-end">
                 <button
                   onClick={() => {
+                    // Limpar imagens ao fechar
+                    selectedImages.forEach((img) => URL.revokeObjectURL(img.url));
                     setShowObservationModal(false);
                     setObservationNotes('');
+                    setSelectedImages([]);
                     setSelectedAppointment(null);
                   }}
                   className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 font-medium"

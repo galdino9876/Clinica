@@ -96,6 +96,11 @@ export interface PatientRecord {
   date: string; // ISO date string
   notes: string;
   created_by: number; // psychologist ID
+  img_nota1?: string | null; // URL da imagem 1
+  img_nota2?: string | null; // URL da imagem 2
+  img_nota3?: string | null; // URL da imagem 3
+  img_nota4?: string | null; // URL da imagem 4
+  img_nota5?: string | null; // URL da imagem 5
 }
 
 export interface PendingPatientsData {
