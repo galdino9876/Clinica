@@ -83,7 +83,9 @@ const FinanceCharts = () => {
   const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>("year");
   const [selectedPsychologist, setSelectedPsychologist] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
+  const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [showMonthSelector, setShowMonthSelector] = useState(false);
+  const [showYearSelector, setShowYearSelector] = useState(false);
   const [showPaymentAppointments, setShowPaymentAppointments] = useState(false);
   const [patientSearchTerm, setPatientSearchTerm] = useState("");
   const [editingPatientHeader, setEditingPatientHeader] = useState(false);
@@ -700,13 +702,16 @@ const FinanceCharts = () => {
     }
   }, [effectivePsychologist, psychologists]);
 
-  // Fechar seletor de mês quando clicar fora
+  // Fechar seletor de mês e ano quando clicar fora
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (showMonthSelector) {
+      if (showMonthSelector || showYearSelector) {
         const target = event.target as HTMLElement;
-        if (!target.closest('.month-selector-container')) {
+        if (showMonthSelector && !target.closest('.month-selector-container')) {
           setShowMonthSelector(false);
+        }
+        if (showYearSelector && !target.closest('.year-selector-container')) {
+          setShowYearSelector(false);
         }
       }
     };
@@ -715,7 +720,7 @@ const FinanceCharts = () => {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [showMonthSelector]);
+  }, [showMonthSelector, showYearSelector]);
 
   // Mostrar atendimentos automaticamente quando selecionar período
   useEffect(() => {
@@ -759,8 +764,9 @@ const FinanceCharts = () => {
         endDate = endOfMonth(selectedMonth);
         break;
       case "year":
-        startDate = startOfYear(today);
-        endDate = endOfYear(today);
+        const yearDate = new Date(selectedYear, 0, 1);
+        startDate = startOfYear(yearDate);
+        endDate = endOfYear(yearDate);
         break;
       default:
         startDate = subDays(today, 30);
@@ -2075,13 +2081,46 @@ const FinanceCharts = () => {
                 </div>
               )}
             </div>
-            <Button
-              variant={filterPeriod === "year" ? "default" : "outline"}
-              size="sm"
-              onClick={() => setFilterPeriod("year")}
-            >
-              Ano
-            </Button>
+            <div className="relative year-selector-container">
+              <Button
+                variant={filterPeriod === "year" ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setFilterPeriod("year");
+                  setShowYearSelector(!showYearSelector);
+                }}
+              >
+                Ano
+              </Button>
+              {showYearSelector && (
+                <div className="absolute top-full left-0 mt-1 bg-white border rounded-md shadow-lg z-10 p-2 min-w-[200px]">
+                  <div className="text-sm font-medium mb-2">Selecionar Ano:</div>
+                  <div className="grid grid-cols-3 gap-1 max-h-[200px] overflow-y-auto">
+                    {Array.from({ length: 10 }, (_, i) => {
+                      const year = new Date().getFullYear() - 5 + i;
+                      const isSelected = selectedYear === year;
+                      return (
+                        <button
+                          key={year}
+                          className={`px-2 py-1 text-xs rounded ${
+                            isSelected 
+                              ? "bg-blue-500 text-white" 
+                              : "bg-gray-100 hover:bg-gray-200"
+                          }`}
+                          onClick={() => {
+                            setSelectedYear(year);
+                            setSelectedMonth(new Date(year, selectedMonth.getMonth(), 1));
+                            setShowYearSelector(false);
+                          }}
+                        >
+                          {year}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {canManageFinance && (
