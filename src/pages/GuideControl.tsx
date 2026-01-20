@@ -52,6 +52,7 @@ interface PrestadorData {
   faturado: number;
   data_vencimento: string | null;
   data_validade: string | null;
+  status_guia?: string | null; // Status da guia: "Autorizada", "Negada", "EM ANALISE", etc.
 }
 
 interface GuideData {
@@ -167,7 +168,23 @@ const GuideControl: React.FC = () => {
       faturado: p.faturado || 0,
       data_vencimento: p.data_vencimento || p.date_vencimento || null,
       data_validade: p.data_validade || p.date_validade || null,
+      status_guia: p.status_guia || null,
     }));
+  };
+
+  // Função para obter a cor do badge baseado no status da guia
+  const getStatusGuiaColor = (status: string | null | undefined): string => {
+    if (!status) return "bg-gray-100 text-gray-700";
+    
+    const statusLower = status.toLowerCase();
+    if (statusLower === "autorizada") {
+      return "bg-green-100 text-green-800";
+    } else if (statusLower === "negada") {
+      return "bg-red-100 text-red-800";
+    } else if (statusLower.includes("analise") || statusLower.includes("análise")) {
+      return "bg-yellow-100 text-yellow-800";
+    }
+    return "bg-gray-100 text-gray-700";
   };
 
   // Função para determinar a cor da data baseada nas regras de negócio
@@ -1647,6 +1664,13 @@ const GuideControl: React.FC = () => {
                                     <span className="font-semibold text-lg text-gray-800 whitespace-nowrap">
                                       Número de Prestador: {prestador.numero_prestador}
                                     </span>
+                                    {prestador.status_guia && 
+                                     prestador.status_guia.trim() !== "" && 
+                                     prestador.status_guia.trim().toLowerCase() !== "null" && (
+                                      <Badge className={getStatusGuiaColor(prestador.status_guia)}>
+                                        {prestador.status_guia}
+                                      </Badge>
+                                    )}
                                     <Button 
                                       size="sm" 
                                       variant="outline"
