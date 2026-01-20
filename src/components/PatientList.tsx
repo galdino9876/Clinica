@@ -23,6 +23,15 @@ const getCategoriaEtaria = (birthdate?: string): string => {
   return age < 12 ? "Criança" : "Adulto";
 };
 
+// Função para extrair apenas o primeiro e segundo nome
+const getShortName = (fullName: string | null | undefined): string => {
+  if (!fullName) return "N/A";
+  const names = fullName.trim().split(/\s+/);
+  if (names.length === 0) return "N/A";
+  if (names.length === 1) return names[0];
+  return `${names[0]} ${names[1]}`;
+};
+
 const PatientsTable = () => {
   const { user } = useAuth(); // Adicionado para obter o usuário autenticado
   const [patients, setPatients] = useState([]);
@@ -174,31 +183,31 @@ const PatientsTable = () => {
       },
       visible: canViewRecords, // Se for recepcionista, visible = false; se não, visible = true
     },
-    {
-      id: "referral",
-      label: "Encaminhamento",
-      icon: Send,
-      color: "text-yellow-600 hover:text-yellow-800",
-      onClick: (patient) => {
-        setSelectedPatient(patient);
-        setIsReferralOpen(true);
-      },
-      visible: canViewRecords || isAdmin || isPsychologist || canManagePatients,
-    },
-    {
-      id: "attendance",
-      label: "Atestado",
-      icon: CircleArrowUp,
-      color: "text-indigo-600 hover:text-indigo-800",
-      onClick: (patient) => {
-        setSelectedPatient(patient);
-        setAttendanceDate(new Date().toISOString().split('T')[0]);
-        setAttendanceStartTime("08:00");
-        setAttendanceEndTime("09:00");
-        setAttendancePeriod("specific");
-        setIsAttendanceOpen(true);
-      },
-    },
+    // {
+    //   id: "referral",
+    //   label: "Encaminhamento",
+    //   icon: Send,
+    //   color: "text-yellow-600 hover:text-yellow-800",
+    //   onClick: (patient) => {
+    //     setSelectedPatient(patient);
+    //     setIsReferralOpen(true);
+    //   },
+    //   visible: canViewRecords || isAdmin || isPsychologist || canManagePatients,
+    // },
+    // {
+    //   id: "attendance",
+    //   label: "Atestado",
+    //   icon: CircleArrowUp,
+    //   color: "text-indigo-600 hover:text-indigo-800",
+    //   onClick: (patient) => {
+    //     setSelectedPatient(patient);
+    //     setAttendanceDate(new Date().toISOString().split('T')[0]);
+    //     setAttendanceStartTime("08:00");
+    //     setAttendanceEndTime("09:00");
+    //     setAttendancePeriod("specific");
+    //     setIsAttendanceOpen(true);
+    //   },
+    // },
     {
       id: "continuity",
       label: "Pedido de Continuidade",
@@ -594,7 +603,9 @@ const PatientsTable = () => {
                     </td>
                     {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.email || "N/A"}</td> */}
                     {isAdmin && (
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isInactive ? "text-gray-500" : "text-gray-900"}`}>{patient.psychologist_name || patient.nome_responsavel || "N/A"}</td>
+                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isInactive ? "text-gray-500" : "text-gray-900"}`}>
+                        {getShortName(patient.psychologist_name || patient.nome_responsavel)}
+                      </td>
                     )}
                     <td className="px-6 py-4 whitespace-nowrap">{renderStatus(patient.status || "Ativo")}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm">
