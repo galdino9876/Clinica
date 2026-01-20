@@ -164,7 +164,7 @@ const PatientTable = ({
                         )}
 
                         {/* Encaminhamento e Atestado - para recepcionistas e quem pode ver prontuários */}
-                        {(canViewRecords || isAdmin || isPsychologist || canManagePatients) && (
+                        {/* {(canViewRecords || isAdmin || isPsychologist || canManagePatients) && (
                           <>
                             <Button
                               variant="ghost"
@@ -183,7 +183,7 @@ const PatientTable = ({
                               <CircleArrowUp className="h-4 w-4" />
                             </Button>
                           </>
-                        )}
+                        )} */}
 
                         {/* Gerenciamento de pacientes - apenas para quem pode gerenciar (admin e recepcionistas) */}
                         {canManagePatients && patient.active && (
