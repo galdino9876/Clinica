@@ -301,9 +301,9 @@ const GuideControl: React.FC = () => {
 
   // Funções para calcular estatísticas do dashboard
   const getDashboardStats = () => {
-    // Filtrar apenas pacientes com planos de saúde (excluir "Particular")
+    // Filtrar apenas pacientes ativos (active === 1) com planos de saúde (excluir "Particular")
     const patientsWithInsurance = patientsData.filter(patient => 
-      patient.insurance_type !== "Particular"
+      patient.insurance_type !== "Particular" && patient.active === 1
     );
     
     const totalPatients = patientsWithInsurance.length;
@@ -395,9 +395,9 @@ const GuideControl: React.FC = () => {
 
   // Função para filtrar pacientes baseado no tipo selecionado
   const getFilteredPatients = () => {
-    // Primeiro filtrar apenas pacientes com planos de saúde (excluir "Particular")
+    // Primeiro filtrar apenas pacientes ativos (active === 1) com planos de saúde (excluir "Particular")
     let patientsWithInsurance = patientsData.filter(patient => 
-      patient.insurance_type !== "Particular"
+      patient.insurance_type !== "Particular" && patient.active === 1
     );
 
     // Filtrar por termo de busca (nome)
