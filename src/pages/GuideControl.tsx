@@ -339,8 +339,12 @@ const GuideControl: React.FC = () => {
             if (prestador.faturado === 1) {
               totalGuiasFaturadas++; // Conta as faturadas
             }
-            // Contar guias que faltam importar (existe_guia_assinada === 0, tem número de prestador e não está faturado)
-            if (prestador.existe_guia_assinada === 0 && prestador.numero_prestador && prestador.faturado !== 1) {
+            // Contar guias que faltam importar (existe_guia_assinada === 0, não têm documento assinado pelo psicólogo, 
+            // tem número de prestador e não está faturado)
+            if (prestador.existe_guia_assinada === 0 && 
+                prestador.existe_guia_assinada_psicologo === 0 &&
+                prestador.numero_prestador && 
+                prestador.faturado !== 1) {
               totalFaltaImportarGuia++;
             }
           });
@@ -468,14 +472,18 @@ const GuideControl: React.FC = () => {
       }
 
       if (filterType === 'falta-importar-guia') {
-        // Pacientes com prestadores que têm existe_guia_assinada === 0, número de prestador e não estão faturados
+        // Pacientes com prestadores que têm existe_guia_assinada === 0, número de prestador, não estão faturados,
+        // não têm documento assinado pelo psicólogo e não têm documento assinado pelo paciente
         if (!patient.prestadores) return false;
         try {
           const parsed = JSON.parse(patient.prestadores);
           const prestadoresData: PrestadorData[] = normalizePrestadoresData(parsed);
           const prestadoresNoMes = filterPrestadoresByMonth(prestadoresData, patient);
           return prestadoresNoMes.some(prestador => 
-            prestador.existe_guia_assinada === 0 && prestador.numero_prestador && prestador.faturado !== 1
+            prestador.existe_guia_assinada === 0 && 
+            prestador.existe_guia_assinada_psicologo === 0 &&
+            prestador.numero_prestador && 
+            prestador.faturado !== 1
           );
         } catch (error) {
           return false;
@@ -1640,9 +1648,13 @@ const GuideControl: React.FC = () => {
                               if (filterType === 'faturado') {
                                 return prestador.faturado === 1;
                               }
-                              // Se o filtro "falta-importar-guia" estiver ativo, mostrar apenas prestadores com existe_guia_assinada === 0, número de prestador e não faturados
+                              // Se o filtro "falta-importar-guia" estiver ativo, mostrar apenas prestadores com existe_guia_assinada === 0, 
+                              // não têm documento assinado pelo psicólogo, número de prestador e não faturados
                               if (filterType === 'falta-importar-guia') {
-                                return prestador.existe_guia_assinada === 0 && prestador.numero_prestador && prestador.faturado !== 1;
+                                return prestador.existe_guia_assinada === 0 && 
+                                       prestador.existe_guia_assinada_psicologo === 0 &&
+                                       prestador.numero_prestador && 
+                                       prestador.faturado !== 1;
                               }
                               return true;
                             })
