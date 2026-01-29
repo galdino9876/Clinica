@@ -301,10 +301,16 @@ const GuideControl: React.FC = () => {
 
   // Funções para calcular estatísticas do dashboard
   const getDashboardStats = () => {
-    // Filtrar apenas pacientes ativos (active === 1) com planos de saúde (excluir "Particular")
-    const patientsWithInsurance = patientsData.filter(patient => 
-      patient.insurance_type !== "Particular" && patient.active === 1
-    );
+    // Filtrar pacientes ativos (active === 1) ou inativos com guia autorizada (existe_guia_autorizada === 1)
+    // com planos de saúde (excluir "Particular")
+    const patientsWithInsurance = patientsData.filter(patient => {
+      if (patient.insurance_type === "Particular") return false;
+      // Mostrar pacientes ativos normalmente
+      if (patient.active === 1) return true;
+      // Mostrar pacientes inativos apenas se tiverem guia autorizada
+      if (patient.active !== 1 && hasGuiaAutorizada(patient)) return true;
+      return false;
+    });
     
     const totalPatients = patientsWithInsurance.length;
     let patientsWithoutGuide = 0;
@@ -393,12 +399,39 @@ const GuideControl: React.FC = () => {
     }
   };
 
+  // Função auxiliar para verificar se o paciente tem guia autorizada (no nível do paciente ou nos prestadores)
+  const hasGuiaAutorizada = (patient: PatientData): boolean => {
+    // Verificar no nível do paciente
+    if (patient.existe_guia_autorizada === 1) {
+      return true;
+    }
+    
+    // Verificar nos prestadores
+    if (patient.prestadores) {
+      try {
+        const parsed = JSON.parse(patient.prestadores);
+        const prestadoresData: PrestadorData[] = normalizePrestadoresData(parsed);
+        return prestadoresData.some(prestador => prestador.existe_guia_autorizada === 1);
+      } catch (error) {
+        return false;
+      }
+    }
+    
+    return false;
+  };
+
   // Função para filtrar pacientes baseado no tipo selecionado
   const getFilteredPatients = () => {
-    // Primeiro filtrar apenas pacientes ativos (active === 1) com planos de saúde (excluir "Particular")
-    let patientsWithInsurance = patientsData.filter(patient => 
-      patient.insurance_type !== "Particular" && patient.active === 1
-    );
+    // Primeiro filtrar pacientes ativos (active === 1) ou inativos com guia autorizada (existe_guia_autorizada === 1)
+    // com planos de saúde (excluir "Particular")
+    let patientsWithInsurance = patientsData.filter(patient => {
+      if (patient.insurance_type === "Particular") return false;
+      // Mostrar pacientes ativos normalmente
+      if (patient.active === 1) return true;
+      // Mostrar pacientes inativos apenas se tiverem guia autorizada
+      if (patient.active !== 1 && hasGuiaAutorizada(patient)) return true;
+      return false;
+    });
 
     // Filtrar por termo de busca (nome)
     if (searchTerm.trim()) {
