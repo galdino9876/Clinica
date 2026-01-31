@@ -3,6 +3,19 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Estilos globais para remover fundo branco */
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  background-color: rgb(185, 159, 126) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  width: 100% !important;
+  min-height: 100vh !important;
+}
+
 @layer base {
   :root {
     --background: 210 50% 98%;
@@ -81,8 +94,24 @@
     @apply border-border;
   }
 
+  html, body {
+    background-color: rgb(185, 159, 126) !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100%;
+    height: 100%;
+  }
+
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+  }
+
+  #root {
+    background-color: rgb(185, 159, 126) !important;
+    min-height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
   }
 }
 

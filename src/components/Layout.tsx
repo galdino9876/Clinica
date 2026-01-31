@@ -27,7 +27,7 @@ const Layout = ({ children, requireAuth = true }: LayoutProps) => {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className={`flex min-h-screen ${requireAuth ? 'bg-gray-50' : ''}`} style={!requireAuth ? { backgroundColor: 'rgb(185, 159, 126)', margin: 0, padding: 0 } : {}}>
       {/* Botão Hambúrguer para Mobile */}
       {isAuthenticated && (
         <button
@@ -59,7 +59,7 @@ const Layout = ({ children, requireAuth = true }: LayoutProps) => {
       )}
 
       {/* Conteúdo principal */}
-      <main className="flex-1 p-4 md:p-6 md:ml-0 transition-all duration-300 pt-20 md:pt-6">
+      <main className={`flex-1 ${requireAuth ? 'p-4 md:p-6 md:ml-0 transition-all duration-300 pt-20 md:pt-6' : 'p-0 m-0'}`}>
         {children}
       </main>
     </div>
