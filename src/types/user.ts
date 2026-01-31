@@ -18,6 +18,10 @@ export interface User {
   password?: string; // Apenas para transferência, não será armazenado no estado
   workingHours?: WorkingHours[]; // Disponibilidade para psicólogos
   commissionPercentage?: number; // Percentage of commission for psychologists
+  sessao?: number; // 0 = ativo, 1 = bloqueado/desativado
+  crp?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export type CommissionOption = 10 | 20 | 30 | 40 | 50 | 60 | 70 | 80 | 90 | 100;
