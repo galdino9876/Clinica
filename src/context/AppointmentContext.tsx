@@ -441,66 +441,118 @@ export const AppointmentProvider: React.FC<{ children: ReactNode }> = ({ childre
     });
   };
 
-  const deactivatePatient = (id: string, reason: string) => {
+  const deactivatePatient = async (id: string, reason: string) => {
     const patient = patients.find(p => p.id === id);
     if (!patient) return;
 
-    const updatedPatient = {
-      ...patient,
-      active: false,
-      deactivationReason: reason,
-      deactivationDate: new Date().toISOString().split('T')[0]
-    };
-
-    updatePatient(updatedPatient);
-
-    // Cancel all future appointments for this patient
-    const patientAppointments = appointments.filter(
-      app => app.patient.id === id &&
-      // Only cancel future appointments or those on the same day
-      (new Date(app.date) >= new Date(new Date().setHours(0, 0, 0, 0))) &&
-      // Only cancel pending or confirmed appointments
-      (app.status === "pending" || app.status === "confirmed")
-    );
-
-    if (patientAppointments.length > 0) {
-      // Update all of these appointments to cancelled
-      patientAppointments.forEach(app => {
-        updateAppointment({
-          ...app,
-          status: "cancelled" as AppointmentStatus
-        });
+    try {
+      // Fazer POST para a API alterar status do paciente
+      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/alter_status_patient", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          patient_id: id,
+          active: 0,
+          motivo: "inativo"
+        }),
       });
+
+      if (!response.ok) {
+        throw new Error("Erro ao desativar paciente na API");
+      }
+
+      const updatedPatient = {
+        ...patient,
+        active: false,
+        deactivationReason: reason,
+        deactivationDate: new Date().toISOString().split('T')[0]
+      };
+
+      updatePatient(updatedPatient);
+
+      // Cancel all future appointments for this patient
+      const patientAppointments = appointments.filter(
+        app => app.patient.id === id &&
+        // Only cancel future appointments or those on the same day
+        (new Date(app.date) >= new Date(new Date().setHours(0, 0, 0, 0))) &&
+        // Only cancel pending or confirmed appointments
+        (app.status === "pending" || app.status === "confirmed")
+      );
+
+      if (patientAppointments.length > 0) {
+        // Update all of these appointments to cancelled
+        patientAppointments.forEach(app => {
+          updateAppointment({
+            ...app,
+            status: "cancelled" as AppointmentStatus
+          });
+        });
+
+        toast({
+          title: `${patientAppointments.length} agendamentos cancelados`,
+          description: `Os agendamentos futuros do paciente ${patient.name} foram cancelados automaticamente.`,
+        });
+      }
 
       toast({
-        title: `${patientAppointments.length} agendamentos cancelados`,
-        description: `Os agendamentos futuros do paciente ${patient.name} foram cancelados automaticamente.`,
+        title: "Paciente desativado",
+        description: `O paciente ${patient.name} foi desativado com sucesso.`
+      });
+    } catch (error) {
+      console.error("Erro ao desativar paciente:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível desativar o paciente. Tente novamente.",
+        variant: "destructive"
       });
     }
-
-    toast({
-      title: "Paciente desativado",
-      description: `O paciente ${patient.name} foi desativado com sucesso.`
-    });
   };
 
-  const reactivatePatient = (id: string) => {
+  const reactivatePatient = async (id: string) => {
     const patient = patients.find(p => p.id === id);
     if (!patient) return;
 
-    const updatedPatient = {
-      ...patient,
-      active: true,
-      deactivationReason: undefined,
-      deactivationDate: undefined
-    };
+    try {
+      // Fazer POST para a API alterar status do paciente
+      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/alter_status_patient", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          patient_id: id,
+          active: 1,
+          motivo: "ativo"
+        }),
+      });
 
-    updatePatient(updatedPatient);
+      if (!response.ok) {
+        throw new Error("Erro ao reativar paciente na API");
+      }
 
-    toast({
-      title: "Paciente reativado",
-      description: `O paciente ${patient.name} foi reativado com sucesso.`
-    });
+      const updatedPatient = {
+        ...patient,
+        active: true,
+        deactivationReason: undefined,
+        deactivationDate: undefined
+      };
+
+      updatePatient(updatedPatient);
+
+      toast({
+        title: "Paciente reativado",
+        description: `O paciente ${patient.name} foi reativado com sucesso.`
+      });
+    } catch (error) {
+      console.error("Erro ao reativar paciente:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível reativar o paciente. Tente novamente.",
+        variant: "destructive"
+      });
+    }
   };
 
   const addPatientRecord = (recordData: Omit<PatientRecord, 'id'>) => {

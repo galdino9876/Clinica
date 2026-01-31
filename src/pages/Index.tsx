@@ -741,7 +741,7 @@ const Index = () => {
         requestBody.patient_id = patientId;
       }
       
-      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/alter_alerta", {
+      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/alter_status_patient", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -186,37 +186,50 @@ const PatientTable = ({
                         )} */}
 
                         {/* Gerenciamento de pacientes - apenas para quem pode gerenciar (admin e recepcionistas) */}
-                        {canManagePatients && patient.active && (
+                        {canManagePatients && (
                           <>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => onEditPatient(patient)}
-                              title="Editar"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => onDeactivatePatient(patient)}
-                              title="Desativar Paciente"
-                            >
-                              <Trash className="h-4 w-4" />
-                            </Button>
+                            {/* Botão Editar - apenas para pacientes ativos */}
+                            {patient.active && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => onEditPatient(patient)}
+                                title="Editar"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </Button>
+                            )}
+                            
+                            {/* Botão inteligente: Ativar (verde) se active = 0, Desativar (vermelho) se active = 1 */}
+                            {(() => {
+                              const isActive = patient.active === 1 || patient.active === true;
+                              return (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    if (isActive) {
+                                      onDeactivatePatient(patient);
+                                    } else {
+                                      onReactivatePatient(patient);
+                                    }
+                                  }}
+                                  title={isActive ? "Desativar Paciente" : "Ativar Paciente"}
+                                  className={
+                                    isActive
+                                      ? "text-red-600 hover:text-red-800 hover:bg-red-50"
+                                      : "text-green-600 hover:text-green-800 hover:bg-green-50"
+                                  }
+                                >
+                                  {isActive ? (
+                                    <Trash className="h-4 w-4" />
+                                  ) : (
+                                    <FilePlus className="h-4 w-4" />
+                                  )}
+                                </Button>
+                              );
+                            })()}
                           </>
-                        )}
-                        {/* Reativar paciente - apenas para admin */}
-                        {isAdmin && !patient.active && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => onReactivatePatient(patient)}
-                            title="Reativar Paciente"
-                            className="text-green-600 hover:text-green-800 hover:bg-green-50"
-                          >
-                            <FilePlus className="h-4 w-4" />
-                          </Button>
                         )}
                       </div>
                     </td>

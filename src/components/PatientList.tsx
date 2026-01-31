@@ -1,6 +1,16 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Edit, Trash2, Eye, Plus, FileText, Activity, Send, CircleArrowUp, MessageCircle, ClipboardList, Download } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import PatientForm from "./PatientForm";
 import PatientAppointmentHistory from "./PatientAppointmentHistory";
 import PatientRecords from "./PatientRecords";
@@ -55,6 +65,9 @@ const PatientsTable = () => {
   const [isReferralOpen, setIsReferralOpen] = useState(false);
   const [isAttendanceOpen, setIsAttendanceOpen] = useState(false);
   const [isContinuityOpen, setIsContinuityOpen] = useState(false);
+  const [isToggleStatusDialogOpen, setIsToggleStatusDialogOpen] = useState(false);
+  const [patientToToggle, setPatientToToggle] = useState<any>(null);
+  const [toggleAction, setToggleAction] = useState<"ativar" | "desativar">("ativar");
   const nameSearchInputRef = useRef<HTMLInputElement | null>(null);
 
 
@@ -126,6 +139,53 @@ const PatientsTable = () => {
     );
     setIsEditFormOpen(false);
     setEditingPatient(null);
+  };
+
+  // Função para confirmar e executar a ação de ativar/desativar
+  const handleConfirmToggleStatus = async () => {
+    if (!patientToToggle) return;
+
+    const isActive = patientToToggle.active === 1 || patientToToggle.active === true;
+    const action = toggleAction;
+    
+    try {
+      const response = await fetch("https://webhook.essenciasaudeintegrada.com.br/webhook/alter_status_patient", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          patient_id: patientToToggle.id,
+          active: isActive ? 0 : 1,
+          motivo: isActive ? "inativo" : "ativo"
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Erro ao ${action} paciente`);
+      }
+
+      // Atualizar o estado local
+      setPatients((prev) =>
+        prev.map((p) =>
+          p.id === patientToToggle.id
+            ? { ...p, active: isActive ? 0 : 1 }
+            : p
+        )
+      );
+
+      toast.success(`Paciente ${action === "ativar" ? "ativado" : "desativado"} com sucesso!`);
+      
+      // Fechar diálogo
+      setIsToggleStatusDialogOpen(false);
+      setPatientToToggle(null);
+      
+      // Recarregar a lista de pacientes para garantir sincronização
+      await fetchPatients();
+    } catch (error) {
+      console.error(`Erro ao ${action} paciente:`, error);
+      toast.error(`Não foi possível ${action} o paciente. Tente novamente.`);
+    }
   };
 
   const filteredPatients = patients.filter(
@@ -219,13 +279,28 @@ const PatientsTable = () => {
       },
       visible: canViewRecords || isReceptionist, // Admin, psicólogos e recepcionistas podem gerar pedido de continuidade
     },
+    // Botão inteligente: mostra "Ativar" (verde) se active = 0, ou "Desativar" (vermelho) se active = 1
     {
-      id: "reactivate",
-      label: "Reativar",
+      id: "toggleStatus",
+      label: (patient) => {
+        const isActive = patient.active === 1 || patient.active === true;
+        return isActive ? "Desativar" : "Ativar";
+      },
       icon: Activity,
-      color: "text-green-600 hover:text-green-800",
-      onClick: (patient) => alert(`Reativar paciente: ${patient.name || patient.nome}`),
-      visible: canManagePatients, // Apenas admin e recepcionistas podem reativar
+      color: (patient) => {
+        const isActive = patient.active === 1 || patient.active === true;
+        return isActive ? "text-red-600 hover:text-red-800" : "text-green-600 hover:text-green-800";
+      },
+      onClick: (patient) => {
+        const isActive = patient.active === 1 || patient.active === true;
+        const action = isActive ? "desativar" : "ativar";
+        
+        // Abrir diálogo de confirmação
+        setPatientToToggle(patient);
+        setToggleAction(action);
+        setIsToggleStatusDialogOpen(true);
+      },
+      visible: canManagePatients, // Apenas admin e recepcionistas podem ativar/desativar
     },
     {
       id: "edit",
@@ -627,16 +702,22 @@ const PatientsTable = () => {
                       <div className="flex space-x-2">
                         {actions
                           .filter((action) => action.visible === undefined || action.visible)
-                          .map((action) => (
-                            <button
-                              key={action.id}
-                              onClick={() => action.onClick(patient)}
-                              className={`${action.color} hover:scale-110 p-1 rounded`}
-                              title={action.label}
-                            >
-                              <action.icon size={16} />
-                            </button>
-                          ))}
+                          .map((action) => {
+                            // Suporta label e color como função ou string
+                            const label = typeof action.label === 'function' ? action.label(patient) : action.label;
+                            const color = typeof action.color === 'function' ? action.color(patient) : action.color;
+                            
+                            return (
+                              <button
+                                key={action.id}
+                                onClick={() => action.onClick(patient)}
+                                className={`${color} hover:scale-110 p-1 rounded`}
+                                title={label}
+                              >
+                                <action.icon size={16} />
+                              </button>
+                            );
+                          })}
                       </div>
                     </td>
                   </tr>
@@ -949,6 +1030,35 @@ const PatientsTable = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Diálogo de confirmação para ativar/desativar paciente */}
+      <AlertDialog open={isToggleStatusDialogOpen} onOpenChange={setIsToggleStatusDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {toggleAction === "ativar" ? "Ativar Paciente" : "Desativar Paciente"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Deseja {toggleAction} o paciente <strong>{patientToToggle?.name || patientToToggle?.nome || "este paciente"}</strong>?
+              {toggleAction === "desativar"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => {
+              setIsToggleStatusDialogOpen(false);
+              setPatientToToggle(null);
+            }}>
+              Cancelar
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmToggleStatus}
+              className={toggleAction === "desativar" ? "bg-red-600 hover:bg-red-700" : "bg-green-600 hover:bg-green-700"}
+            >
+              {toggleAction === "ativar" ? "Ativar" : "Desativar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

@@ -12,7 +12,7 @@ export interface Patient {
   email: string;
   address?: string;
   birthdate?: string;
-  active: boolean;
+  active: boolean | number; // Aceita boolean ou number (0 = inativo, 1 = ativo) da API
   deactivationReason?: string;
   deactivationDate?: string;
   identityDocument?: File | string; // Added for identity document
