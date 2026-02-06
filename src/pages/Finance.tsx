@@ -1,13 +1,24 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Layout from "@/components/Layout";
 import FinanceCharts from "@/components/FinanceCharts";
 import GuiaAReceberTable from "@/components/GuiaAReceberTable";
 import GuiaRecebidaTable from "@/components/GuiaRecebidaTable";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useAuth } from "@/context/AuthContext";
+import { isAdmin } from "@/utils/roleUtils";
 
 const Finance = () => {
+  const { user } = useAuth();
+  const userIsAdmin = isAdmin(user?.role);
   const [activeTab, setActiveTab] = useState("charts");
   const [refreshKey, setRefreshKey] = useState(0);
+
+  // Garantir que usuários não-admin não acessem abas de guias
+  useEffect(() => {
+    if (!userIsAdmin && (activeTab === "a-receber" || activeTab === "recebidas")) {
+      setActiveTab("charts");
+    }
+  }, [userIsAdmin, activeTab]);
 
   return (
     <Layout>
@@ -22,21 +33,29 @@ const Finance = () => {
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList>
             <TabsTrigger value="charts">Dashboard Financeiro</TabsTrigger>
-            <TabsTrigger value="a-receber">Guias a Receber</TabsTrigger>
-            <TabsTrigger value="recebidas">Guias Recebidas</TabsTrigger>
+            {userIsAdmin && (
+              <>
+                <TabsTrigger value="a-receber">Guias a Receber</TabsTrigger>
+                <TabsTrigger value="recebidas">Guias Recebidas</TabsTrigger>
+              </>
+            )}
           </TabsList>
 
           <TabsContent value="charts" className="space-y-4">
             <FinanceCharts />
           </TabsContent>
 
-          <TabsContent value="a-receber" className="space-y-4">
-            <GuiaAReceberTable key={refreshKey} />
-          </TabsContent>
+          {userIsAdmin && (
+            <>
+              <TabsContent value="a-receber" className="space-y-4">
+                <GuiaAReceberTable key={refreshKey} />
+              </TabsContent>
 
-          <TabsContent value="recebidas" className="space-y-4">
-            <GuiaRecebidaTable />
-          </TabsContent>
+              <TabsContent value="recebidas" className="space-y-4">
+                <GuiaRecebidaTable />
+              </TabsContent>
+            </>
+          )}
         </Tabs>
       </div>
     </Layout>
