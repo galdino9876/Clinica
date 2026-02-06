@@ -22,21 +22,21 @@ const Finance = () => {
 
   return (
     <Layout>
-      <div className="space-y-6">
+      <div className="space-y-4 md:space-y-6 p-3 md:p-6">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Finanças</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Finanças</h1>
+          <p className="text-sm md:text-base text-muted-foreground">
             Gestão financeira e acompanhamento de guias a receber
           </p>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="charts">Dashboard Financeiro</TabsTrigger>
+          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 gap-2 h-auto">
+            <TabsTrigger value="charts" className="text-xs sm:text-sm">Dashboard Financeiro</TabsTrigger>
             {userIsAdmin && (
               <>
-                <TabsTrigger value="a-receber">Guias a Receber</TabsTrigger>
-                <TabsTrigger value="recebidas">Guias Recebidas</TabsTrigger>
+                <TabsTrigger value="a-receber" className="text-xs sm:text-sm">Guias a Receber</TabsTrigger>
+                <TabsTrigger value="recebidas" className="text-xs sm:text-sm">Guias Recebidas</TabsTrigger>
               </>
             )}
           </TabsList>

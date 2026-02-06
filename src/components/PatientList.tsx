@@ -189,12 +189,22 @@ const PatientsTable = () => {
   };
 
   const filteredPatients = patients.filter(
-    (patient) =>
-      (patient.name || patient.nome || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (patient.cpf || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (patient.phone || patient.telefone || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (patient.email || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (isAdmin && patient.psychologist_name ? patient.psychologist_name.toLowerCase().includes(searchTerm.toLowerCase()) : false)
+    (patient) => {
+      // Para psicólogos, filtrar apenas pacientes ativos
+      if (isPsychologist) {
+        const isActive = patient.active !== 0 && patient.active !== false;
+        if (!isActive) return false;
+      }
+      
+      // Filtro de busca
+      return (
+        (patient.name || patient.nome || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (patient.cpf || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (patient.phone || patient.telefone || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (patient.email || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (isAdmin && patient.psychologist_name ? patient.psychologist_name.toLowerCase().includes(searchTerm.toLowerCase()) : false)
+      );
+    }
   );
 
   // Ordena: primeiro pacientes ativos (active === 1 ou true), depois inativos (active === 0 ou false)
@@ -562,34 +572,36 @@ const PatientsTable = () => {
   }
 
   return (
-    <div className="w-full p-6">
+    <div className="w-full p-3 md:p-6">
       <div className="bg-white shadow-lg rounded-lg overflow-hidden">
-        <div className="bg-gray-50 px-6 py-4 border-b border-gray-200">
-          <div className="flex justify-between items-center">
+        <div className="bg-gray-50 px-3 md:px-6 py-4 border-b border-gray-200">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
-              <h2 className="text-xl font-semibold text-gray-800">Pacientes</h2>
-              <div className="text-sm text-gray-600 mt-1">
+              <h2 className="text-lg md:text-xl font-semibold text-gray-800">Pacientes</h2>
+              <div className="text-xs md:text-sm text-gray-600 mt-1">
                 Total: {totalPatients} | Ativos: {activePatients}
               </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
               {canManagePatients && (
                 <button
                   onClick={() => setIsFormOpen(true)}
-                  className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md flex items-center gap-2"
+                  className="bg-blue-600 hover:bg-blue-700 text-white px-3 md:px-4 py-2 rounded-md flex items-center justify-center gap-2 text-sm"
                 >
                   <Plus size={16} />
-                  Novo Paciente
+                  <span className="hidden sm:inline">Novo Paciente</span>
+                  <span className="sm:hidden">Novo</span>
                 </button>
               )}
-              {(canViewRecords || isReceptionist) && (
+              {canManagePatients && (
                 <button
                   onClick={handleBulkContinuityRequest}
                   disabled={bulkContinuityLoading || filteredPatients.length === 0}
-                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md flex items-center gap-2"
+                  className="bg-green-600 hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-3 md:px-4 py-2 rounded-md flex items-center justify-center gap-2 text-sm"
                 >
                   <Download size={16} />
-                  Baixar Pedidos Continuidade
+                  <span className="hidden sm:inline">Baixar Pedidos Continuidade</span>
+                  <span className="sm:hidden">Baixar</span>
                 </button>
               )}
             </div>
@@ -597,31 +609,32 @@ const PatientsTable = () => {
           {error && <div className="mt-2 text-sm text-red-600 bg-red-50 p-2 rounded">{error}</div>}
         </div>
 
-        <div className="overflow-x-auto">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   <div className="relative">
                     <input
                       ref={nameSearchInputRef}
                       type="text"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Pesquisar paciente por nome..."
-                      className="w-full rounded-md border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-400 transition-colors duration-200"
+                      placeholder="Pesquisar paciente..."
+                      className="w-full rounded-md border border-gray-300 bg-white px-2 md:px-3 py-2 text-xs md:text-sm text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 hover:border-gray-400 transition-colors duration-200"
                     />
                   </div>
                 </th>
                 {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">CPF</th> */}
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Telefone</th>
+                <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Telefone</th>
                 {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th> */}
                 {isAdmin && (
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Responsável</th>
+                  <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Responsável</th>
                 )}
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Criança/Adulto</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
+                <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Criança/Adulto</th>
+                <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ações</th>
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
@@ -652,9 +665,9 @@ const PatientsTable = () => {
                         </tr>
                       )}
                       <tr key={patient.id || index} className={`hover:bg-gray-50 ${isInactive ? "bg-gray-200 opacity-75" : ""}`}>
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm font-medium ${isInactive ? "text-gray-500" : "text-gray-900"}`}>{patient.name || patient.nome || "N/A"}</td>
+                    <td className={`px-3 md:px-6 py-4 whitespace-nowrap text-xs md:text-sm font-medium ${isInactive ? "text-gray-500" : "text-gray-900"}`}>{patient.name || patient.nome || "N/A"}</td>
                     {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.cpf || "N/A"}</td> */}
-                    <td className={`px-6 py-4 whitespace-nowrap text-sm ${isInactive ? "text-gray-500" : "text-gray-900"}`}>
+                    <td className={`px-3 md:px-6 py-4 whitespace-nowrap text-xs md:text-sm ${isInactive ? "text-gray-500" : "text-gray-900"}`}>
                       {(patient.phone || patient.telefone) ? (
                         <div className="flex items-center gap-2">
                           <button
@@ -678,12 +691,12 @@ const PatientsTable = () => {
                     </td>
                     {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.email || "N/A"}</td> */}
                     {isAdmin && (
-                      <td className={`px-6 py-4 whitespace-nowrap text-sm ${isInactive ? "text-gray-500" : "text-gray-900"}`}>
+                      <td className={`px-3 md:px-6 py-4 whitespace-nowrap text-xs md:text-sm ${isInactive ? "text-gray-500" : "text-gray-900"}`}>
                         {getShortName(patient.psychologist_name || patient.nome_responsavel)}
                       </td>
                     )}
-                    <td className="px-6 py-4 whitespace-nowrap">{renderStatus(patient.status || "Ativo")}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm">
+                    <td className="px-3 md:px-6 py-4 whitespace-nowrap">{renderStatus(patient.status || "Ativo")}</td>
+                    <td className="px-3 md:px-6 py-4 whitespace-nowrap text-xs md:text-sm">
                       {(() => {
                         const categoria = getCategoriaEtaria(patient.birthdate || patient.data_nascimento);
                         const classes = categoria === 'Adulto'
@@ -698,8 +711,8 @@ const PatientsTable = () => {
                         );
                       })()}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
+                    <td className="px-3 md:px-6 py-4 whitespace-nowrap text-xs md:text-sm font-medium">
+                      <div className="flex space-x-1 md:space-x-2">
                         {actions
                           .filter((action) => action.visible === undefined || action.visible)
                           .map((action) => {
@@ -729,8 +742,107 @@ const PatientsTable = () => {
           </table>
         </div>
 
-        <div className="bg-gray-50 px-6 py-3 border-t border-gray-200">
-          <div className="text-sm text-gray-700">
+        {/* Mobile Card View */}
+        <div className="md:hidden p-4 space-y-4">
+          {filteredPatients.length === 0 ? (
+            <div className="text-center text-gray-500 py-8">Nenhum paciente encontrado</div>
+          ) : (
+            sortedFilteredPatients.map((patient, index) => {
+              const isInactive = patient.active === 0 || patient.active === false;
+              const isFirstInactive = isInactive && (
+                index === 0 || 
+                (sortedFilteredPatients[index - 1].active !== 0 && sortedFilteredPatients[index - 1].active !== false)
+              );
+              
+              return (
+                <div key={patient.id || index}>
+                  {isFirstInactive && inactivePatients > 0 && (
+                    <div className="bg-gray-100 px-4 py-2 mb-4 rounded-md">
+                      <div className="text-sm font-semibold text-gray-700 text-center">
+                        Pacientes Inativos: {inactivePatients}
+                      </div>
+                    </div>
+                  )}
+                  <div className={`bg-white border rounded-lg p-4 ${isInactive ? "opacity-75 bg-gray-50" : ""}`}>
+                    <div className="flex justify-between items-start mb-3">
+                      <div className="flex-1">
+                        <h3 className={`font-semibold text-base ${isInactive ? "text-gray-500" : "text-gray-900"}`}>
+                          {patient.name || patient.nome || "N/A"}
+                        </h3>
+                        <div className="mt-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-500">Telefone:</span>
+                            {(patient.phone || patient.telefone) ? (
+                              <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => openWhatsApp(patient.phone || patient.telefone)}
+                                  className={`${isInactive ? "text-gray-400" : "text-blue-600"} hover:underline text-sm`}
+                                >
+                                  {patient.phone || patient.telefone}
+                                </button>
+                                <button
+                                  onClick={() => openWhatsApp(patient.phone || patient.telefone)}
+                                  className={`${isInactive ? "text-gray-400" : "text-green-600"} transition-colors`}
+                                >
+                                  <MessageCircle className="h-4 w-4" />
+                                </button>
+                              </div>
+                            ) : (
+                              <span className="text-sm text-gray-500">N/A</span>
+                            )}
+                          </div>
+                          {isAdmin && (
+                            <div>
+                              <span className="text-xs text-gray-500">Responsável: </span>
+                              <span className={`text-sm ${isInactive ? "text-gray-500" : "text-gray-900"}`}>
+                                {getShortName(patient.psychologist_name || patient.nome_responsavel)}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap gap-2 mb-3">
+                      {renderStatus(patient.status || "Ativo")}
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        getCategoriaEtaria(patient.birthdate || patient.data_nascimento) === 'Adulto'
+                          ? 'bg-blue-100 text-blue-800'
+                          : getCategoriaEtaria(patient.birthdate || patient.data_nascimento) === 'Criança'
+                            ? 'bg-yellow-100 text-yellow-800'
+                            : 'bg-gray-100 text-gray-800'
+                      }`}>
+                        {getCategoriaEtaria(patient.birthdate || patient.data_nascimento)}
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-2 pt-3 border-t">
+                      {actions
+                        .filter((action) => action.visible === undefined || action.visible)
+                        .map((action) => {
+                          const label = typeof action.label === 'function' ? action.label(patient) : action.label;
+                          const color = typeof action.color === 'function' ? action.color(patient) : action.color;
+                          
+                          return (
+                            <button
+                              key={action.id}
+                              onClick={() => action.onClick(patient)}
+                              className={`${color} hover:scale-110 p-2 rounded flex items-center gap-1 text-xs`}
+                              title={label}
+                            >
+                              <action.icon size={14} />
+                              <span className="hidden sm:inline">{label}</span>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="bg-gray-50 px-3 md:px-6 py-3 border-t border-gray-200">
+          <div className="text-xs md:text-sm text-gray-700 text-center md:text-left">
             Total de pacientes: {totalPatients} | Ativos: {activePatients} | Inativos: {inactivePatients}
           </div>
         </div>

@@ -119,6 +119,16 @@ const FinanceCharts = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState<boolean>(false);
   const [isDownloadingComprovante, setIsDownloadingComprovante] = useState<boolean>(false);
+  const [isMobile, setIsMobile] = useState<boolean>(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const isAdmin = user?.role === "admin";
   const isReceptionist = user?.role === "receptionist";
@@ -1357,17 +1367,17 @@ const FinanceCharts = () => {
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">Finanças</h1>
+        <h1 className="text-xl md:text-2xl font-bold">Finanças</h1>
         {(loading || isLoading) && <Loader className="h-5 w-5 animate-spin" />}
       </div>
 
       {/* Tab Navigation */}
-      <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+      <div className="flex flex-col sm:flex-row gap-2 bg-gray-100 p-1 rounded-lg">
         <Button
           variant={activeTab === "charts" ? "default" : "ghost"}
           size="sm"
           onClick={() => setActiveTab("charts")}
-          className="flex-1"
+          className="flex-1 text-xs sm:text-sm"
         >
           Relatórios
         </Button>
@@ -1378,17 +1388,18 @@ const FinanceCharts = () => {
             setActiveTab("payments");
             loadPaymentBatches(); // Carregar lotes quando clicar na aba
           }}
-          className="flex-1"
+          className="flex-1 text-xs sm:text-sm"
         >
-          <DollarSign className="h-4 w-4 mr-2" />
-          {isPsychologist ? "Meus Pagamentos" : "Pagamentos"}
+          <DollarSign className="h-4 w-4 mr-1 sm:mr-2" />
+          <span className="hidden sm:inline">{isPsychologist ? "Meus Pagamentos" : "Pagamentos"}</span>
+          <span className="sm:hidden">Pagamentos</span>
         </Button>
         {canManageFinance && (
           <Button
             variant={activeTab === "dashboard" ? "default" : "ghost"}
             size="sm"
             onClick={() => setActiveTab("dashboard")}
-            className="flex-1"
+            className="flex-1 text-xs sm:text-sm"
           >
             Dashboard
           </Button>
@@ -1405,9 +1416,9 @@ const FinanceCharts = () => {
                   <CardTitle>Criar Novo Pagamento</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
                     <div>
-                      <label className="text-sm font-medium">Psicólogo</label>
+                      <label className="text-xs md:text-sm font-medium">Psicólogo</label>
                       <Select value={selectedPaymentPsychologist} onValueChange={(value) => {
                         setSelectedPaymentPsychologist(value);
                         setSelectedAppointments([]);
@@ -1429,7 +1440,7 @@ const FinanceCharts = () => {
                     </div>
                     
                     <div>
-                      <label className="text-sm font-medium">Período</label>
+                      <label className="text-xs md:text-sm font-medium">Período</label>
                       <Popover>
                         <PopoverTrigger asChild>
                           <Button
@@ -1461,7 +1472,7 @@ const FinanceCharts = () => {
                               setPaymentDateRange(range);
                               setSelectedAppointments([]);
                             }}
-                            numberOfMonths={2}
+                            numberOfMonths={isMobile ? 1 : 2}
                             className="p-3 pointer-events-auto"
                           />
                         </PopoverContent>
@@ -1619,7 +1630,8 @@ const FinanceCharts = () => {
                   <CardTitle>Lotes de Pagamento</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="rounded-md border">
+                  {/* Desktop Table View */}
+                  <div className="hidden md:block rounded-md border overflow-x-auto">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -1715,6 +1727,102 @@ const FinanceCharts = () => {
                       </TableBody>
                     </Table>
                   </div>
+
+                  {/* Mobile Card View */}
+                  <div className="md:hidden space-y-3">
+                    {getGroupedPaymentLots().length === 0 ? (
+                      <div className="text-center py-4 text-gray-500">
+                        Nenhum lote de pagamento encontrado
+                      </div>
+                    ) : (
+                      getGroupedPaymentLots().map(lot => (
+                        <div 
+                          key={lot.id}
+                          className={`border rounded-lg p-4 ${lot.status === 'payments_finish' ? 'bg-green-50' : ''}`}
+                        >
+                          <div className="space-y-2">
+                            <div>
+                              <span className="text-xs text-gray-500">Psicólogo:</span>
+                              <p className="font-medium">{lot.psychologist_name}</p>
+                            </div>
+                            <div>
+                              <span className="text-xs text-gray-500">Data Criação:</span>
+                              <p className="text-sm">{format(new Date(lot.payment_created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
+                            </div>
+                            <div>
+                              <span className="text-xs text-gray-500">Valor A receber (-6%):</span>
+                              <p className="font-medium text-green-600">R$ {((lot.total_value * 0.94) * 0.5).toFixed(2)}</p>
+                            </div>
+                            <div>
+                              <span className="text-xs text-gray-500">Status:</span>
+                              <div className="mt-1">
+                                <Badge className={
+                                  lot.status === 'payments_created' 
+                                    ? 'bg-blue-100 text-blue-800' 
+                                    : lot.status === 'payments_finish'
+                                    ? 'bg-green-100 text-green-800'
+                                    : 'bg-gray-100 text-gray-800'
+                                }>
+                                  {lot.status === 'payments_created' 
+                                    ? 'Criado' 
+                                    : lot.status === 'payments_finish'
+                                    ? 'Finalizado'
+                                    : lot.status}
+                                </Badge>
+                              </div>
+                            </div>
+                            <div className="pt-2 border-t flex flex-wrap gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedLotDetails(lot)}
+                                className="text-xs"
+                              >
+                                <Eye className="h-3 w-3 mr-1" />
+                                Ver
+                              </Button>
+                              {canManageFinance && !lot.comprovante && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setShowUploadModal(lot)}
+                                  className="text-xs text-blue-600"
+                                >
+                                  <Upload className="h-3 w-3 mr-1" />
+                                  Comprovante
+                                </Button>
+                              )}
+                              {lot.comprovante && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => downloadComprovante(lot)}
+                                  disabled={isDownloadingComprovante}
+                                  className="text-xs text-green-600"
+                                >
+                                  {isDownloadingComprovante ? (
+                                    <Loader className="h-3 w-3 mr-1 animate-spin" />
+                                  ) : (
+                                    <Download className="h-3 w-3 mr-1" />
+                                  )}
+                                  Baixar
+                                </Button>
+                              )}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setShowDeleteConfirm(lot)}
+                                className="text-xs text-red-600"
+                              >
+                                <Trash2 className="h-3 w-3 mr-1" />
+                                Excluir
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </CardContent>
               </Card>
             </div>
@@ -1783,51 +1891,53 @@ const FinanceCharts = () => {
                       Nenhum lote de pagamento encontrado
                     </div>
                   ) : (
-                    <div className="rounded-md border">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead>Data Criação</TableHead>
-                            <TableHead>Valor Total</TableHead>
-                            <TableHead>Valor A receber (-6%)</TableHead>
-                            <TableHead>Status</TableHead>
-                            <TableHead>Atendimentos</TableHead>
-                            <TableHead>Ações/Comprovante</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {getPsychologistPaymentLots(String(user?.id) || "").map(lot => (
-                            <TableRow 
-                              key={lot.id}
-                              className={lot.status === 'payments_finish' ? 'bg-green-50 hover:bg-green-100' : ''}
-                            >
-                              <TableCell>
-                                {format(new Date(lot.payment_created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                              </TableCell>
-                              <TableCell>R$ {lot.total_value.toFixed(2)}</TableCell>
-                              <TableCell>R$ {((lot.total_value * 0.94) * 0.5).toFixed(2)}</TableCell>
-                              <TableCell>
-                                <Badge className={
-                                  lot.status === 'payments_created' 
-                                    ? 'bg-blue-100 text-blue-800' 
-                                    : lot.status === 'payments_finish'
-                                    ? 'bg-green-100 text-green-800'
-                                    : 'bg-gray-100 text-gray-800'
-                                }>
-                                  {lot.status === 'payments_created' 
-                                    ? 'Criado' 
-                                    : lot.status === 'payments_finish'
-                                    ? 'Finalizado'
-                                    : lot.status}
-                                </Badge>
-                              </TableCell>
-                              <TableCell>
-                                <span className="text-sm text-gray-600">
-                                  {lot.appointments.length} atendimento(s)
-                                </span>
-                              </TableCell>
-                              <TableCell>
-                                <div className="flex space-x-2">
+                    <>
+                      {/* Desktop Table View */}
+                      <div className="hidden md:block rounded-md border overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Data Criação</TableHead>
+                              <TableHead>Valor Total</TableHead>
+                              <TableHead>Valor A receber (-6%)</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead>Atendimentos</TableHead>
+                              <TableHead>Ações/Comprovante</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {getPsychologistPaymentLots(String(user?.id) || "").map(lot => (
+                              <TableRow 
+                                key={lot.id}
+                                className={lot.status === 'payments_finish' ? 'bg-green-50 hover:bg-green-100' : ''}
+                              >
+                                <TableCell>
+                                  {format(new Date(lot.payment_created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                                </TableCell>
+                                <TableCell>R$ {lot.total_value.toFixed(2)}</TableCell>
+                                <TableCell>R$ {((lot.total_value * 0.94) * 0.5).toFixed(2)}</TableCell>
+                                <TableCell>
+                                  <Badge className={
+                                    lot.status === 'payments_created' 
+                                      ? 'bg-blue-100 text-blue-800' 
+                                      : lot.status === 'payments_finish'
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-gray-100 text-gray-800'
+                                  }>
+                                    {lot.status === 'payments_created' 
+                                      ? 'Criado' 
+                                      : lot.status === 'payments_finish'
+                                      ? 'Finalizado'
+                                      : lot.status}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="text-sm text-gray-600">
+                                    {lot.appointments.length} atendimento(s)
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex space-x-2">
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -1864,16 +1974,102 @@ const FinanceCharts = () => {
                                       )}
                                     </Button>
                                   )}
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                      </div>
+
+                      {/* Mobile Card View */}
+                      <div className="md:hidden space-y-3">
+                        {getPsychologistPaymentLots(String(user?.id) || "").map(lot => (
+                          <div 
+                            key={lot.id}
+                            className={`border rounded-lg p-4 ${lot.status === 'payments_finish' ? 'bg-green-50' : ''}`}
+                          >
+                            <div className="space-y-2">
+                              <div>
+                                <span className="text-xs text-gray-500">Data Criação:</span>
+                                <p className="text-sm">{format(new Date(lot.payment_created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
+                              </div>
+                              <div>
+                                <span className="text-xs text-gray-500">Valor Total:</span>
+                                <p className="font-medium">R$ {lot.total_value.toFixed(2)}</p>
+                              </div>
+                              <div>
+                                <span className="text-xs text-gray-500">Valor A receber (-6%):</span>
+                                <p className="font-medium text-green-600">R$ {((lot.total_value * 0.94) * 0.5).toFixed(2)}</p>
+                              </div>
+                              <div>
+                                <span className="text-xs text-gray-500">Status:</span>
+                                <div className="mt-1">
+                                  <Badge className={
+                                    lot.status === 'payments_created' 
+                                      ? 'bg-blue-100 text-blue-800' 
+                                      : lot.status === 'payments_finish'
+                                      ? 'bg-green-100 text-green-800'
+                                      : 'bg-gray-100 text-gray-800'
+                                  }>
+                                    {lot.status === 'payments_created' 
+                                      ? 'Criado' 
+                                      : lot.status === 'payments_finish'
+                                      ? 'Finalizado'
+                                      : lot.status}
+                                  </Badge>
                                 </div>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+                              </div>
+                              <div>
+                                <span className="text-xs text-gray-500">Atendimentos:</span>
+                                <p className="text-sm">{lot.appointments.length} atendimento(s)</p>
+                              </div>
+                              <div className="pt-2 border-t flex flex-wrap gap-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => setSelectedLotDetails(lot)}
+                                  className="text-xs"
+                                >
+                                  <Eye className="h-3 w-3 mr-1" />
+                                  Ver
+                                </Button>
+                                {lot.status === 'payments_created' && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setShowApproveConfirm(lot)}
+                                    className="text-xs text-green-600"
+                                  >
+                                    <Check className="h-3 w-3 mr-1" />
+                                    Aprovar
+                                  </Button>
+                                )}
+                                {lot.comprovante && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => downloadComprovante(lot)}
+                                    disabled={isDownloadingComprovante}
+                                    className="text-xs text-green-600"
+                                  >
+                                    {isDownloadingComprovante ? (
+                                      <Loader className="h-3 w-3 mr-1 animate-spin" />
+                                    ) : (
+                                      <Download className="h-3 w-3 mr-1" />
+                                    )}
+                                    Baixar
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                    )}
+                  </CardContent>
+                </Card>
             </div>
           )}
         </>

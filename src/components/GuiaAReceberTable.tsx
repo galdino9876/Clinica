@@ -123,30 +123,31 @@ const GuiaAReceberTable = ({ onImportClick }: GuiaAReceberTableProps) => {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
           <div>
-            <CardTitle>Guias a Receber</CardTitle>
-            <CardDescription>
+            <CardTitle className="text-lg md:text-xl">Guias a Receber</CardTitle>
+            <CardDescription className="text-xs md:text-sm">
               Lista de guias aguardando recebimento após faturamento
             </CardDescription>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
             <Button
               variant="outline"
               size="sm"
               onClick={fetchGuias}
               disabled={loading}
+              className="w-full sm:w-auto"
             >
               {loading ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="h-4 w-4" />
               )}
-              <span className="ml-2">Atualizar</span>
+              <span className="ml-2 text-xs md:text-sm">Atualizar</span>
             </Button>
-            <Button onClick={handleOpenImport} size="sm">
+            <Button onClick={handleOpenImport} size="sm" className="w-full sm:w-auto">
               <Upload className="h-4 w-4 mr-2" />
-              Importar Excel
+              <span className="text-xs md:text-sm">Importar Excel</span>
             </Button>
           </div>
         </div>
@@ -157,7 +158,7 @@ const GuiaAReceberTable = ({ onImportClick }: GuiaAReceberTableProps) => {
             placeholder="Buscar por paciente, número da guia ou fatura..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-sm"
+            className="w-full md:max-w-sm text-sm"
           />
         </div>
 
@@ -166,56 +167,101 @@ const GuiaAReceberTable = ({ onImportClick }: GuiaAReceberTableProps) => {
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
           </div>
         ) : filteredGuias.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
+          <div className="text-center py-8 text-muted-foreground text-sm">
             {searchTerm ? "Nenhuma guia encontrada com os filtros aplicados." : "Nenhuma guia a receber encontrada."}
           </div>
         ) : (
-          <div className="rounded-md border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Paciente</TableHead>
-                  <TableHead>Data Atendimento</TableHead>
-                  <TableHead>Entrega na AMHP</TableHead>
-                  <TableHead>Entrega no Convênio</TableHead>
-                  <TableHead>Repasse ao Associado</TableHead>
-                  <TableHead>Código do Serviço</TableHead>
-                  <TableHead>Nº da Guia</TableHead>
-                  <TableHead>Nº AMHPTISS</TableHead>
-                  <TableHead>Nº Fechamento</TableHead>
-                  <TableHead>Nº da Fatura</TableHead>
-                  <TableHead>Local/Caráter</TableHead>
-                  <TableHead>Valor Cobrado</TableHead>
-                  <TableHead>Valor</TableHead>
-                  <TableHead>Motivo</TableHead>
-                  <TableHead>Valor do Repasse</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredGuias.map((guia) => (
-                  <TableRow key={guia.id || `${guia["Nº da Guia"]}-${guia.Paciente}`}>
-                    <TableCell className="font-medium">{guia.Paciente || "-"}</TableCell>
-                    <TableCell>{guia["Data Atendimento"] ?? "-"}</TableCell>
-                    <TableCell>{guia["Entrega na AMHP"] ?? "-"}</TableCell>
-                    <TableCell>{guia["Entrega no Convênio"] ?? "-"}</TableCell>
-                    <TableCell>{guia["Repasse ao Associado"] ?? "-"}</TableCell>
-                    <TableCell>{guia["Código do Serviço"] ?? "-"}</TableCell>
-                    <TableCell>{guia["Nº da Guia"] ?? "-"}</TableCell>
-                    <TableCell>{guia["Nº AMHPTISS"] ?? "-"}</TableCell>
-                    <TableCell>{guia["Nº Fechamento de Produção"] ?? "-"}</TableCell>
-                    <TableCell>{guia["Nº da Fatura"] ?? "-"}</TableCell>
-                    <TableCell>{guia["Local / Caráter do Atendimento"] ?? "-"}</TableCell>
-                    <TableCell>{guia["Valor Cobrado"] ?? "-"}</TableCell>
-                    <TableCell>{guia["Valor"] ?? "-"}</TableCell>
-                    <TableCell className="max-w-xs truncate" title={guia["Motivo"] || undefined}>
-                      {guia["Motivo"] ?? "-"}
-                    </TableCell>
-                    <TableCell className="font-medium">{guia["Valor do Repasse"] ?? "-"}</TableCell>
+          <>
+            {/* Desktop Table View */}
+            <div className="hidden lg:block rounded-md border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Paciente</TableHead>
+                    <TableHead>Data Atendimento</TableHead>
+                    <TableHead>Entrega na AMHP</TableHead>
+                    <TableHead>Entrega no Convênio</TableHead>
+                    <TableHead>Repasse ao Associado</TableHead>
+                    <TableHead>Código do Serviço</TableHead>
+                    <TableHead>Nº da Guia</TableHead>
+                    <TableHead>Nº AMHPTISS</TableHead>
+                    <TableHead>Nº Fechamento</TableHead>
+                    <TableHead>Nº da Fatura</TableHead>
+                    <TableHead>Local/Caráter</TableHead>
+                    <TableHead>Valor Cobrado</TableHead>
+                    <TableHead>Valor</TableHead>
+                    <TableHead>Motivo</TableHead>
+                    <TableHead>Valor do Repasse</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {filteredGuias.map((guia) => (
+                    <TableRow key={guia.id || `${guia["Nº da Guia"]}-${guia.Paciente}`}>
+                      <TableCell className="font-medium">{guia.Paciente || "-"}</TableCell>
+                      <TableCell>{guia["Data Atendimento"] ?? "-"}</TableCell>
+                      <TableCell>{guia["Entrega na AMHP"] ?? "-"}</TableCell>
+                      <TableCell>{guia["Entrega no Convênio"] ?? "-"}</TableCell>
+                      <TableCell>{guia["Repasse ao Associado"] ?? "-"}</TableCell>
+                      <TableCell>{guia["Código do Serviço"] ?? "-"}</TableCell>
+                      <TableCell>{guia["Nº da Guia"] ?? "-"}</TableCell>
+                      <TableCell>{guia["Nº AMHPTISS"] ?? "-"}</TableCell>
+                      <TableCell>{guia["Nº Fechamento de Produção"] ?? "-"}</TableCell>
+                      <TableCell>{guia["Nº da Fatura"] ?? "-"}</TableCell>
+                      <TableCell>{guia["Local / Caráter do Atendimento"] ?? "-"}</TableCell>
+                      <TableCell>{guia["Valor Cobrado"] ?? "-"}</TableCell>
+                      <TableCell>{guia["Valor"] ?? "-"}</TableCell>
+                      <TableCell className="max-w-xs truncate" title={guia["Motivo"] || undefined}>
+                        {guia["Motivo"] ?? "-"}
+                      </TableCell>
+                      <TableCell className="font-medium">{guia["Valor do Repasse"] ?? "-"}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            {/* Mobile/Tablet Card View */}
+            <div className="lg:hidden space-y-4">
+              {filteredGuias.map((guia) => (
+                <div key={guia.id || `${guia["Nº da Guia"]}-${guia.Paciente}`} className="border rounded-lg p-4 space-y-3">
+                  <div className="space-y-2">
+                    <div>
+                      <span className="text-xs text-gray-500">Paciente:</span>
+                      <p className="font-medium text-sm">{guia.Paciente || "-"}</p>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="text-xs text-gray-500">Data Atendimento:</span>
+                        <p className="text-xs">{guia["Data Atendimento"] ?? "-"}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-gray-500">Nº da Guia:</span>
+                        <p className="text-xs">{guia["Nº da Guia"] ?? "-"}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-gray-500">Nº da Fatura:</span>
+                        <p className="text-xs">{guia["Nº da Fatura"] ?? "-"}</p>
+                      </div>
+                      <div>
+                        <span className="text-xs text-gray-500">Valor:</span>
+                        <p className="text-xs font-medium">{guia["Valor"] ?? "-"}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-xs text-gray-500">Valor do Repasse:</span>
+                      <p className="text-sm font-medium text-green-600">{guia["Valor do Repasse"] ?? "-"}</p>
+                    </div>
+                    {guia["Motivo"] && (
+                      <div>
+                        <span className="text-xs text-gray-500">Motivo:</span>
+                        <p className="text-xs">{guia["Motivo"]}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
         )}
 
         {!loading && filteredGuias.length > 0 && (
