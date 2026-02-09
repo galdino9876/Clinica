@@ -881,8 +881,8 @@ const GuideControl: React.FC = () => {
       return;
     }
 
-    // Calcular total de requests (3 por numero_prestador único)
-    const totalRequests = guidesToDownload.length * 3;
+    // Calcular total de requests (1 por numero_prestador único)
+    const totalRequests = guidesToDownload.length;
 
     setDownloadingEverything(true);
     setDownloadEverythingProgress({
@@ -907,135 +907,41 @@ const GuideControl: React.FC = () => {
           currentStep: `Processando prestador ${i + 1} de ${guidesToDownload.length}`
         }));
 
-        // Request 1: Guia assinada pelo psicólogo
+        // Request única: merge_guias
         try {
           setDownloadEverythingProgress(prev => ({
             ...prev,
-            currentStep: `Baixando guia assinada pelo psicólogo - ${guide.paciente_nome}`
+            currentStep: `Baixando faturar+documentos - ${guide.paciente_nome}`
           }));
 
-          const response1 = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/get_guia_completed', {
+          const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/merge_guias', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              numero_prestador: guide.numero_prestador,
-              command: 'Guia-assinada-psicologo'
+              numero_prestador: guide.numero_prestador
             })
           });
 
-          if (response1.ok) {
-            const blob1 = await response1.blob();
-            const url1 = window.URL.createObjectURL(blob1);
-            const link1 = document.createElement('a');
-            link1.href = url1;
-            const contentDisposition = response1.headers.get('Content-Disposition');
-            const filename1 = contentDisposition 
+          if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            const contentDisposition = response.headers.get('Content-Disposition');
+            const filename = contentDisposition 
               ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') 
-              : `Guia-Assinada-Psicologo-${guide.paciente_nome}-${guide.numero_prestador}.pdf`;
-            link1.download = filename1;
-            document.body.appendChild(link1);
-            link1.click();
-            document.body.removeChild(link1);
-            window.URL.revokeObjectURL(url1);
+              : `Faturar-Documentos-${guide.paciente_nome}-${guide.numero_prestador}.pdf`;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
             completed++;
           } else {
             failed++;
           }
         } catch (error) {
-          console.error('Erro ao baixar guia assinada pelo psicólogo:', error);
-          failed++;
-        }
-
-        setDownloadEverythingProgress(prev => ({
-          ...prev,
-          completed: completed,
-          failed: failed,
-          remaining: totalRequests - completed - failed
-        }));
-
-        // Request 2: Documento pessoal
-        try {
-          setDownloadEverythingProgress(prev => ({
-            ...prev,
-            currentStep: `Baixando documento pessoal - ${guide.paciente_nome}`
-          }));
-
-          const response2 = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/documento_pessoal', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              nome: guide.paciente_nome
-            })
-          });
-
-          if (response2.ok) {
-            const blob2 = await response2.blob();
-            const url2 = window.URL.createObjectURL(blob2);
-            const link2 = document.createElement('a');
-            link2.href = url2;
-            const contentDisposition2 = response2.headers.get('Content-Disposition');
-            const filename2 = contentDisposition2 
-              ? contentDisposition2.split('filename=')[1]?.replace(/"/g, '') 
-              : `Documento-Pessoal-${guide.paciente_nome}.pdf`;
-            link2.download = filename2;
-            document.body.appendChild(link2);
-            link2.click();
-            document.body.removeChild(link2);
-            window.URL.revokeObjectURL(url2);
-            completed++;
-          } else {
-            failed++;
-          }
-        } catch (error) {
-          console.error('Erro ao baixar documento pessoal:', error);
-          failed++;
-        }
-
-        setDownloadEverythingProgress(prev => ({
-          ...prev,
-          completed: completed,
-          failed: failed,
-          remaining: totalRequests - completed - failed
-        }));
-
-        // Request 3: Relatório
-        try {
-          setDownloadEverythingProgress(prev => ({
-            ...prev,
-            currentStep: `Baixando relatório - ${guide.paciente_nome}`
-          }));
-
-          const response3 = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/relatorio', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              nome: guide.paciente_nome,
-              titulo: 'RELATORIO PSICOLOGICO',
-              cid: 'F-41',
-              plano: 'PMDF'
-            })
-          });
-
-          if (response3.ok) {
-            const blob3 = await response3.blob();
-            const url3 = window.URL.createObjectURL(blob3);
-            const link3 = document.createElement('a');
-            link3.href = url3;
-            const contentDisposition3 = response3.headers.get('Content-Disposition');
-            const filename3 = contentDisposition3 
-              ? contentDisposition3.split('filename=')[1]?.replace(/"/g, '') 
-              : `Relatorio-Psicologico-${guide.paciente_nome}.pdf`;
-            link3.download = filename3;
-            document.body.appendChild(link3);
-            link3.click();
-            document.body.removeChild(link3);
-            window.URL.revokeObjectURL(url3);
-            completed++;
-          } else {
-            failed++;
-          }
-        } catch (error) {
-          console.error('Erro ao baixar relatório:', error);
+          console.error('Erro ao baixar faturar+documentos:', error);
           failed++;
         }
 
