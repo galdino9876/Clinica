@@ -3,13 +3,12 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Estilos globais para remover fundo branco */
+/* Estilos globais */
 * {
   box-sizing: border-box;
 }
 
 html, body, #root {
-  background-color: rgb(185, 159, 126) !important;
   margin: 0 !important;
   padding: 0 !important;
   width: 100% !important;
@@ -95,11 +94,11 @@ html, body, #root {
   }
 
   html, body {
-    background-color: rgb(185, 159, 126) !important;
     margin: 0 !important;
     padding: 0 !important;
     width: 100%;
     height: 100%;
+    background-color: #f9fafb; /* Cinza claro padrão */
   }
 
   body {
@@ -107,11 +106,11 @@ html, body, #root {
   }
 
   #root {
-    background-color: rgb(185, 159, 126) !important;
     min-height: 100vh !important;
     margin: 0 !important;
     padding: 0 !important;
     width: 100% !important;
+    background-color: #f9fafb; /* Cinza claro padrão */
   }
 }
 

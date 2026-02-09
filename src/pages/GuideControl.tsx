@@ -1216,71 +1216,77 @@ const GuideControl: React.FC = () => {
     <Layout>
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900">Guias Concluídas</h1>
-            <p className="text-gray-600 mt-1">Gestão de guias médicas finalizadas</p>
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Guias Concluídas</h1>
+            <p className="text-sm md:text-base text-gray-600 mt-1">Gestão de guias médicas finalizadas</p>
           </div>
-          <div className="flex gap-2 items-center">
+          <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
             {/* Search Bar */}
-            <div className="relative">
+            <div className="relative w-full sm:w-auto">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
               <Input
                 type="text"
                 placeholder="Buscar por nome..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 w-64"
+                className="pl-10 w-full sm:w-64"
               />
             </div>
-            <Button 
-              onClick={handleDownloadEverything} 
-              disabled={loading || downloadingEverything || downloadingSignedGuides}
-              className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-700 cursor-pointer [&>*]:cursor-pointer"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              {downloadingEverything ? 'Baixando...' : 'Todas faturar+documentos'}
-            </Button>
-            <Button 
-              onClick={handleDownloadSignedGuides} 
-              disabled={loading || downloadingSignedGuides || downloadingEverything}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 cursor-pointer [&>*]:cursor-pointer"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              {downloadingSignedGuides ? 'Baixando...' : 'Todas Guias para PSI assinar'}
-            </Button>
-            <Button onClick={fetchData} variant="outline" disabled={loading} className="cursor-pointer [&>*]:cursor-pointer">
-              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-              Atualizar
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <Button 
+                onClick={handleDownloadEverything} 
+                disabled={loading || downloadingEverything || downloadingSignedGuides}
+                className="flex items-center justify-center gap-2 bg-yellow-600 hover:bg-yellow-700 cursor-pointer [&>*]:cursor-pointer text-sm sm:text-base"
+              >
+                <Upload className="h-4 w-4" />
+                <span className="hidden sm:inline">{downloadingEverything ? 'Baixando...' : 'Todas faturar+documentos'}</span>
+                <span className="sm:hidden">{downloadingEverything ? 'Baixando...' : 'Faturar+docs'}</span>
+              </Button>
+              <Button 
+                onClick={handleDownloadSignedGuides} 
+                disabled={loading || downloadingSignedGuides || downloadingEverything}
+                className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 cursor-pointer [&>*]:cursor-pointer text-sm sm:text-base"
+              >
+                <Upload className="h-4 w-4" />
+                <span className="hidden sm:inline">{downloadingSignedGuides ? 'Baixando...' : 'Todas Guias para PSI assinar'}</span>
+                <span className="sm:hidden">{downloadingSignedGuides ? 'Baixando...' : 'Guias PSI'}</span>
+              </Button>
+              <Button onClick={fetchData} variant="outline" disabled={loading} className="cursor-pointer [&>*]:cursor-pointer text-sm sm:text-base">
+                <RefreshCw className={`h-4 w-4 sm:mr-2 ${loading ? 'animate-spin' : ''}`} />
+                <span className="hidden sm:inline">Atualizar</span>
+              </Button>
+            </div>
           </div>
         </div>
 
         {/* Filtro por Mês */}
         {!loading && !error && patientsData.length > 0 && (
-          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
-            <div className="flex items-center gap-4">
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 md:p-4">
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
               <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-gray-600" />
-                <span className="font-semibold text-gray-700">Filtrar por Mês:</span>
+                <Calendar className="h-4 w-4 md:h-5 md:w-5 text-gray-600" />
+                <span className="text-sm md:text-base font-semibold text-gray-700">Filtrar por Mês:</span>
               </div>
-              <Input
-                type="month"
-                value={selectedMonth}
-                onChange={(e) => setSelectedMonth(e.target.value)}
-                className="w-48"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => {
-                  const now = new Date();
-                  setSelectedMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
-                }}
-                className="cursor-pointer [&>*]:cursor-pointer"
-              >
-                Mês Atual
-              </Button>
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 flex-1 sm:flex-initial">
+                <Input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="w-full sm:w-48"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const now = new Date();
+                    setSelectedMonth(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+                  }}
+                  className="cursor-pointer [&>*]:cursor-pointer w-full sm:w-auto"
+                >
+                  Mês Atual
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -1538,19 +1544,19 @@ const GuideControl: React.FC = () => {
                 
                 return (
                   <Card key={patient.patient_id} className="shadow-md hover:shadow-lg transition-shadow duration-200">
-                    <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b">
-                      <CardTitle className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-blue-100 rounded-lg">
-                            <User className="h-5 w-5 text-blue-600" />
+                    <CardHeader className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b p-3 md:p-6">
+                      <CardTitle className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <div className="flex items-start gap-2 md:gap-3 flex-1 min-w-0">
+                          <div className="p-1.5 md:p-2 bg-blue-100 rounded-lg flex-shrink-0">
+                            <User className="h-4 w-4 md:h-5 md:w-5 text-blue-600" />
                           </div>
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-xl text-gray-800">{patient.paciente_nome}</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="font-bold text-base md:text-xl text-gray-800 break-words">{patient.paciente_nome}</span>
                               {patient.appointment_type && (
                                 <Badge 
                                   variant="secondary" 
-                                  className={`text-xs ${
+                                  className={`text-xs flex-shrink-0 ${
                                     patient.appointment_type === "online" 
                                       ? "bg-green-100 text-green-800 hover:bg-green-200" 
                                       : "bg-blue-100 text-blue-800 hover:bg-blue-200"
@@ -1560,7 +1566,7 @@ const GuideControl: React.FC = () => {
                                 </Badge>
                               )}
                             </div>
-                            <div className="flex items-center gap-2 mt-2">
+                            <div className="flex flex-wrap items-center gap-2 mt-2">
                               <Badge variant="secondary" className="text-xs bg-blue-100 text-blue-800 hover:bg-blue-200">
                                 ID: {patient.patient_id}
                               </Badge>
@@ -1575,14 +1581,15 @@ const GuideControl: React.FC = () => {
                         <Button 
                           size="sm" 
                           variant="outline" 
-                          className="border-blue-200 text-blue-700 hover:bg-blue-50 cursor-pointer [&>*]:cursor-pointer"
+                          className="border-blue-200 text-blue-700 hover:bg-blue-50 cursor-pointer [&>*]:cursor-pointer w-full md:w-auto text-sm"
                           onClick={() => {
                             saveScrollPosition();
                             handleOpenGuideModal(patient);
                           }}
                         >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Inserir Guia
+                          <Plus className="h-3 w-3 md:h-4 md:w-4 md:mr-2" />
+                          <span className="hidden sm:inline">Inserir Guia</span>
+                          <span className="sm:hidden">Inserir</span>
                         </Button>
                       </CardTitle>
                     </CardHeader>
@@ -2302,23 +2309,23 @@ const GuideControl: React.FC = () => {
 
       {/* Toast de Download Completo */}
       {showDownloadComplete && (
-        <div className="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-3 rounded-lg shadow-lg z-50 max-w-sm">
-          <div className="flex items-center gap-3">
+        <div className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:max-w-sm bg-green-600 text-white px-3 md:px-4 py-2 md:py-3 rounded-lg shadow-lg z-50">
+          <div className="flex items-start gap-2 md:gap-3">
             <div className="flex-shrink-0">
               <div className="p-1 bg-green-500 rounded-full">
-                <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="h-3 w-3 md:h-4 md:w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
             </div>
-            <div className="flex-1">
-              <div className="text-sm font-medium">
+            <div className="flex-1 min-w-0">
+              <div className="text-xs md:text-sm font-medium">
                 {downloadResult.completed > 0 && downloadResult.failed === 0 && 'Download Concluído!'}
                 {downloadResult.failed > 0 && downloadResult.completed === 0 && 'Download Falhou!'}
                 {downloadResult.completed > 0 && downloadResult.failed > 0 && 'Download Parcial!'}
                 {downloadResult.completed === 0 && downloadResult.failed === 0 && 'Erro!'}
               </div>
-              <div className="text-xs mt-1">
+              <div className="text-xs mt-1 break-words">
                 {downloadResult.message}
               </div>
               {downloadResult.completed > 0 && (
@@ -2330,7 +2337,7 @@ const GuideControl: React.FC = () => {
             </div>
             <button
               onClick={() => setShowDownloadComplete(false)}
-              className="flex-shrink-0 text-green-200 hover:text-white"
+              className="flex-shrink-0 text-green-200 hover:text-white mt-0.5"
             >
               <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -2342,30 +2349,30 @@ const GuideControl: React.FC = () => {
 
       {/* Modal de Progresso do Download Completo */}
       {downloadingEverything && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-green-100 rounded-full">
-                <Upload className="h-5 w-5 text-green-600" />
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 md:p-6 max-w-md w-full shadow-xl">
+            <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
+              <div className="p-1.5 md:p-2 bg-green-100 rounded-full">
+                <Upload className="h-4 w-4 md:h-5 md:w-5 text-green-600" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-800">
+              <h3 className="text-base md:text-lg font-semibold text-gray-800">
                 Baixando Tudo
               </h3>
             </div>
             
-            <div className="space-y-4">
-              <div className="text-sm text-gray-600">
+            <div className="space-y-3 md:space-y-4">
+              <div className="text-xs md:text-sm text-gray-600 break-words">
                 {downloadEverythingProgress.currentStep}
               </div>
               
               {downloadEverythingProgress.currentGuide && (
-                <div className="text-sm font-medium text-blue-600">
+                <div className="text-xs md:text-sm font-medium text-blue-600 break-words">
                   Paciente: {downloadEverythingProgress.currentGuide}
                 </div>
               )}
               
               <div className="space-y-2">
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-xs md:text-sm">
                   <span>Progresso:</span>
                   <span>{downloadEverythingProgress.completed} de {downloadEverythingProgress.total}</span>
                 </div>
@@ -2381,16 +2388,16 @@ const GuideControl: React.FC = () => {
               
               <div className="grid grid-cols-3 gap-2 text-xs">
                 <div className="text-center">
-                  <div className="font-semibold text-green-600">{downloadEverythingProgress.completed}</div>
-                  <div className="text-gray-500">Concluídos</div>
+                  <div className="font-semibold text-green-600 text-sm md:text-base">{downloadEverythingProgress.completed}</div>
+                  <div className="text-gray-500 text-xs">Concluídos</div>
                 </div>
                 <div className="text-center">
-                  <div className="font-semibold text-red-600">{downloadEverythingProgress.failed}</div>
-                  <div className="text-gray-500">Falhas</div>
+                  <div className="font-semibold text-red-600 text-sm md:text-base">{downloadEverythingProgress.failed}</div>
+                  <div className="text-gray-500 text-xs">Falhas</div>
                 </div>
                 <div className="text-center">
-                  <div className="font-semibold text-blue-600">{downloadEverythingProgress.remaining}</div>
-                  <div className="text-gray-500">Restantes</div>
+                  <div className="font-semibold text-blue-600 text-sm md:text-base">{downloadEverythingProgress.remaining}</div>
+                  <div className="text-gray-500 text-xs">Restantes</div>
                 </div>
               </div>
             </div>
@@ -2400,30 +2407,30 @@ const GuideControl: React.FC = () => {
 
       {/* Modal de Progresso do Download de Guias Assinadas */}
       {downloadingSignedGuides && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 bg-blue-100 rounded-full">
-                <Upload className="h-5 w-5 text-blue-600" />
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-4 md:p-6 max-w-md w-full shadow-xl">
+            <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
+              <div className="p-1.5 md:p-2 bg-blue-100 rounded-full">
+                <Upload className="h-4 w-4 md:h-5 md:w-5 text-blue-600" />
               </div>
-              <h3 className="text-lg font-semibold text-gray-800">
+              <h3 className="text-base md:text-lg font-semibold text-gray-800">
                 Baixando Guias Assinadas
               </h3>
             </div>
             
-            <div className="space-y-4">
-              <div className="text-sm text-gray-600">
+            <div className="space-y-3 md:space-y-4">
+              <div className="text-xs md:text-sm text-gray-600 break-words">
                 {downloadSignedGuidesProgress.currentStep}
               </div>
               
               {downloadSignedGuidesProgress.currentGuide && (
-                <div className="text-sm font-medium text-blue-600">
+                <div className="text-xs md:text-sm font-medium text-blue-600 break-words">
                   Paciente: {downloadSignedGuidesProgress.currentGuide}
                 </div>
               )}
               
               <div className="space-y-2">
-                <div className="flex justify-between text-sm">
+                <div className="flex justify-between text-xs md:text-sm">
                   <span>Progresso:</span>
                   <span>{downloadSignedGuidesProgress.completed} de {downloadSignedGuidesProgress.total}</span>
                 </div>
@@ -2439,16 +2446,16 @@ const GuideControl: React.FC = () => {
               
               <div className="grid grid-cols-3 gap-2 text-xs">
                 <div className="text-center">
-                  <div className="font-semibold text-green-600">{downloadSignedGuidesProgress.completed}</div>
-                  <div className="text-gray-500">Concluídos</div>
+                  <div className="font-semibold text-green-600 text-sm md:text-base">{downloadSignedGuidesProgress.completed}</div>
+                  <div className="text-gray-500 text-xs">Concluídos</div>
                 </div>
                 <div className="text-center">
-                  <div className="font-semibold text-red-600">{downloadSignedGuidesProgress.failed}</div>
-                  <div className="text-gray-500">Falhas</div>
+                  <div className="font-semibold text-red-600 text-sm md:text-base">{downloadSignedGuidesProgress.failed}</div>
+                  <div className="text-gray-500 text-xs">Falhas</div>
                 </div>
                 <div className="text-center">
-                  <div className="font-semibold text-blue-600">{downloadSignedGuidesProgress.remaining}</div>
-                  <div className="text-gray-500">Restantes</div>
+                  <div className="font-semibold text-blue-600 text-sm md:text-base">{downloadSignedGuidesProgress.remaining}</div>
+                  <div className="text-gray-500 text-xs">Restantes</div>
                 </div>
               </div>
             </div>

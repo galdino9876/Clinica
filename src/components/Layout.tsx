@@ -27,7 +27,7 @@ const Layout = ({ children, requireAuth = true }: LayoutProps) => {
   };
 
   return (
-    <div className={`flex min-h-screen ${requireAuth ? 'bg-gray-50' : ''}`} style={!requireAuth ? { backgroundColor: 'rgb(185, 159, 126)', margin: 0, padding: 0 } : {}}>
+    <div className={`flex min-h-screen ${requireAuth ? 'bg-gray-50' : ''}`} style={!requireAuth ? { backgroundColor: 'rgb(185, 159, 126)', margin: 0, padding: 0 } : { backgroundColor: '#f9fafb' }}>
       {/* Botão Hambúrguer para Mobile */}
       {isAuthenticated && (
         <button
