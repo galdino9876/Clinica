@@ -845,7 +845,53 @@ const GuideControl: React.FC = () => {
     setPrestadorToDelete(null);
   };
 
-  // Função para baixar tudo (3 requests por numero_prestador único)
+  // Função auxiliar para fazer requisição com timeout e retry
+  const fetchWithTimeoutAndRetry = async (
+    url: string, 
+    options: RequestInit, 
+    timeoutMs: number = 20000,
+    pacienteNome: string
+  ): Promise<Response | null> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (error: any) {
+      clearTimeout(timeoutId);
+      if (error.name === 'AbortError') {
+        console.warn(`Timeout após ${timeoutMs}ms para ${pacienteNome} - tentando novamente...`);
+        // Retry uma vez
+        const retryController = new AbortController();
+        const retryTimeoutId = setTimeout(() => retryController.abort(), timeoutMs);
+        try {
+          const retryResponse = await fetch(url, {
+            ...options,
+            signal: retryController.signal
+          });
+          clearTimeout(retryTimeoutId);
+          return retryResponse;
+        } catch (retryError: any) {
+          clearTimeout(retryTimeoutId);
+          if (retryError.name === 'AbortError') {
+            console.error(`Timeout na segunda tentativa para ${pacienteNome} - pulando para o próximo`);
+          } else {
+            console.error(`Erro na segunda tentativa para ${pacienteNome}:`, retryError);
+          }
+          return null;
+        }
+      } else {
+        console.error(`Erro na requisição para ${pacienteNome}:`, error);
+        return null;
+      }
+    }
+  };
+
   const handleDownloadEverything = async () => {
     // Filtrar prestadores com guia assinada pelo psicólogo E que não estão faturados
     const guidesToDownload: Array<{numero_prestador: number, paciente_nome: string}> = [];
@@ -897,54 +943,69 @@ const GuideControl: React.FC = () => {
     let completed = 0;
     let failed = 0;
 
-    try {
-      for (let i = 0; i < guidesToDownload.length; i++) {
-        const guide = guidesToDownload[i];
+    for (let i = 0; i < guidesToDownload.length; i++) {
+      const guide = guidesToDownload[i];
 
+      try {
         setDownloadEverythingProgress(prev => ({
           ...prev,
           currentGuide: guide.paciente_nome,
           currentStep: `Processando prestador ${i + 1} de ${guidesToDownload.length}`
         }));
 
-        // Request única: merge_guias
+        // Request única: merge_guias com timeout e retry
         try {
           setDownloadEverythingProgress(prev => ({
             ...prev,
             currentStep: `Baixando faturar+documentos - ${guide.paciente_nome}`
           }));
 
-          const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/merge_guias', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              numero_prestador: guide.numero_prestador
-            })
-          });
+          const response = await fetchWithTimeoutAndRetry(
+            'https://webhook.essenciasaudeintegrada.com.br/webhook/merge_guias',
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                numero_prestador: guide.numero_prestador
+              })
+            },
+            20000, // 20 segundos de timeout
+            guide.paciente_nome
+          );
 
-          if (response.ok) {
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            const contentDisposition = response.headers.get('Content-Disposition');
-            const filename = contentDisposition 
-              ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') 
-              : `Faturar-Documentos-${guide.paciente_nome}-${guide.numero_prestador}.pdf`;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
-            completed++;
+          if (response && response.ok) {
+            try {
+              const blob = await response.blob();
+              const url = window.URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              const contentDisposition = response.headers.get('Content-Disposition');
+              const filename = contentDisposition 
+                ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') 
+                : `Faturar-Documentos-${guide.paciente_nome}-${guide.numero_prestador}.pdf`;
+              link.download = filename;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              window.URL.revokeObjectURL(url);
+              completed++;
+              console.log(`Download concluído: ${guide.paciente_nome} (${i + 1}/${guidesToDownload.length})`);
+            } catch (downloadError) {
+              console.error(`Erro ao processar download para ${guide.paciente_nome}:`, downloadError);
+              failed++;
+            }
           } else {
+            if (response) {
+              console.error(`Erro na resposta para ${guide.paciente_nome}: Status ${response.status}`);
+            }
             failed++;
           }
-        } catch (error) {
-          console.error('Erro ao baixar faturar+documentos:', error);
+        } catch (fetchError) {
+          console.error(`Erro ao fazer requisição para ${guide.paciente_nome}:`, fetchError);
           failed++;
         }
 
+        // Atualizar progresso após cada tentativa
         setDownloadEverythingProgress(prev => ({
           ...prev,
           completed: completed,
@@ -956,47 +1017,42 @@ const GuideControl: React.FC = () => {
         if (i < guidesToDownload.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 1000));
         }
+      } catch (error) {
+        // Erro geral no processamento deste prestador - continuar com o próximo
+        console.error(`Erro geral ao processar ${guide.paciente_nome}:`, error);
+        failed++;
+        setDownloadEverythingProgress(prev => ({
+          ...prev,
+          completed: completed,
+          failed: failed,
+          remaining: totalRequests - completed - failed
+        }));
       }
-
-      setDownloadingEverything(false);
-
-      // Mostrar resultado final com toast
-      let message = '';
-      if (failed === 0) {
-        message = `Download concluído! ${completed} arquivos baixados com sucesso.`;
-      } else if (completed === 0) {
-        message = `Falha no download! ${failed} arquivos falharam.`;
-      } else {
-        message = `Download parcial! ${completed} arquivos baixados, ${failed} falharam.`;
-      }
-      
-      setDownloadResult({
-        completed,
-        failed,
-        message
-      });
-      setShowDownloadComplete(true);
-      
-      // Esconder toast após 5 segundos
-      setTimeout(() => {
-        setShowDownloadComplete(false);
-      }, 5000);
-      
-    } catch (error) {
-      console.error('Erro geral no download:', error);
-      setDownloadResult({
-        completed: 0,
-        failed: 0,
-        message: 'Erro durante o download. Tente novamente.'
-      });
-      setShowDownloadComplete(true);
-      setDownloadingEverything(false);
-      
-      // Esconder toast após 5 segundos
-      setTimeout(() => {
-        setShowDownloadComplete(false);
-      }, 5000);
     }
+
+    setDownloadingEverything(false);
+
+    // Mostrar resultado final com toast
+    let message = '';
+    if (failed === 0) {
+      message = `Download concluído! ${completed} arquivos baixados com sucesso.`;
+    } else if (completed === 0) {
+      message = `Falha no download! ${failed} arquivos falharam.`;
+    } else {
+      message = `Download parcial! ${completed} arquivos baixados, ${failed} falharam.`;
+    }
+    
+    setDownloadResult({
+      completed,
+      failed,
+      message
+    });
+    setShowDownloadComplete(true);
+    
+    // Esconder toast após 5 segundos
+    setTimeout(() => {
+      setShowDownloadComplete(false);
+    }, 5000);
   };
 
   // Função para baixar guias assinadas (existe_guia_assinada === 1, existe_guia_assinada_psicologo === 0, faturado === 0)
