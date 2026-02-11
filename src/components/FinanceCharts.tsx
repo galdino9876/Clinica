@@ -102,7 +102,7 @@ const FinanceCharts = () => {
   const [isEditingLoading, setIsEditingLoading] = useState<boolean>(false);
   
   // Estados para pagamentos
-  const [activeTab, setActiveTab] = useState<"charts" | "payments" | "dashboard">("charts");
+  const [activeTab, setActiveTab] = useState<"charts" | "payments">("charts");
   const [paymentDateRange, setPaymentDateRange] = useState<DateRange | undefined>();
   const [selectedPaymentPsychologist, setSelectedPaymentPsychologist] = useState<string>("");
   const [selectedAppointments, setSelectedAppointments] = useState<string[]>([]);
@@ -832,11 +832,32 @@ const FinanceCharts = () => {
 
   // Listas filtradas por status para relatórios
   const baseFilteredAppointmentsForReports = getBaseFilteredAppointmentsForReports();
-  const filteredAppointmentsCompletedForReports = baseFilteredAppointmentsForReports.filter(a => a.status === "completed");
-  const filteredAppointmentsConfirmedForReports = baseFilteredAppointmentsForReports.filter(a => a.status === "confirmed");
+  
+  // Debug: verificar status dos dados
+  if (baseFilteredAppointmentsForReports.length > 0) {
+    const statusCounts: { [key: string]: number } = {};
+    baseFilteredAppointmentsForReports.forEach(a => {
+      const status = a.status || 'undefined';
+      statusCounts[status] = (statusCounts[status] || 0) + 1;
+    });
+    console.log('Status encontrados nos dados:', statusCounts);
+    console.log('Total de appointments após filtro de período:', baseFilteredAppointmentsForReports.length);
+  }
+  
+  const filteredAppointmentsCompletedForReports = baseFilteredAppointmentsForReports.filter(a => {
+    const status = String(a.status || '').toLowerCase().trim();
+    return status === "completed";
+  });
+  const filteredAppointmentsConfirmedForReports = baseFilteredAppointmentsForReports.filter(a => {
+    const status = String(a.status || '').toLowerCase().trim();
+    return status === "confirmed";
+  });
 
-  // Mantém compatibilidade: usar completed como default para gráficos/tabelas existentes
-  const filteredAppointmentsForReports = filteredAppointmentsCompletedForReports;
+  // Incluir tanto "completed" quanto "confirmed" no relatório - comparação case-insensitive
+  const filteredAppointmentsForReports = baseFilteredAppointmentsForReports.filter(a => {
+    const status = String(a.status || '').toLowerCase().trim();
+    return (status === "completed" || status === "confirmed") && Number(a.value) > 0;
+  });
 
   const calculateFinancialsFrom = (list: Appointment[]) => {
     // console.log('=== CÁLCULO DE RECEITAS ===');
@@ -1366,10 +1387,13 @@ const FinanceCharts = () => {
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center">
-        <h1 className="text-xl md:text-2xl font-bold">Finanças</h1>
-        {(loading || isLoading) && <Loader className="h-5 w-5 animate-spin" />}
-      </div>
+      {/* Loading Indicator */}
+      {(loading || isLoading) && (
+        <div className="flex items-center justify-center py-8">
+          <Loader className="h-6 w-6 animate-spin text-blue-600" />
+          <span className="ml-2 text-sm text-gray-600">Carregando dados...</span>
+        </div>
+      )}
 
       {/* Tab Navigation */}
       <div className="flex flex-col sm:flex-row gap-2 bg-gray-100 p-1 rounded-lg">
@@ -1394,16 +1418,6 @@ const FinanceCharts = () => {
           <span className="hidden sm:inline">{isPsychologist ? "Meus Pagamentos" : "Pagamentos"}</span>
           <span className="sm:hidden">Pagamentos</span>
         </Button>
-        {canManageFinance && (
-          <Button
-            variant={activeTab === "dashboard" ? "default" : "ghost"}
-            size="sm"
-            onClick={() => setActiveTab("dashboard")}
-            className="flex-1 text-xs sm:text-sm"
-          >
-            Dashboard
-          </Button>
-        )}
       </div>
 
       {activeTab === "payments" && (
@@ -2075,126 +2089,6 @@ const FinanceCharts = () => {
         </>
       )}
 
-      {activeTab === "dashboard" && canManageFinance && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-            <h2 className="text-2xl font-bold">Dashboard de Pagamentos</h2>
-          </div>
-
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-gray-500 flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Total de Lotes
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{paymentBatches.length}</div>
-                <p className="text-xs text-gray-500">
-                  {Array.from(new Set(paymentBatches.map(p => p.psychologistId))).length} psicólogos
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-gray-500 flex items-center gap-2">
-                  <CalendarIcon className="h-4 w-4" />
-                  Pendentes
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-yellow-600">
-                  {paymentBatches.filter(b => b.status === 'pending').length}
-                </div>
-                <p className="text-xs text-gray-500">
-                  R$ {paymentBatches.filter(b => b.status === 'pending').reduce((sum, b) => sum + b.totalNetValue, 0).toFixed(2)}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-gray-500 flex items-center gap-2">
-                  <TrendingUp className="h-4 w-4" />
-                  Aprovados
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-green-600">
-                  {paymentBatches.filter(b => b.status === 'approved').length}
-                </div>
-                <p className="text-xs text-gray-500">
-                  R$ {paymentBatches.filter(b => b.status === 'approved').reduce((sum, b) => sum + b.totalNetValue, 0).toFixed(2)}
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-gray-500 flex items-center gap-2">
-                  <DollarSign className="h-4 w-4" />
-                  Pagos
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-blue-600">
-                  {paymentBatches.filter(b => b.status === 'paid').length}
-                </div>
-                <p className="text-xs text-gray-500">
-                  R$ {paymentBatches.filter(b => b.status === 'paid').reduce((sum, b) => sum + b.totalNetValue, 0).toFixed(2)}
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Recent Payments */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Pagamentos Recentes</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {paymentBatches.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
-                  Nenhum pagamento encontrado
-                </div>
-              ) : (
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Psicólogo</TableHead>
-                        <TableHead>Data Criação</TableHead>
-                        <TableHead>Valor</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Criado por</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paymentBatches
-                        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-                        .slice(0, 10)
-                        .map(batch => (
-                        <TableRow key={batch.id}>
-                          <TableCell className="font-medium">{batch.psychologistName}</TableCell>
-                          <TableCell>
-                            {format(new Date(batch.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
-                          </TableCell>
-                          <TableCell>R$ {batch.totalNetValue.toFixed(2)}</TableCell>
-                          <TableCell>{getStatusBadge(batch.status)}</TableCell>
-                          <TableCell>{batch.createdByName}</TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
             {activeTab === "charts" && (
         <div className="space-y-4">
@@ -2520,7 +2414,12 @@ const FinanceCharts = () => {
                   ) : filteredAppointmentsForReports.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={canManageFinance ? 9 : 7} className="text-center py-4 text-gray-500">
-                        Nenhuma consulta confirmada encontrada para este período
+                        Nenhuma consulta encontrada para este período
+                        {baseFilteredAppointmentsForReports.length > 0 && (
+                          <div className="mt-2 text-xs text-gray-400">
+                            (Total de {baseFilteredAppointmentsForReports.length} consulta(s) encontrada(s), mas nenhuma com status "completed" ou "confirmed")
+                          </div>
+                        )}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -2535,10 +2434,18 @@ const FinanceCharts = () => {
                         // console.log(`Appointment ${appointment.id} tem control: ${appointment.control}`);
                       }
 
+                      // Determinar cor da linha baseado no status
+                      const appointmentStatus = String(appointment.status || '').toLowerCase().trim();
+                      const rowClassName = appointmentStatus === 'completed' 
+                        ? 'bg-green-50 hover:bg-green-100 border-l-4 border-green-500' 
+                        : appointmentStatus === 'confirmed'
+                        ? 'bg-purple-50 hover:bg-purple-100 border-l-4 border-purple-500'
+                        : '';
+
                       return (
                         <TableRow 
                           key={appointment.id}
-                          className={appointment.control === 'payments_finish' ? 'bg-green-50 hover:bg-green-100' : ''}
+                          className={rowClassName}
                         >
                           <TableCell>{patient?.name || patient?.nome || "Paciente não encontrado"}</TableCell>
                           <TableCell>
@@ -2741,18 +2648,36 @@ const FinanceCharts = () => {
       <Dialog open={!!selectedLotDetails} onOpenChange={() => setSelectedLotDetails(null)}>
         <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Detalhes do Lote de Pagamento</DialogTitle>
-            {selectedLotDetails && (
-              <Button
-                onClick={() => generatePaymentLotPDF(selectedLotDetails)}
-                className="flex items-center gap-1"
-                size="sm"
-                variant="outline"
-              >
-                <Download className="h-4 w-4" /> Exportar PDF
-              </Button>
-            )}
+            <div className="flex items-center justify-between">
+              <DialogTitle>Detalhes do Lote de Pagamento</DialogTitle>
+            </div>
           </DialogHeader>
+          
+          {/* Banner destacado com botão de exportar PDF */}
+          {selectedLotDetails && (
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-lg p-4 mb-4 shadow-md">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-100 rounded-full">
+                    <Download className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-gray-800 text-sm sm:text-base">Gerar Documento PDF</p>
+                    <p className="text-xs sm:text-sm text-gray-600">Exporte os detalhes do lote de pagamento em PDF</p>
+                  </div>
+                </div>
+                <Button
+                  onClick={() => generatePaymentLotPDF(selectedLotDetails)}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg hover:shadow-xl transition-all duration-200 px-5 py-2.5 whitespace-nowrap"
+                  size="default"
+                >
+                  <Download className="h-5 w-5" /> 
+                  <span className="text-sm sm:text-base">Exportar PDF</span>
+                </Button>
+              </div>
+            </div>
+          )}
+          
           {selectedLotDetails && (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">

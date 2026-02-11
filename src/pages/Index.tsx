@@ -12,6 +12,7 @@ import AppointmentForm from "@/components/AppointmentForm";
 import SolicitarGuiaModal from "@/components/SolicitarGuiaModal";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { toast } from "sonner";
 
 type AlertWebhookItem = {
   paciente_nome: string;
@@ -584,7 +585,7 @@ const Index = () => {
       }
 
       if (!patientId) {
-        alert("Não foi possível encontrar o ID do paciente.");
+        toast.error("Não foi possível encontrar o ID do paciente.");
         return;
       }
 
@@ -637,7 +638,7 @@ const Index = () => {
       setShowAppointmentForm(true);
     } catch (error) {
       console.error('Erro ao abrir formulário de agendamento:', error);
-      alert("Erro ao preparar formulário de agendamento. Tente novamente.");
+      toast.error("Erro ao preparar formulário de agendamento. Tente novamente.");
     }
   };
 
@@ -774,46 +775,43 @@ const Index = () => {
 
       {showAlertModal && canViewAlerts && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-0 sm:p-4"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 p-4"
           onClick={() => setShowAlertModal(false)}
         >
           <div
-            className="bg-white rounded-none sm:rounded-xl shadow-2xl w-full max-w-full sm:max-w-6xl mt-0 sm:mt-4 md:mt-8 max-h-screen sm:max-h-[95vh] md:max-h-[90vh] overflow-hidden mx-0 sm:mx-2 md:mx-0"
+            className="bg-white rounded-xl shadow-2xl w-full max-w-6xl mt-4 md:mt-8 max-h-[95vh] md:max-h-[90vh] overflow-hidden mx-2 md:mx-0"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white p-2 sm:p-3 md:p-4 flex items-center justify-between">
-              <h2 className="text-base sm:text-lg md:text-xl font-bold">Alertas do Sistema</h2>
+            <div className="bg-gradient-to-r from-blue-500 to-indigo-500 text-white p-3 md:p-4 flex items-center justify-between">
+              <h2 className="text-lg md:text-xl font-bold">Alertas do Sistema</h2>
               <button
                 onClick={() => setShowAlertModal(false)}
-                className="p-1 rounded-full hover:bg-white/20 transition flex-shrink-0"
+                className="p-1 rounded-full hover:bg-white/20 transition"
               >
-                <X className="w-4 h-4 sm:w-5 sm:h-5 md:w-6 md:h-6" />
+                <X className="w-5 h-5 md:w-6 md:h-6" />
               </button>
             </div>
 
-            <div className="p-2 sm:p-3 md:p-6 max-h-[calc(100vh-60px)] sm:max-h-[calc(95vh-100px)] md:max-h-[calc(90vh-120px)] overflow-y-auto">
+            <div className="p-3 md:p-6 max-h-[calc(95vh-100px)] md:max-h-[calc(90vh-120px)] overflow-y-auto">
               <Tabs defaultValue="alerts" className="w-full">
-                <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'} text-xs md:text-sm`}>
-                  <TabsTrigger value="alerts" className="flex items-center gap-1 md:gap-2 px-2 md:px-4">
-                    <AlertTriangle className="h-3 w-3 md:h-4 md:w-4" />
-                    <span className="hidden sm:inline">Alertas do Sistema</span>
-                    <span className="sm:hidden">Alertas</span>
+                <TabsList className={`grid w-full ${isAdmin ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                  <TabsTrigger value="alerts" className="flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    Alertas do Sistema
                   </TabsTrigger>
-                  <TabsTrigger value="availability" className="flex items-center gap-1 md:gap-2 px-2 md:px-4">
-                    <BarChart3 className="h-3 w-3 md:h-4 md:w-4" />
-                    <span className="hidden sm:inline">Disponibilidade dos Psicólogos</span>
-                    <span className="sm:hidden">Disponibilidade</span>
+                  <TabsTrigger value="availability" className="flex items-center gap-2">
+                    <BarChart3 className="h-4 w-4" />
+                    Disponibilidade dos Psicólogos
                   </TabsTrigger>
                   {isAdmin && (
-                    <TabsTrigger value="guide-request" className="flex items-center gap-1 md:gap-2 px-2 md:px-4">
-                      <FileText className="h-3 w-3 md:h-4 md:w-4" />
-                      <span className="hidden sm:inline">Controle Solicitação GUIA</span>
-                      <span className="sm:hidden">GUIA</span>
+                    <TabsTrigger value="guide-request" className="flex items-center gap-2">
+                      <FileText className="h-4 w-4" />
+                      Controle Solicitação GUIA
                     </TabsTrigger>
                   )}
                 </TabsList>
                 
-                <TabsContent value="alerts" className="mt-3 sm:mt-6 overflow-hidden">
+                <TabsContent value="alerts" className="mt-6">
                   {loadingAlerts && (
                     <div className="text-gray-600">Carregando alertas...</div>
                   )}
@@ -825,16 +823,16 @@ const Index = () => {
                   )}
 
                   {!loadingAlerts && !alertError && alertItems.length > 0 && (
-                    <div className="space-y-4 max-w-full overflow-hidden">
+                    <div className="space-y-4 max-w-full">
                       {/* Alertas da API */}
-                      <Card className="w-full overflow-hidden">
-                        <CardHeader className="pb-2 sm:pb-3 px-2 sm:px-6">
-                          <CardTitle className="flex items-center gap-1.5 sm:gap-2 text-sm sm:text-base">
-                            <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 flex-shrink-0" />
-                            <span>Alertas do Sistema</span>
+                      <Card className="w-full">
+                        <CardHeader className="pb-3">
+                          <CardTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-blue-600" />
+                            Alertas do Sistema
                           </CardTitle>
                         </CardHeader>
-                        <CardContent className="px-1 sm:px-0 pb-0 overflow-hidden">
+                        <CardContent className="px-0 pb-0">
                           {/* Cabeçalho da tabela - oculto em mobile */}
                           <div className="hidden md:flex items-center px-4 py-2 bg-gray-100 text-sm font-medium text-gray-700 mb-1">
                             <div className="flex items-center gap-2 flex-1">
@@ -902,15 +900,15 @@ const Index = () => {
                               const groupedAlerts = [...groupedAlertsAtivos, ...groupedAlertsDesabilitados];
                               
                               return groupedAlerts.map((group) => (
-                                <div key={group.day} className="space-y-1 overflow-hidden">
+                                <div key={group.day} className="space-y-1">
                                   {/* Cabeçalho do grupo */}
-                                  <div className={`px-2 sm:px-3 md:px-4 py-1.5 sm:py-2 border-l-4 ${
+                                  <div className={`px-4 py-2 border-l-4 ${
                                     group.day === 'Pacientes Desabilitados' 
                                       ? 'bg-gray-100 border-gray-500' 
                                       : 'bg-blue-100 border-blue-500'
                                   }`}>
-                                    <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                                      <span className={`font-semibold text-xs sm:text-sm ${
+                                    <div className="flex items-center gap-2">
+                                      <span className={`font-semibold text-sm ${
                                         group.day === 'Pacientes Desabilitados' 
                                           ? 'text-gray-800' 
                                           : 'text-blue-800'
@@ -929,13 +927,13 @@ const Index = () => {
                               const alertColor = isActive ? "bg-blue-50 border-blue-200" : "bg-gray-50 border-gray-200";
                               
                               return (
-                                <div key={index} className={`flex flex-col md:flex-row md:items-center gap-2 sm:gap-3 md:gap-0 px-1.5 sm:px-2 md:px-4 py-1.5 sm:py-2 md:py-3 rounded text-xs md:text-sm hover:bg-opacity-80 transition-colors border-l-4 ${alertColor} overflow-hidden`}>
+                                <div key={index} className={`flex flex-col md:flex-row md:items-center gap-3 md:gap-0 px-3 md:px-4 py-3 rounded text-sm hover:bg-opacity-80 transition-colors border-l-4 ${alertColor}`}>
                                   {/* Nome do Paciente */}
-                                  <div className="flex items-start gap-2 md:gap-3 flex-1 min-w-0">
-                                    <User className="h-3 w-3 md:h-4 md:w-4 text-gray-500 flex-shrink-0 mt-0.5" />
+                                  <div className="flex items-start gap-3 flex-1 min-w-0">
+                                    <User className="h-4 w-4 text-gray-500 flex-shrink-0 mt-0.5" />
                                     <div className="flex flex-col gap-1 flex-1 min-w-0">
-                                      <div className="flex flex-wrap items-center gap-1.5 md:gap-2">
-                                        <span className="font-medium break-words text-sm md:text-base">{alert.paciente_nome}</span>
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <span className="font-medium break-words">{alert.paciente_nome}</span>
                                         {(() => {
                                           // Tentar usar birthdate do alert, ou buscar do cache se tiver patient_id
                                           const birthdate = alert.birthdate || (alert.patient_id ? patientsBirthdates.get(alert.patient_id) : undefined);
@@ -1050,15 +1048,15 @@ const Index = () => {
                                                            "bg-blue-200 text-blue-900";
                                           
                                           return (
-                                            <div key={idx} className={`flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 p-1.5 sm:p-2 rounded-md ${isHoje ? 'ring-2 ring-blue-500 ring-offset-1 bg-blue-50/50' : 'bg-gray-50/50'}`}>
-                                              <span className={`text-xs font-medium min-w-[75px] sm:min-w-[80px] flex-shrink-0 ${isHoje ? 'font-bold text-blue-700' : 'text-gray-600'}`}>
+                                            <div key={idx} className={`flex flex-col sm:flex-row sm:items-center gap-2 p-2 rounded-md ${isHoje ? 'ring-2 ring-blue-500 ring-offset-1 bg-blue-50/50' : 'bg-gray-50/50'}`}>
+                                              <span className={`text-xs font-medium min-w-[90px] sm:min-w-[80px] ${isHoje ? 'font-bold text-blue-700' : 'text-gray-600'}`}>
                                                 {dataItem.data}
                                                 {isHoje && <span className="ml-1 text-blue-600">●</span>}
                                               </span>
-                                              <div className="flex flex-wrap gap-1 sm:gap-1.5 flex-1 min-w-0">
+                                              <div className="flex flex-wrap gap-1.5 sm:gap-1">
                                                 {dataItem.agendamento === "falta" ? (
                                                   <span 
-                                                    className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-xs font-medium whitespace-nowrap ${agendamentoColor} cursor-pointer hover:opacity-80 transition-opacity`}
+                                                    className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${agendamentoColor} cursor-pointer hover:opacity-80 transition-opacity`}
                                                     onClick={(e) => {
                                                       e.stopPropagation();
                                                       handleOpenAppointmentForm(alert, dataItem);
@@ -1068,12 +1066,12 @@ const Index = () => {
                                                     📅 falta agendamento
                                                   </span>
                                                 ) : (
-                                                  <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-xs font-medium whitespace-nowrap ${agendamentoColor}`}>
+                                                  <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${agendamentoColor}`}>
                                                     📅 {dataItem.agendamento}
                                                   </span>
                                                 )}
                                                 {!isParticular && (
-                                                <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-xs font-medium whitespace-nowrap ${guiaColor}`}>
+                                                <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${guiaColor}`}>
                                                   📋 {dataItem.guia === "falta" ? "falta guia" : dataItem.guia}
                                                 </span>
                                                 )}
@@ -1091,10 +1089,10 @@ const Index = () => {
                                   <div className="flex items-center justify-end md:justify-start gap-2 md:w-20 mt-2 md:mt-0">
                                     <button
                                       onClick={() => handleEditAlert(alert)}
-                                      className="p-1.5 md:p-2 md:p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                                      className="p-2 md:p-1 text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors"
                                       title="Editar alerta"
                                     >
-                                      <Edit className="h-3 w-3 md:h-4 md:w-4" />
+                                      <Edit className="h-4 w-4" />
                                     </button>
                                   </div>
                                 </div>

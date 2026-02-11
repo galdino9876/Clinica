@@ -25,38 +25,30 @@ const Finance = () => {
       <div className="space-y-4 md:space-y-6 p-3 md:p-6">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Finanças</h1>
-          <p className="text-sm md:text-base text-muted-foreground">
-            Gestão financeira e acompanhamento de guias a receber
-          </p>
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
-          <TabsList className="grid w-full grid-cols-1 sm:grid-cols-3 gap-2 h-auto">
-            <TabsTrigger value="charts" className="text-xs sm:text-sm">Dashboard Financeiro</TabsTrigger>
-            {userIsAdmin && (
-              <>
-                <TabsTrigger value="a-receber" className="text-xs sm:text-sm">Guias a Receber</TabsTrigger>
-                <TabsTrigger value="recebidas" className="text-xs sm:text-sm">Guias Recebidas</TabsTrigger>
-              </>
-            )}
-          </TabsList>
+        {/* Conteúdo principal - FinanceCharts com navegação interna */}
+        <div className="space-y-4">
+          <FinanceCharts />
+        </div>
 
-          <TabsContent value="charts" className="space-y-4">
-            <FinanceCharts />
-          </TabsContent>
+        {/* Abas apenas para admin - COMENTADO */}
+        {/* {userIsAdmin && (
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+            <TabsList className="grid w-full grid-cols-2 gap-2 h-auto">
+              <TabsTrigger value="a-receber" className="text-xs sm:text-sm">Guias a Receber</TabsTrigger>
+              <TabsTrigger value="recebidas" className="text-xs sm:text-sm">Guias Recebidas</TabsTrigger>
+            </TabsList>
 
-          {userIsAdmin && (
-            <>
-              <TabsContent value="a-receber" className="space-y-4">
-                <GuiaAReceberTable key={refreshKey} />
-              </TabsContent>
+            <TabsContent value="a-receber" className="space-y-4">
+              <GuiaAReceberTable key={refreshKey} />
+            </TabsContent>
 
-              <TabsContent value="recebidas" className="space-y-4">
-                <GuiaRecebidaTable />
-              </TabsContent>
-            </>
-          )}
-        </Tabs>
+            <TabsContent value="recebidas" className="space-y-4">
+              <GuiaRecebidaTable />
+            </TabsContent>
+          </Tabs>
+        )} */}
       </div>
     </Layout>
   );
