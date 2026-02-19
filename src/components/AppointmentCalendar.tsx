@@ -1967,9 +1967,9 @@ const AppointmentCalendar = () => {
             onClick={(e) => e.stopPropagation()} // Prevenir fechamento ao clicar no conteúdo
           >
             {/* Header do Modal */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 md:p-6 rounded-t-none md:rounded-t-xl sticky top-0 z-10">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-3 md:p-4 rounded-t-none md:rounded-t-xl sticky top-0 z-10">
               <div className="flex justify-between items-center">
-                <h3 className="text-lg md:text-xl font-bold">
+                <h3 className="text-base md:text-lg font-bold">
                   Observações do Atendimento
                 </h3>
                 <button
@@ -1981,21 +1981,21 @@ const AppointmentCalendar = () => {
                     setSelectedImages([]);
                     setSelectedAppointment(null);
                   }}
-                  className="text-white hover:text-blue-200 transition-all duration-200 p-2 rounded-full hover:bg-white hover:bg-opacity-20 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600 hover:scale-110"
+                  className="text-white hover:text-blue-200 transition-all duration-200 p-1.5 rounded-full hover:bg-white hover:bg-opacity-20 focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-blue-600 hover:scale-110"
                   aria-label="Fechar modal"
                 >
-                  <X size={20} />
+                  <X size={18} />
                 </button>
               </div>
-              <p className="text-blue-100 mt-2 text-sm md:text-base">
+              <p className="text-blue-100 mt-1.5 text-xs md:text-sm">
                 Descreva o que aconteceu no atendimento com {getPatientName(selectedAppointment.patient_id)}
               </p>
             </div>
 
             {/* Conteúdo do Modal */}
-            <div className="p-4 md:p-6 pb-6 md:pb-6">
-              <div className="mb-4 md:mb-6">
-                <label htmlFor="observation-notes" className="block text-sm font-medium text-gray-700 mb-2">
+            <div className="p-4 md:p-5 pb-4 md:pb-5">
+              <div className="mb-3 md:mb-4">
+                <label htmlFor="observation-notes" className="block text-sm font-medium text-gray-700 mb-1.5">
                   Observações do Atendimento *
                 </label>
                 <textarea
@@ -2003,7 +2003,7 @@ const AppointmentCalendar = () => {
                   value={observationNotes}
                   onChange={(e) => setObservationNotes(e.target.value)}
                   placeholder="Descreva detalhadamente o que foi discutido, observado e as orientações dadas durante o atendimento..."
-                  className="w-full h-32 md:h-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-sm md:text-base"
+                  className="w-full h-24 md:h-28 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-sm md:text-base"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   * Campo obrigatório para registrar o atendimento
@@ -2012,7 +2012,7 @@ const AppointmentCalendar = () => {
 
               {/* Área de upload de imagens */}
               <div className="mb-4 md:mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1.5">
                   Imagens (máximo 5)
                 </label>
                 
@@ -2021,7 +2021,7 @@ const AppointmentCalendar = () => {
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
-                  className={`w-full border-2 border-dashed rounded-lg p-4 md:p-6 text-center transition-colors ${
+                  className={`w-full border-2 border-dashed rounded-lg p-2 md:p-3 text-center transition-colors ${
                     isDragging 
                       ? "border-blue-500 bg-blue-50" 
                       : "border-gray-300 bg-gray-50 hover:border-gray-400"
@@ -2038,10 +2038,10 @@ const AppointmentCalendar = () => {
                   />
                   <label
                     htmlFor="observation-image-upload-input"
-                    className="cursor-pointer flex flex-col items-center gap-2"
+                    className="cursor-pointer flex flex-col items-center gap-1"
                   >
                     <svg
-                      className="w-10 h-10 md:w-12 md:h-12 text-gray-400"
+                      className="w-6 h-6 md:w-8 md:h-8 text-gray-400"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -2053,8 +2053,8 @@ const AppointmentCalendar = () => {
                         d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                       />
                     </svg>
-                    <p className="text-xs md:text-sm text-gray-600">
-                      Arraste e solte imagens aqui ou clique para selecionar
+                    <p className="text-xs text-gray-600">
+                      Arraste e solte ou clique para selecionar
                     </p>
                     <p className="text-xs text-gray-500">
                       {selectedImages.length}/5 imagens selecionadas
@@ -2064,7 +2064,7 @@ const AppointmentCalendar = () => {
 
                 {/* Preview das imagens */}
                 {selectedImages.length > 0 && (
-                  <div className={`grid gap-3 mt-2 ${
+                  <div className={`grid gap-2 mt-2 ${
                     selectedImages.length === 1 ? 'grid-cols-1' :
                     selectedImages.length === 2 ? 'grid-cols-2' :
                     selectedImages.length <= 4 ? 'grid-cols-2' : 'grid-cols-3'
@@ -2074,7 +2074,7 @@ const AppointmentCalendar = () => {
                         <img
                           src={img.url}
                           alt={`Preview ${index + 1}`}
-                          className="w-full h-48 md:h-56 object-cover rounded border border-gray-300"
+                          className="w-full h-32 md:h-40 object-cover rounded border border-gray-300"
                         />
                         <button
                           onClick={() => removeImage(img.id)}
