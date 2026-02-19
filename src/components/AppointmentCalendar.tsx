@@ -1952,7 +1952,7 @@ const AppointmentCalendar = () => {
       {/* Modal de Observações do Atendimento */}
       {showObservationModal && selectedAppointment && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-start md:items-center justify-center z-50 p-0 md:p-4 overflow-y-auto"
           onClick={() => {
             // Limpar imagens ao fechar
             selectedImages.forEach((img) => URL.revokeObjectURL(img.url));
@@ -1963,13 +1963,13 @@ const AppointmentCalendar = () => {
           }} // Fechar ao clicar no backdrop
         >
           <div
-            className="bg-white rounded-xl shadow-2xl max-w-2xl w-full"
+            className="bg-white rounded-none md:rounded-xl shadow-2xl max-w-2xl w-full min-h-screen md:min-h-0 my-0 md:my-4"
             onClick={(e) => e.stopPropagation()} // Prevenir fechamento ao clicar no conteúdo
           >
             {/* Header do Modal */}
-            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 rounded-t-xl">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-4 md:p-6 rounded-t-none md:rounded-t-xl sticky top-0 z-10">
               <div className="flex justify-between items-center">
-                <h3 className="text-xl font-bold">
+                <h3 className="text-lg md:text-xl font-bold">
                   Observações do Atendimento
                 </h3>
                 <button
@@ -1987,14 +1987,14 @@ const AppointmentCalendar = () => {
                   <X size={20} />
                 </button>
               </div>
-              <p className="text-blue-100 mt-2">
+              <p className="text-blue-100 mt-2 text-sm md:text-base">
                 Descreva o que aconteceu no atendimento com {getPatientName(selectedAppointment.patient_id)}
               </p>
             </div>
 
             {/* Conteúdo do Modal */}
-            <div className="p-6">
-              <div className="mb-6">
+            <div className="p-4 md:p-6 pb-6 md:pb-6">
+              <div className="mb-4 md:mb-6">
                 <label htmlFor="observation-notes" className="block text-sm font-medium text-gray-700 mb-2">
                   Observações do Atendimento *
                 </label>
@@ -2003,7 +2003,7 @@ const AppointmentCalendar = () => {
                   value={observationNotes}
                   onChange={(e) => setObservationNotes(e.target.value)}
                   placeholder="Descreva detalhadamente o que foi discutido, observado e as orientações dadas durante o atendimento..."
-                  className="w-full h-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                  className="w-full h-32 md:h-32 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none text-sm md:text-base"
                 />
                 <p className="text-xs text-gray-500 mt-1">
                   * Campo obrigatório para registrar o atendimento
@@ -2011,7 +2011,7 @@ const AppointmentCalendar = () => {
               </div>
 
               {/* Área de upload de imagens */}
-              <div className="mb-6">
+              <div className="mb-4 md:mb-6">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Imagens (máximo 5)
                 </label>
@@ -2021,7 +2021,7 @@ const AppointmentCalendar = () => {
                   onDragOver={handleDragOver}
                   onDragLeave={handleDragLeave}
                   onDrop={handleDrop}
-                  className={`w-full border-2 border-dashed rounded-lg p-6 text-center transition-colors ${
+                  className={`w-full border-2 border-dashed rounded-lg p-4 md:p-6 text-center transition-colors ${
                     isDragging 
                       ? "border-blue-500 bg-blue-50" 
                       : "border-gray-300 bg-gray-50 hover:border-gray-400"
@@ -2041,7 +2041,7 @@ const AppointmentCalendar = () => {
                     className="cursor-pointer flex flex-col items-center gap-2"
                   >
                     <svg
-                      className="w-12 h-12 text-gray-400"
+                      className="w-10 h-10 md:w-12 md:h-12 text-gray-400"
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -2053,7 +2053,7 @@ const AppointmentCalendar = () => {
                         d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"
                       />
                     </svg>
-                    <p className="text-sm text-gray-600">
+                    <p className="text-xs md:text-sm text-gray-600">
                       Arraste e solte imagens aqui ou clique para selecionar
                     </p>
                     <p className="text-xs text-gray-500">
@@ -2093,7 +2093,7 @@ const AppointmentCalendar = () => {
               </div>
 
               {/* Botões de Ação */}
-              <div className="flex gap-3 justify-end">
+              <div className="flex flex-col sm:flex-row gap-3 justify-end mt-6 pt-4 border-t border-gray-200 sticky bottom-0 bg-white pb-2 md:pb-0 md:static md:border-t-0 md:bg-transparent">
                 <button
                   onClick={() => {
                     // Limpar imagens ao fechar
@@ -2103,14 +2103,14 @@ const AppointmentCalendar = () => {
                     setSelectedImages([]);
                     setSelectedAppointment(null);
                   }}
-                  className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 font-medium"
+                  className="w-full sm:w-auto px-4 py-2.5 md:py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 font-medium text-sm md:text-base"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleSaveObservations}
                   disabled={!observationNotes.trim()}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 font-medium"
+                  className="w-full sm:w-auto px-6 py-2.5 md:py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed text-white rounded-lg transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 font-medium text-sm md:text-base"
                 >
                   Salvar e Marcar como Realizado
                 </button>
