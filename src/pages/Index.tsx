@@ -5,7 +5,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import React, { useEffect, useState } from "react";
-import { X, AlertTriangle, Calendar, ClipboardList, User, Edit, BarChart3, FileText } from "lucide-react";
+import { X, AlertTriangle, Calendar, ClipboardList, User, Edit, BarChart3, FileText, FileCheck, FileX } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import PsychologistAvailabilityDashboard from "@/components/PsychologistAvailabilityDashboard";
 import AppointmentForm from "@/components/AppointmentForm";
@@ -22,11 +22,14 @@ type AlertWebhookItem = {
   active: number | string;
   insurance_type?: string; // Tipo de plano/seguro
   birthdate?: string; // Data de nascimento para calcular se é adulto ou criança
+  prestadores?: string; // JSON string da API: [{ numero_prestador, datas[], existe_guia_assinada, ... }]
+  existe_guia_assinada?: number | string; // 1 ou "1" = guia devolvida (preenchido a partir de prestadores)
   datas: Array<{
     data: string; // Data no formato "DD/MM/YYYY"
     agendamento: string; // Status do agendamento ("ok", "warning", "error", etc.)
     guia: string; // Status da guia ("falta", "ok", etc.)
     numero_prestador: number | string | null;
+    existe_guia_assinada?: number | string; // Preenchido a partir do prestador com mesmo numero_prestador
   }>;
 };
 
@@ -345,6 +348,7 @@ const Index = () => {
             return dataItem;
           });
           
+          // Preservar existe_guia_assinada e todos os outros campos do alert ao atualizar
           return {
             ...alert,
             datas: updatedDatas
@@ -357,6 +361,49 @@ const Index = () => {
       console.error('Erro ao corrigir status de agendamento:', error);
       return alertItems; // Retornar sem alterações se falhar
     }
+  };
+
+  // Enriquecer alertas com existe_guia_assinada a partir do campo prestadores (JSON string)
+  const enrichAlertsFromPrestadores = (items: AlertWebhookItem[]): AlertWebhookItem[] => {
+    return items.map(alert => {
+      if (!alert.prestadores || typeof alert.prestadores !== 'string') {
+        return alert;
+      }
+      try {
+        const prestadoresList = JSON.parse(alert.prestadores) as Array<{
+          numero_prestador?: string | number;
+          existe_guia_assinada?: number | string;
+        }>;
+        if (!Array.isArray(prestadoresList) || prestadoresList.length === 0) {
+          return alert;
+        }
+        const mapByNumero = new Map<string, number | string>();
+        prestadoresList.forEach(p => {
+          const num = p.numero_prestador != null ? String(p.numero_prestador) : null;
+          if (num != null && p.existe_guia_assinada !== undefined) {
+            mapByNumero.set(num, p.existe_guia_assinada);
+          }
+        });
+        const firstExisteGuiaAssinada = prestadoresList[0]?.existe_guia_assinada;
+        const datasEnriched = (alert.datas || []).map(d => {
+          const numPrestador = d.numero_prestador != null && d.numero_prestador !== 'null'
+            ? String(d.numero_prestador)
+            : null;
+          const existeGuia = numPrestador ? mapByNumero.get(numPrestador) : undefined;
+          return {
+            ...d,
+            existe_guia_assinada: existeGuia !== undefined ? existeGuia : d.existe_guia_assinada,
+          };
+        });
+        return {
+          ...alert,
+          existe_guia_assinada: firstExisteGuiaAssinada ?? alert.existe_guia_assinada,
+          datas: datasEnriched,
+        };
+      } catch {
+        return alert;
+      }
+    });
   };
 
   // Função para buscar alertas da API
@@ -389,6 +436,9 @@ const Index = () => {
       } else if (data && typeof data === 'object') {
         alertItems = [data];
       }
+
+      // Enriquecer com existe_guia_assinada a partir do campo prestadores (string JSON)
+      alertItems = enrichAlertsFromPrestadores(alertItems);
       
       // Corrigir status de agendamento baseado nos appointments reais
       alertItems = await correctAppointmentStatus(alertItems);
@@ -1074,6 +1124,24 @@ const Index = () => {
                                                 <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${guiaColor}`}>
                                                   📋 {dataItem.guia === "falta" ? "falta guia" : dataItem.guia}
                                                 </span>
+                                                )}
+                                                {!isParticular && (
+                                                  (() => {
+                                                    const devolvida = dataItem.existe_guia_assinada !== undefined
+                                                      ? (dataItem.existe_guia_assinada === 1 || dataItem.existe_guia_assinada === "1" || Number(dataItem.existe_guia_assinada) === 1)
+                                                      : (alert.existe_guia_assinada === 1 || alert.existe_guia_assinada === "1" || Number(alert.existe_guia_assinada) === 1);
+                                                    return devolvida;
+                                                  })() ? (
+                                                    <span className="px-2 py-1 rounded text-xs font-medium whitespace-nowrap bg-green-600 text-white flex items-center gap-1">
+                                                      <FileCheck className="h-3 w-3 inline" />
+                                                      Guia devolvida
+                                                    </span>
+                                                  ) : (
+                                                    <span className="px-2 py-1 rounded text-xs font-medium whitespace-nowrap bg-orange-500 text-white flex items-center gap-1">
+                                                      <FileX className="h-3 w-3 inline" />
+                                                      não devolvida
+                                                    </span>
+                                                  )
                                                 )}
                                               </div>
                                             </div>
