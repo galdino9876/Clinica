@@ -1127,9 +1127,9 @@ const Index = () => {
                                                 )}
                                                 {!isParticular && (
                                                   (() => {
-                                                    const devolvida = dataItem.existe_guia_assinada !== undefined
-                                                      ? (dataItem.existe_guia_assinada === 1 || dataItem.existe_guia_assinada === "1" || Number(dataItem.existe_guia_assinada) === 1)
-                                                      : (alert.existe_guia_assinada === 1 || alert.existe_guia_assinada === "1" || Number(alert.existe_guia_assinada) === 1);
+                                                    // Só mostra "Guia devolvida" quando este dataItem tem numero_prestador que bate com um prestador com existe_guia_assinada === 1.
+                                                    // Datas com numero_prestador null ou sem match devem mostrar "não devolvida".
+                                                    const devolvida = dataItem.existe_guia_assinada === 1 || dataItem.existe_guia_assinada === "1" || Number(dataItem.existe_guia_assinada) === 1;
                                                     return devolvida;
                                                   })() ? (
                                                     <span className="px-2 py-1 rounded text-xs font-medium whitespace-nowrap bg-green-600 text-white flex items-center gap-1">
