@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,17 @@ const normalizeDate = (dateStr: string): Date => {
 import GuideModal from '@/components/GuideModal';
 import EditPrestadorModal from '@/components/EditPrestadorModal';
 import SolicitarGuiaModal from '@/components/SolicitarGuiaModal';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 import { 
   User, 
   Calendar, 
@@ -39,7 +50,8 @@ import {
   DollarSign,
   Trash2,
   Edit,
-  Search
+  Search,
+  X
 } from "lucide-react";
 
 interface PrestadorData {
@@ -134,6 +146,8 @@ const GuideControl: React.FC = () => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
   });
+  const [excludeGuiaConfirmOpen, setExcludeGuiaConfirmOpen] = useState(false);
+  const [excludeGuiaPending, setExcludeGuiaPending] = useState<{ numeroPrestador: number | string; command: string } | null>(null);
 
   // Função para salvar posição de scroll
   const saveScrollPosition = () => {
@@ -691,6 +705,37 @@ const GuideControl: React.FC = () => {
       console.error('Erro ao baixar arquivo:', error);
       alert('Erro ao baixar arquivo. Tente novamente.');
       setDownloadingFile(null);
+    }
+  };
+
+  // Abre o modal de confirmação para excluir guia
+  const openExcludeGuiaConfirm = (numeroPrestador: number | string, command: string) => {
+    setExcludeGuiaPending({ numeroPrestador, command });
+    setExcludeGuiaConfirmOpen(true);
+  };
+
+  // Excluir guia importada (chamado após confirmação no modal)
+  const handleExcludeGuia = async (numeroPrestador: number | string, command: string) => {
+    try {
+      const response = await fetch(
+        "https://webhook.essenciasaudeintegrada.com.br/webhook/insert_guia_completed",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            command,
+            numero_prestador: String(numeroPrestador),
+          }),
+        }
+      );
+      if (!response.ok) {
+        throw new Error(`Erro ao excluir guia: ${response.status}`);
+      }
+      await fetchData();
+      toast.success("Guia excluída com sucesso.");
+    } catch (error) {
+      console.error("Erro ao excluir guia:", error);
+      alert("Erro ao excluir guia. Tente novamente.");
     }
   };
 
@@ -1728,112 +1773,148 @@ const GuideControl: React.FC = () => {
                                 
                                 {/* Botões de Ação */}
                                 <div className="flex items-center gap-2 flex-wrap mt-4">
-                                  {/* Botão Guia Autorizada */}
-                                  <div className="relative">
-                                    {prestador.existe_guia_autorizada === 1 ? (
-                                      <Button 
-                                        size="sm" 
-                                        variant="default"
-                                        className="text-xs px-3 py-2 bg-green-700 text-white hover:bg-white hover:text-green-700 hover:border-green-700 border border-green-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer"
-                                        onClick={() => handleDownloadGuia(prestador.numero_prestador, "Guia-autorizada")}
+                                  {/* Botão Guia Autorizada + X para excluir no hover */}
+                                  <div className="relative group flex flex-col items-center">
+                                    {prestador.existe_guia_autorizada === 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); openExcludeGuiaConfirm(prestador.numero_prestador, "exclude-Guia-autorizada"); }}
+                                        className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-20 p-1 rounded-full bg-white border-2 border-red-500 text-red-600 hover:bg-red-50 shadow cursor-pointer"
+                                        title="Excluir guia importada"
                                       >
-                                        <Upload className="h-3 w-3 mr-1" />
-                                        Baixar Autorizada
-                                      </Button>
-                                    ) : (
-                                      <div className="relative group">
-                                        <input
-                                          type="file"
-                                          accept=".pdf"
-                                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                          onChange={(e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file) {
-                                              handleImportGuia(patient.paciente_nome, prestador.numero_prestador, "Guia-autorizada", file);
-                                            }
-                                          }}
-                                        />
+                                        <X className="h-4 w-4" />
+                                      </button>
+                                    )}
+                                    <div className="relative">
+                                      {prestador.existe_guia_autorizada === 1 ? (
                                         <Button 
                                           size="sm" 
-                                          className="text-xs px-3 py-2 bg-white text-green-700 border border-green-200 group-hover:bg-green-700 group-hover:text-white group-hover:border-green-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer relative z-0"
+                                          variant="default"
+                                          className="text-xs px-3 py-2 bg-green-700 text-white hover:bg-white hover:text-green-700 hover:border-green-700 border border-green-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer"
+                                          onClick={() => handleDownloadGuia(prestador.numero_prestador, "Guia-autorizada")}
                                         >
                                           <Upload className="h-3 w-3 mr-1" />
-                                          Guia Autorizada
+                                          Baixar Autorizada
                                         </Button>
-                                      </div>
-                                    )}
+                                      ) : (
+                                        <div className="relative group">
+                                          <input
+                                            type="file"
+                                            accept=".pdf"
+                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                            onChange={(e) => {
+                                              const file = e.target.files?.[0];
+                                              if (file) {
+                                                handleImportGuia(patient.paciente_nome, prestador.numero_prestador, "Guia-autorizada", file);
+                                              }
+                                            }}
+                                          />
+                                          <Button 
+                                            size="sm" 
+                                            className="text-xs px-3 py-2 bg-white text-green-700 border border-green-200 group-hover:bg-green-700 group-hover:text-white group-hover:border-green-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer relative z-0"
+                                          >
+                                            <Upload className="h-3 w-3 mr-1" />
+                                            Guia Autorizada
+                                          </Button>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
 
-                                  {/* Botão Guia Assinada */}
-                                  <div className="relative">
-                                    {prestador.existe_guia_assinada === 1 ? (
-                                      <Button 
-                                        size="sm" 
-                                        variant="default"
-                                        className="text-xs px-3 py-2 bg-blue-700 text-white hover:bg-white hover:text-blue-700 hover:border-blue-700 border border-blue-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer"
-                                        onClick={() => handleDownloadGuia(prestador.numero_prestador, "Guia-assinada")}
+                                  {/* Botão Guia Assinada + X para excluir no hover */}
+                                  <div className="relative group flex flex-col items-center">
+                                    {prestador.existe_guia_assinada === 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); openExcludeGuiaConfirm(prestador.numero_prestador, "exclude-Guia-assinada"); }}
+                                        className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-20 p-1 rounded-full bg-white border-2 border-red-500 text-red-600 hover:bg-red-50 shadow cursor-pointer"
+                                        title="Excluir guia importada"
                                       >
-                                        <Upload className="h-3 w-3 mr-1" />
-                                        Baixar Assinada
-                                      </Button>
-                                    ) : (
-                                      <div className="relative group">
-                                        <input
-                                          type="file"
-                                          accept=".pdf"
-                                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                          onChange={(e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file) {
-                                              handleImportGuia(patient.paciente_nome, prestador.numero_prestador, "Guia-assinada", file);
-                                            }
-                                          }}
-                                        />
+                                        <X className="h-4 w-4" />
+                                      </button>
+                                    )}
+                                    <div className="relative">
+                                      {prestador.existe_guia_assinada === 1 ? (
                                         <Button 
                                           size="sm" 
-                                          className="text-xs px-3 py-2 bg-white text-blue-700 border border-blue-200 group-hover:bg-blue-700 group-hover:text-white group-hover:border-blue-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer relative z-0"
+                                          variant="default"
+                                          className="text-xs px-3 py-2 bg-blue-700 text-white hover:bg-white hover:text-blue-700 hover:border-blue-700 border border-blue-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer"
+                                          onClick={() => handleDownloadGuia(prestador.numero_prestador, "Guia-assinada")}
                                         >
                                           <Upload className="h-3 w-3 mr-1" />
-                                          Assinada Paciente
+                                          Baixar Assinada
                                         </Button>
-                                      </div>
-                                    )}
+                                      ) : (
+                                        <div className="relative group">
+                                          <input
+                                            type="file"
+                                            accept=".pdf"
+                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                            onChange={(e) => {
+                                              const file = e.target.files?.[0];
+                                              if (file) {
+                                                handleImportGuia(patient.paciente_nome, prestador.numero_prestador, "Guia-assinada", file);
+                                              }
+                                            }}
+                                          />
+                                          <Button 
+                                            size="sm" 
+                                            className="text-xs px-3 py-2 bg-white text-blue-700 border border-blue-200 group-hover:bg-blue-700 group-hover:text-white group-hover:border-blue-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer relative z-0"
+                                          >
+                                            <Upload className="h-3 w-3 mr-1" />
+                                            Assinada Paciente
+                                          </Button>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
 
-                                  {/* Botão Guia Assinada Psicólogo */}
-                                  <div className="relative">
-                                    {prestador.existe_guia_assinada_psicologo === 1 ? (
-                                      <Button 
-                                        size="sm" 
-                                        variant="default"
-                                        className="text-xs px-3 py-2 bg-purple-700 text-white hover:bg-white hover:text-purple-700 hover:border-purple-700 border border-purple-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer"
-                                        onClick={() => handleDownloadGuia(prestador.numero_prestador, "Guia-assinada-psicologo")}
+                                  {/* Botão Guia Assinada Psicólogo + X para excluir no hover */}
+                                  <div className="relative group flex flex-col items-center">
+                                    {prestador.existe_guia_assinada_psicologo === 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.preventDefault(); e.stopPropagation(); openExcludeGuiaConfirm(prestador.numero_prestador, "exclude-Guia-assinada-psicologo"); }}
+                                        className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-20 p-1 rounded-full bg-white border-2 border-red-500 text-red-600 hover:bg-red-50 shadow cursor-pointer"
+                                        title="Excluir guia importada"
                                       >
-                                        <Upload className="h-3 w-3 mr-1" />
-                                        Baixar Psicólogo
-                                      </Button>
-                                    ) : (
-                                      <div className="relative group">
-                                        <input
-                                          type="file"
-                                          accept=".pdf"
-                                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                          onChange={(e) => {
-                                            const file = e.target.files?.[0];
-                                            if (file) {
-                                              handleImportGuia(patient.paciente_nome, prestador.numero_prestador, "Guia-assinada-psicologo", file);
-                                            }
-                                          }}
-                                        />
+                                        <X className="h-4 w-4" />
+                                      </button>
+                                    )}
+                                    <div className="relative">
+                                      {prestador.existe_guia_assinada_psicologo === 1 ? (
                                         <Button 
                                           size="sm" 
-                                          className="text-xs px-3 py-2 bg-white text-purple-700 border border-purple-200 group-hover:bg-purple-700 group-hover:text-white group-hover:border-purple-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer relative z-0"
+                                          variant="default"
+                                          className="text-xs px-3 py-2 bg-purple-700 text-white hover:bg-white hover:text-purple-700 hover:border-purple-700 border border-purple-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer"
+                                          onClick={() => handleDownloadGuia(prestador.numero_prestador, "Guia-assinada-psicologo")}
                                         >
                                           <Upload className="h-3 w-3 mr-1" />
-                                          Assinada Psicologo
+                                          Baixar Psicólogo
                                         </Button>
-                                      </div>
-                                    )}
+                                      ) : (
+                                        <div className="relative group">
+                                          <input
+                                            type="file"
+                                            accept=".pdf"
+                                            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
+                                            onChange={(e) => {
+                                              const file = e.target.files?.[0];
+                                              if (file) {
+                                                handleImportGuia(patient.paciente_nome, prestador.numero_prestador, "Guia-assinada-psicologo", file);
+                                              }
+                                            }}
+                                          />
+                                          <Button 
+                                            size="sm" 
+                                            className="text-xs px-3 py-2 bg-white text-purple-700 border border-purple-200 group-hover:bg-purple-700 group-hover:text-white group-hover:border-purple-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer relative z-0"
+                                          >
+                                            <Upload className="h-3 w-3 mr-1" />
+                                            Assinada Psicologo
+                                          </Button>
+                                        </div>
+                                      )}
+                                    </div>
                                   </div>
 
                                   {/* Botão Faturar */}
@@ -2468,6 +2549,32 @@ const GuideControl: React.FC = () => {
           fetchData(); // Recarregar dados após edição (já restaura scroll)
         }}
       />
+
+      {/* Modal de confirmação para excluir guia */}
+      <AlertDialog open={excludeGuiaConfirmOpen} onOpenChange={(open) => { setExcludeGuiaConfirmOpen(open); if (!open) setExcludeGuiaPending(null); }}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir guia</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir a guia?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (!excludeGuiaPending) return;
+                await handleExcludeGuia(excludeGuiaPending.numeroPrestador, excludeGuiaPending.command);
+                setExcludeGuiaConfirmOpen(false);
+                setExcludeGuiaPending(null);
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 };
