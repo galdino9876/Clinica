@@ -60,6 +60,7 @@ const PatientsTable = () => {
   
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedPatient, setSelectedPatient] = useState(null);
+  const [patientDetailsFromApi, setPatientDetailsFromApi] = useState(null); // birthdate, nome_responsavel, telefone_responsavel da API apointment_patient
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
   const [isRecordsOpen, setIsRecordsOpen] = useState(false);
   const [isReferralOpen, setIsReferralOpen] = useState(false);
@@ -238,6 +239,7 @@ const PatientsTable = () => {
       color: "text-gray-600 hover:text-gray-800",
       onClick: (patient) => {
         setSelectedPatient(patient);
+        setPatientDetailsFromApi(null);
         setIsDetailsOpen(true);
       },
       visible: true,
@@ -881,22 +883,35 @@ const PatientsTable = () => {
           <DialogHeader>
             <DialogTitle>Detalhes do Paciente - {selectedPatient?.name || selectedPatient?.nome || "Carregando..."}</DialogTitle>
           </DialogHeader>
-          {selectedPatient && (
+          {selectedPatient && (() => {
+            const birthdate = patientDetailsFromApi?.birthdate ?? selectedPatient.birthdate;
+            const nomeResponsavel = patientDetailsFromApi?.nome_responsavel ?? selectedPatient.nome_responsavel;
+            const telefoneResponsavel = patientDetailsFromApi?.telefone_responsavel ?? selectedPatient.telefone_responsavel;
+            const age = birthdate ? (() => {
+              const d = new Date(birthdate);
+              if (isNaN(d.getTime())) return null;
+              const today = new Date();
+              let a = today.getFullYear() - d.getFullYear();
+              const m = today.getMonth() - d.getMonth();
+              if (m < 0 || (m === 0 && today.getDate() < d.getDate())) a--;
+              return a >= 0 ? a : null;
+            })() : null;
+            return (
             <div className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div className="space-y-1">
-                  <p className="text-sm font-medium text-gray-500">Nome</p>
+                  <p className="text-sm font-medium text-gray-500">Nome do paciente</p>
                   <p>{selectedPatient.name || selectedPatient.nome || "N/A"}</p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-gray-500">CPF</p>
                   <p>{selectedPatient.cpf || "N/A"}</p>
                 </div>
-                <div className="space-y-1">
-                  <p className="text-sm font-medium text-gray-500">Telefone</p>
-                  <div className="flex items-center gap-2">
-                    <p>{selectedPatient.phone || selectedPatient.telefone || "N/A"}</p>
-                    {(selectedPatient.phone || selectedPatient.telefone) && (
+                {(selectedPatient.phone || selectedPatient.telefone) && (
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-gray-500">Telefone do paciente</p>
+                    <div className="flex items-center gap-2">
+                      <p>{selectedPatient.phone || selectedPatient.telefone}</p>
                       <button
                         onClick={() => openWhatsApp(selectedPatient.phone || selectedPatient.telefone)}
                         className="text-green-600 hover:text-green-700 transition-colors"
@@ -904,41 +919,55 @@ const PatientsTable = () => {
                       >
                         <MessageCircle className="h-4 w-4" />
                       </button>
-                    )}
+                    </div>
                   </div>
-                </div>
+                )}
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-gray-500">E-mail</p>
                   <p>{selectedPatient.email || "N/A"}</p>
                 </div>
+                {age != null && (
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-gray-500">Idade</p>
+                    <p>{age} {age === 1 ? "Ano" : "Anos"}</p>
+                  </div>
+                )}
                 <div className="space-y-1">
                   <p className="text-sm font-medium text-gray-500">Status</p>
                   {renderStatus(selectedPatient.status || "Ativo")}
                 </div>
-                {/* Campos do responsável - só mostram se tiverem valores */}
-                {selectedPatient.nome_responsavel && selectedPatient.telefone_responsavel && (
+                {/* Responsável: nome_responsavel e telefone_responsavel (ex.: criança) - listar quando tiver valor */}
+                {(nomeResponsavel || telefoneResponsavel) && (
                   <div className="space-y-1 md:col-span-2">
                     <p className="text-sm font-medium text-gray-500">Responsável</p>
                     <div className="space-y-1">
-                      <p><span className="text-sm font-medium text-gray-500">Nome:</span> {selectedPatient.nome_responsavel}</p>
-                      <div className="flex items-center gap-2">
-                        <p><span className="text-sm font-medium text-gray-500">Telefone:</span> {selectedPatient.telefone_responsavel}</p>
-                        <button
-                          onClick={() => openWhatsApp(selectedPatient.telefone_responsavel)}
-                          className="text-green-600 hover:text-green-700 transition-colors"
-                          title="Abrir WhatsApp"
-                        >
-                          <MessageCircle className="h-4 w-4" />
-                        </button>
-                      </div>
+                      {nomeResponsavel && (
+                        <p><span className="text-sm font-medium text-gray-500">Nome do responsável:</span> {nomeResponsavel}</p>
+                      )}
+                      {telefoneResponsavel && (
+                        <div className="flex items-center gap-2">
+                          <p><span className="text-sm font-medium text-gray-500">Telefone do responsável:</span> {telefoneResponsavel}</p>
+                          <button
+                            onClick={() => openWhatsApp(telefoneResponsavel)}
+                            className="text-green-600 hover:text-green-700 transition-colors"
+                            title="Abrir WhatsApp"
+                          >
+                            <MessageCircle className="h-4 w-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 )}
               </div>
               <h3 className="text-lg font-semibold">Histórico de Consultas</h3>
-              <PatientAppointmentHistory patient={selectedPatient} />
+              <PatientAppointmentHistory
+                patient={selectedPatient}
+                onPatientDetailsLoaded={setPatientDetailsFromApi}
+              />
             </div>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

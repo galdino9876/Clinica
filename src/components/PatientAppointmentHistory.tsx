@@ -18,6 +18,7 @@ import {
 
 interface PatientAppointmentHistoryProps {
   patient: Patient;
+  onPatientDetailsLoaded?: (details: { birthdate?: string | null; nome_responsavel?: string | null; telefone_responsavel?: string | null }) => void;
 }
 
 interface PatientAppointment {
@@ -34,7 +35,18 @@ interface PatientAppointment {
   [key: string]: any; // Permitir outros campos que possam vir da API
 }
 
-const PatientAppointmentHistory = ({ patient }: PatientAppointmentHistoryProps) => {
+const getAgeFromBirthdate = (birthdate: string | null | undefined): number | null => {
+  if (!birthdate) return null;
+  const d = new Date(birthdate);
+  if (isNaN(d.getTime())) return null;
+  const today = new Date();
+  let age = today.getFullYear() - d.getFullYear();
+  const m = today.getMonth() - d.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < d.getDate())) age--;
+  return age >= 0 ? age : null;
+};
+
+const PatientAppointmentHistory = ({ patient, onPatientDetailsLoaded }: PatientAppointmentHistoryProps) => {
   const [appointments, setAppointments] = useState<PatientAppointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +54,11 @@ const PatientAppointmentHistory = ({ patient }: PatientAppointmentHistoryProps) 
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [pendingCancelId, setPendingCancelId] = useState<number | string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  const [patientDetailsFromApi, setPatientDetailsFromApi] = useState<{
+    birthdate?: string | null;
+    nome_responsavel?: string | null;
+    telefone_responsavel?: string | null;
+  } | null>(null);
 
   const fetchPatientAppointments = async (isRefresh = false) => {
     if (!patient?.id) return;
@@ -67,20 +84,40 @@ const PatientAppointmentHistory = ({ patient }: PatientAppointmentHistoryProps) 
       }
 
       const data = await response.json();
-      // Filtrar objetos vazios da resposta
-      const validAppointments = Array.isArray(data) 
-        ? data.filter(appointment => 
-            appointment && 
-            Object.keys(appointment).length > 0 && 
-            appointment.date // Verificar se tem pelo menos a propriedade date
-          ) 
-        : [];
-      
-      // Log para debug - verificar estrutura dos dados
-      if (validAppointments.length > 0) {
-        console.log('Estrutura do primeiro agendamento:', validAppointments[0]);
-        console.log('Todos os campos disponíveis:', Object.keys(validAppointments[0]));
-        console.log('Valores de todos os campos:', validAppointments[0]);
+      let validAppointments: PatientAppointment[] = [];
+      let details: { birthdate?: string | null; nome_responsavel?: string | null; telefone_responsavel?: string | null } = {};
+
+      if (Array.isArray(data)) {
+        validAppointments = data.filter((appointment: any) => 
+          appointment && 
+          Object.keys(appointment).length > 0 && 
+          appointment.date
+        );
+        const first = validAppointments[0] as any;
+        if (first && (first.birthdate != null || first.nome_responsavel != null || first.telefone_responsavel != null)) {
+          details = {
+            birthdate: first.birthdate ?? null,
+            nome_responsavel: first.nome_responsavel ?? null,
+            telefone_responsavel: first.telefone_responsavel ?? null,
+          };
+          setPatientDetailsFromApi(details);
+          onPatientDetailsLoaded?.(details);
+        }
+      } else if (data && typeof data === 'object') {
+        const list = data.appointments ?? data.data ?? data;
+        validAppointments = Array.isArray(list)
+          ? list.filter((appointment: any) => appointment && appointment.date)
+          : [];
+        const source = data.patient ?? data;
+        if (source.birthdate != null || source.nome_responsavel != null || source.telefone_responsavel != null) {
+          details = {
+            birthdate: source.birthdate ?? null,
+            nome_responsavel: source.nome_responsavel ?? null,
+            telefone_responsavel: source.telefone_responsavel ?? null,
+          };
+          setPatientDetailsFromApi(details);
+          onPatientDetailsLoaded?.(details);
+        }
       }
       
       setAppointments(validAppointments);
@@ -247,7 +284,6 @@ const PatientAppointmentHistory = ({ patient }: PatientAppointmentHistoryProps) 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h3 className="text-lg font-medium">Histórico de Consultas</h3>
         {refreshing && (
           <div className="flex items-center gap-2 text-sm text-gray-500">
             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
