@@ -8,6 +8,7 @@ import { FileText, AlertCircle, Calendar, Hash, CheckCircle2, XCircle } from "lu
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
+import { toast as sonnerToast } from "sonner";
 
 interface SolicitarGuiaModalProps {
   isOpen: boolean;
@@ -155,13 +156,56 @@ const SolicitarGuiaModal: React.FC<SolicitarGuiaModalProps> = ({
       }
 
       const result = await response.json();
-      console.log('Guia solicitada com sucesso:', result);
+      console.log('Resposta da API solicitar guia:', result);
 
-      toast({
-        title: "Sucesso",
-        description: "Guia solicitada com sucesso!",
-        variant: "default",
-      });
+      // A API pode retornar 200 com array de itens onde algum tem error (vários formatos possíveis)
+      const items = Array.isArray(result) ? result : [result];
+      const getErrorMessage = (item: any): string | null => {
+        if (!item?.error) return null;
+        const e = item.error;
+        if (typeof e === "string") return e;
+        if (e?.message && typeof e.message === "string") return e.message;
+        if (e?.error && typeof e.error === "string") return e.error;
+        if (e?.msg && typeof e.msg === "string") return e.msg;
+        if (e?.mensagem && typeof e.mensagem === "string") return e.mensagem;
+        return null;
+      };
+      const firstErrorItem = items.find((item: any) => getErrorMessage(item) != null);
+      const rawMessage = firstErrorItem ? getErrorMessage(firstErrorItem) : null;
+      if (rawMessage) {
+        let userMessage = rawMessage;
+        try {
+          const afterPrefix = rawMessage.replace(/^\s*\d+\s*-\s*/, "").trim();
+          const firstParse = JSON.parse(afterPrefix);
+          let obj: { error?: string } | null = null;
+          if (typeof firstParse === "string") {
+            obj = JSON.parse(firstParse.replace(/\\"/g, '"'));
+          } else if (firstParse && typeof firstParse === "object") {
+            obj = firstParse;
+          }
+          if (obj && typeof obj.error === "string") {
+            userMessage = obj.error;
+          }
+        } catch {
+          const match = rawMessage.match(/"error"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+          if (match && match[1]) {
+            userMessage = match[1].replace(/\\"/g, '"').trim();
+          } else if (rawMessage.length > 350) {
+            userMessage = rawMessage.substring(0, 350) + "...";
+          }
+        }
+        setError(userMessage);
+        toast({
+          title: "Erro ao solicitar guia",
+          description: userMessage,
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Resposta de sucesso (ex.: [{ "success": true }] ou sem erro) — alerta verde no canto inferior direito
+      sonnerToast.success("Guia solicitada com sucesso!");
 
       onSuccess();
       onClose();
