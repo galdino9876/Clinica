@@ -166,8 +166,10 @@ const useAppointmentData = (user: any, viewingDate: Date) => {
       const isUserPsychologist = isPsychologist(user?.role);
       const psychologistId = isUserPsychologist ? user.id : null;
 
-      // URLs fixas da API (sem caminhos específicos por psicólogo para evitar erros de rota)
-      const appointmentsUrl = `${baseUrl}/appointmens`;
+      // Para psicólogo usar endpoint específico; para admin/recepção manter endpoint geral
+      const appointmentsUrl = isUserPsychologist
+        ? `${baseUrl}/appointments_psyc`
+        : `${baseUrl}/appointmens`;
       const urls = {
         workingHours: `${baseUrl}/working_hours`,
         patients: `${baseUrl}/patients`,
@@ -1356,7 +1358,7 @@ const AppointmentCalendar = ({ alertas = [] }: { alertas?: AlertaItem[] }) => {
             psychologists.map(async (psych: any) => {
               try {
                 const workingHoursResponse = await fetch(
-                  `https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/working_hours/${psych.id}`
+                  `https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/working_hours/${psych.id}?date=${dateString}`
                 );
 
                 if (workingHoursResponse.ok) {
