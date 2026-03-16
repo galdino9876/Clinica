@@ -16,6 +16,7 @@ import {
 import AppointmentForm from "./AppointmentForm";
 import { useToast } from "@/components/ui/use-toast";
 import { isPsychologist } from "@/utils/roleUtils";
+import { toYearMonth } from "@/utils/dateUtils";
 
 // Tipos para melhorar a tipagem
 interface Appointment {
@@ -83,6 +84,22 @@ interface TimeSlot {
   }>;
 }
 
+// Tipo para item da API ALERTA (usado para exibir status da guia no card de agendamento)
+export interface AlertaItem {
+  appointment_id?: number;
+  patient_id?: number;
+  datas?: Array<{
+    data: string;
+    numero_prestador?: string | number | null;
+    existe_guia_assinada?: number | string;
+  }>;
+}
+
+export interface GuiaInfo {
+  numero_prestador: string | number | null;
+  existe_guia_assinada?: number | string;
+}
+
 // Constantes para melhorar manutenibilidade
 const STATUS_COLORS = {
   pending: 'bg-amber-500',
@@ -116,8 +133,8 @@ const DAY_STATUS_COLORS = {
 
 const DAYS_OF_WEEK = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'] as const;
 
-// Hook customizado para gerenciar dados da API
-const useAppointmentData = (user: any) => {
+// Hook customizado para gerenciar dados da API (viewingDate = mês exibido no calendário)
+const useAppointmentData = (user: any, viewingDate: Date) => {
   const [data, setData] = useState({
     appointments: [] as Appointment[],
     workingHours: [] as WorkingHour[],
@@ -128,6 +145,8 @@ const useAppointmentData = (user: any) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const viewingYearMonth = toYearMonth(viewingDate);
 
   const fetchData = useCallback(async () => {
     // Cancelar requisição anterior se existir
@@ -148,10 +167,10 @@ const useAppointmentData = (user: any) => {
       const psychologistId = isUserPsychologist ? user.id : null;
 
       // URLs baseadas no role do usuário
+      const appointmentsUrl = psychologistId
+        ? `${baseUrl}/d52c9494-5de9-4444-877e-9e8d01662962/appointmens/${psychologistId}`
+        : `${baseUrl}/appointmens`;
       const urls = {
-        appointments: psychologistId
-          ? `${baseUrl}/d52c9494-5de9-4444-877e-9e8d01662962/appointmens/${psychologistId}`
-          : `${baseUrl}/appointmens`,
         workingHours: psychologistId
           ? `${baseUrl}/d52c9494-5de9-4444-877e-9e8d01662962/working_hours/${psychologistId}`
           : `${baseUrl}/working_hours`,
@@ -160,11 +179,16 @@ const useAppointmentData = (user: any) => {
         rooms: `${baseUrl}/consulting_rooms`
       };
 
-      // Fetch paralelo para melhor performance com timeout
+      // Fetch paralelo: appointments via POST com filtro de mês; demais via GET
       const timeoutId = setTimeout(() => abortControllerRef.current?.abort(), 30000); // 30s timeout
 
       const [appointmentsRes, workingHoursRes, patientsRes, usersRes, roomsRes] = await Promise.all([
-        fetch(urls.appointments, { signal: abortControllerRef.current.signal }),
+        fetch(appointmentsUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date: viewingYearMonth }),
+          signal: abortControllerRef.current.signal
+        }),
         fetch(urls.workingHours, { signal: abortControllerRef.current.signal }),
         fetch(urls.patients, { signal: abortControllerRef.current.signal }),
         fetch(urls.users, { signal: abortControllerRef.current.signal }),
@@ -241,7 +265,7 @@ const useAppointmentData = (user: any) => {
     } finally {
       setLoading(false);
     }
-  }, [user]);
+  }, [user, viewingYearMonth]);
 
   useEffect(() => {
     fetchData();
@@ -451,7 +475,8 @@ const TimeSlot = ({
   onEditAppointment,
   toast,
   formatDisplayDate,
-  onRescheduleSuccess
+  onRescheduleSuccess,
+  getGuiaInfoForAppointment
 }: {
   slot: TimeSlot;
   getPatientName: (id: string) => string;
@@ -465,6 +490,7 @@ const TimeSlot = ({
   toast: any;
   formatDisplayDate: (dateString: string) => string;
   onRescheduleSuccess: () => Promise<void>;
+  getGuiaInfoForAppointment?: (appointment: Appointment) => GuiaInfo | null;
 }) => (
   <div className="border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow">
     <div className="bg-gradient-to-r from-gray-50 to-gray-100 px-4 py-3 border-b border-gray-200">
@@ -481,6 +507,7 @@ const TimeSlot = ({
             <AppointmentCard
               key={aptIndex}
               appointment={apt}
+              guiaInfo={getGuiaInfoForAppointment?.(apt) ?? null}
               getPatientName={getPatientName}
               getPsychologistName={getPsychologistName}
               getRoomName={getRoomName}
@@ -616,6 +643,7 @@ const TimeSlot = ({
 // Componente para um card de agendamento
 const AppointmentCard = React.memo(({
   appointment,
+  guiaInfo = null,
   getPatientName,
   getPsychologistName,
   getRoomName,
@@ -628,6 +656,7 @@ const AppointmentCard = React.memo(({
   onRescheduleSuccess
 }: {
   appointment: Appointment;
+  guiaInfo?: GuiaInfo | null;
   getPatientName: (id: string) => string;
   getPsychologistName: (id: string) => string;
   getRoomName: (roomId: string | null | undefined) => string;
@@ -664,6 +693,23 @@ const AppointmentCard = React.memo(({
   const getGuiaColor = useCallback((guia?: string | null) => {
     return guia ? 'text-gray-800' : 'text-red-600';
   }, []);
+
+  // Texto e cor da guia conforme dados do ALERTA (numero_prestador + existe_guia_assinada)
+  const guiaDisplay = (() => {
+    if (guiaInfo != null) {
+      const num = guiaInfo.numero_prestador;
+      const hasNum = num != null && num !== '' && String(num).toLowerCase() !== 'null';
+      const assinada = guiaInfo.existe_guia_assinada === 1 || guiaInfo.existe_guia_assinada === '1' || Number(guiaInfo.existe_guia_assinada) === 1;
+      if (!hasNum) return { text: 'FALTA GUIA', className: 'text-red-600', suffix: null as string | null, suffixClassName: '' };
+      if (assinada) return { text: `GUIA: ${num} ATENDIMENTO AUTORIZADO`, className: 'text-green-600', suffix: null as string | null, suffixClassName: '' };
+      // NÃO DEVOLVIDA: número em cinza, "NÃO DEVOLVIDA" em vermelho
+      return { text: `GUIA: ${num}`, className: 'text-gray-800', suffix: ' NÃO DEVOLVIDA', suffixClassName: 'text-red-600' };
+    }
+    const guia = (appointment as any).guia;
+    const hasGuia = guia != null && guia !== '' && String(guia).toLowerCase() !== 'null';
+    const fallback = hasGuia ? { text: `GUIA: ${guia}`, className: getGuiaColor(guia) } : { text: 'Falta Guia', className: 'text-red-600' };
+    return { ...fallback, suffix: null as string | null, suffixClassName: '' };
+  })();
 
   const handleConfirm = async () => {
     if (isUpdating) return;
@@ -1077,9 +1123,10 @@ const AppointmentCard = React.memo(({
         {/* Botão Editar no canto superior direito */}
         {userRole && userRole !== "psychologist" && (
           <div className="flex flex-col items-end gap-2">
-            {/* Exibir guia acima do botão Editar independente do status */}
-            <div className={`text-xs font-medium ${getGuiaColor((appointment as any).guia)}`}>
-              {((appointment as any).guia) ? `GUIA: ${(appointment as any).guia}` : 'Falta Guia'}
+            {/* Exibir guia acima do botão Editar: ALERTA (numero_prestador + existe_guia_assinada) ou fallback do appointment.guia */}
+            <div className="text-xs font-medium">
+              <span className={guiaDisplay.className}>{guiaDisplay.text}</span>
+              {guiaDisplay.suffix != null && <span className={guiaDisplay.suffixClassName}>{guiaDisplay.suffix}</span>}
             </div>
             <button
               onClick={handleEdit}
@@ -1107,8 +1154,19 @@ const AppointmentCard = React.memo(({
 
 AppointmentCard.displayName = 'AppointmentCard';
 
+// Converte data YYYY-MM-DD para DD/MM/YYYY (formato usado em alert.datas[].data)
+const dateToDDMMYYYY = (dateStr: string): string => {
+  if (!dateStr) return '';
+  const parts = dateStr.split(/[-/]/);
+  if (parts.length >= 3) {
+    const [y, m, d] = dateStr.includes('-') ? [parts[0], parts[1], parts[2]] : [parts[2], parts[1], parts[0]];
+    return `${d.padStart(2, '0')}/${m.padStart(2, '0')}/${y}`;
+  }
+  return dateStr;
+};
+
 // Componente principal do calendário
-const AppointmentCalendar = () => {
+const AppointmentCalendar = ({ alertas = [] }: { alertas?: AlertaItem[] }) => {
   const { user } = useAuth();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<number | null>(null);
@@ -1127,7 +1185,7 @@ const AppointmentCalendar = () => {
   const [editPlano, setEditPlano] = useState('');
   const [editValor, setEditValor] = useState('');
 
-  const { appointments, workingHours, patients, users, rooms, loading, error, refetch } = useAppointmentData(user);
+  const { appointments, workingHours, patients, users, rooms, loading, error, refetch } = useAppointmentData(user, currentDate);
   const { formatDate, getDaysInMonth, getFirstDayOfMonth, formatDisplayDate } = useDateUtils();
   const { getDayStatus } = useDayStatus(appointments, workingHours);
   const { toast } = useToast();
@@ -1205,6 +1263,30 @@ const AppointmentCalendar = () => {
     const room = rooms.find(r => r.id === roomId);
     return room ? room.name : `Sala ${roomId}`;
   }, [rooms]);
+
+  // Obtém numero_prestador e existe_guia_assinada do ALERTA para um agendamento (para exibição da guia)
+  // Faz match por appointment_id ou, se não achar, por patient_id + data
+  const getGuiaInfoForAppointment = useCallback((appointment: Appointment): GuiaInfo | null => {
+    if (!alertas?.length) return null;
+    const aptDate = appointment.date || appointment.appointment_date || appointment.scheduled_date || '';
+    const aptDateDDMM = dateToDDMMYYYY(aptDate);
+    if (!aptDateDDMM) return null;
+    const aptId = typeof appointment.id === 'string' ? parseInt(appointment.id, 10) : appointment.id;
+    const patientId = typeof appointment.patient_id === 'string' ? parseInt(appointment.patient_id, 10) : appointment.patient_id;
+    let alert = alertas.find(a => a.appointment_id != null && Number(a.appointment_id) === aptId);
+    if (!alert && !Number.isNaN(patientId)) {
+      alert = alertas.find(a => a.patient_id != null && Number(a.patient_id) === patientId);
+    }
+    if (!alert?.datas?.length) return null;
+    const dataItem = alert.datas.find(d => d.data === aptDateDDMM);
+    if (!dataItem) return null;
+    const num = dataItem.numero_prestador;
+    const hasNum = num != null && num !== '' && String(num).toLowerCase() !== 'null';
+    return {
+      numero_prestador: hasNum ? num : null,
+      existe_guia_assinada: dataItem.existe_guia_assinada,
+    };
+  }, [alertas]);
 
   const navigateMonth = useCallback((direction: number) => {
     setCurrentDate(prev => {
@@ -1931,6 +2013,7 @@ const AppointmentCalendar = () => {
                         toast={toast}
                         formatDisplayDate={formatDisplayDate}
                         onRescheduleSuccess={handleRescheduleSuccess}
+                        getGuiaInfoForAppointment={getGuiaInfoForAppointment}
                       />
                     ))}
                   </div>

@@ -13,6 +13,7 @@ import SolicitarGuiaModal from "@/components/SolicitarGuiaModal";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
+import { toYearMonth } from "@/utils/dateUtils";
 
 type AlertWebhookItem = {
   paciente_nome: string;
@@ -278,14 +279,16 @@ const Index = () => {
     return Array.from(patientsMap.values());
   };
 
-  // Função auxiliar para corrigir status de agendamento baseado nos appointments reais
+  // Função auxiliar para corrigir status de agendamento baseado nos appointments reais (mês atual)
   const correctAppointmentStatus = async (alertItems: AlertWebhookItem[]): Promise<AlertWebhookItem[]> => {
     try {
+      const dateFilter = toYearMonth(new Date());
       const appointmentsResponse = await fetch(
         "https://webhook.essenciasaudeintegrada.com.br/webhook/appointmens",
         {
-          method: "GET",
+          method: "POST",
           headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ date: dateFilter }),
         }
       );
       
@@ -293,7 +296,8 @@ const Index = () => {
         return alertItems; // Retornar sem alterações se falhar
       }
       
-      const appointments = await appointmentsResponse.json();
+      const rawAppointments = await appointmentsResponse.json();
+      const appointments = Array.isArray(rawAppointments) ? rawAppointments : (rawAppointments?.data ?? []);
       
       // Criar um mapa de appointments por patient_id e data
       // Formato: Map<patient_id, Map<date_YYYY-MM-DD, appointment>>
@@ -593,15 +597,16 @@ const Index = () => {
     }
   };
 
-  // Função para buscar agendamento completo pelo ID (para obter psychologist_id)
+  // Função para buscar agendamento completo pelo ID (para obter psychologist_id) — mês atual
   const fetchAppointmentById = async (appointmentId: number) => {
     try {
-      // Buscar todos os agendamentos e filtrar pelo ID
+      const dateFilter = toYearMonth(new Date());
       const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/appointmens', {
-        method: 'GET',
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
+        body: JSON.stringify({ date: dateFilter }),
       });
 
       if (!response.ok) {
@@ -610,7 +615,7 @@ const Index = () => {
       }
 
       const data = await response.json();
-      const appointments = Array.isArray(data) ? data : [];
+      const appointments = Array.isArray(data) ? data : (data?.data ?? []);
       
       // Encontrar o agendamento pelo ID
       const appointment = appointments.find((apt: any) => apt.id === appointmentId || String(apt.id) === String(appointmentId));
@@ -820,7 +825,7 @@ const Index = () => {
   return (
     <Layout>
       <div className="w-full max-w-6xl mx-auto">
-        <AppointmentCalendar />
+        <AppointmentCalendar alertas={alertItems} />
       </div>
 
       {showAlertModal && canViewAlerts && (

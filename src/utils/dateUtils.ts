@@ -46,3 +46,12 @@ export const formatDateForDisplay = (dateString: string): string => {
 export const isBusinessDay = (date: Date): boolean => {
   return !isSaturday(date) && !isSunday(date);
 };
+
+/**
+ * Retorna ano e mês no formato "YYYY-MM" (ex: "2026-02")
+ */
+export const toYearMonth = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+};
