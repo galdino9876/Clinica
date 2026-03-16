@@ -703,21 +703,49 @@ const AppointmentCard = React.memo(({
     return guia ? 'text-gray-800' : 'text-red-600';
   }, []);
 
-  // Texto e cor da guia conforme dados do ALERTA (numero_prestador + existe_guia_assinada)
+  // Texto e cor da guia conforme dados do ALERTA ou diretamente do agendamento (guia + existe_guia_assinada)
   const guiaDisplay = (() => {
     if (guiaInfo != null) {
       const num = guiaInfo.numero_prestador;
       const hasNum = num != null && num !== '' && String(num).toLowerCase() !== 'null';
       const assinada = guiaInfo.existe_guia_assinada === 1 || guiaInfo.existe_guia_assinada === '1' || Number(guiaInfo.existe_guia_assinada) === 1;
-      if (!hasNum) return { text: 'FALTA GUIA', className: 'text-red-600', suffix: null as string | null, suffixClassName: '' };
-      if (assinada) return { text: `GUIA: ${num} ATENDIMENTO AUTORIZADO`, className: 'text-green-600', suffix: null as string | null, suffixClassName: '' };
-      // NÃO DEVOLVIDA: número em cinza, "NÃO DEVOLVIDA" em vermelho
-      return { text: `GUIA: ${num}`, className: 'text-gray-800', suffix: ' NÃO DEVOLVIDA', suffixClassName: 'text-red-600' };
+      if (!hasNum) {
+        return { text: 'FALTA GUIA', className: 'text-red-600', suffix: null as string | null, suffixClassName: '' };
+      }
+      if (assinada) {
+        return { text: `GUIA: ${num}`, className: 'text-green-600', suffix: 'ATENDIMENTO AUTORIZADO', suffixClassName: 'text-green-600' };
+      }
+      // NÃO DEVOLVIDA
+      return { text: `GUIA: ${num}`, className: 'text-red-600', suffix: 'GUIA NÃO DEVOLVIDA', suffixClassName: 'text-red-600' };
     }
+    // Fallback: usar campos que vêm direto da API do agendamento (guia + existe_guia_assinada)
     const guia = (appointment as any).guia;
+    const existeGuiaAssinada = (appointment as any).existe_guia_assinada;
     const hasGuia = guia != null && guia !== '' && String(guia).toLowerCase() !== 'null';
-    const fallback = hasGuia ? { text: `GUIA: ${guia}`, className: getGuiaColor(guia) } : { text: 'Falta Guia', className: 'text-red-600' };
-    return { ...fallback, suffix: null as string | null, suffixClassName: '' };
+    const assinada =
+      existeGuiaAssinada === 1 ||
+      existeGuiaAssinada === '1' ||
+      Number(existeGuiaAssinada) === 1;
+
+    if (!hasGuia) {
+      return { text: 'FALTA GUIA', className: 'text-red-600', suffix: null as string | null, suffixClassName: '' };
+    }
+
+    if (assinada) {
+      return {
+        text: `GUIA: ${guia}`,
+        className: 'text-green-600',
+        suffix: 'ATENDIMENTO AUTORIZADO',
+        suffixClassName: 'text-green-600'
+      };
+    }
+
+    return {
+      text: `GUIA: ${guia}`,
+      className: 'text-red-600',
+      suffix: 'GUIA NÃO DEVOLVIDA',
+      suffixClassName: 'text-red-600'
+    };
   })();
 
   const handleConfirm = async () => {
@@ -886,9 +914,15 @@ const AppointmentCard = React.memo(({
                   <span className="text-xs text-gray-500 uppercase tracking-wide font-medium">
                     Plano
                   </span>
-                  <p className="font-semibold text-gray-900">
-                    {(appointment as any).insurance_type || "Particular"}
-                  </p>
+                  {(() => {
+                    const plano = (appointment as any).insurance_type || "Particular";
+                    const isParticular = String(plano).toLowerCase() === "particular";
+                    return (
+                      <p className={`font-semibold ${isParticular ? "text-green-600" : "text-gray-900"}`}>
+                        {isParticular ? "PARTICULAR" : plano}
+                      </p>
+                    );
+                  })()}
                 </div>
               </div>
             </div>
@@ -1129,31 +1163,37 @@ const AppointmentCard = React.memo(({
           </AlertDialog>
         </div>
 
-        {/* Botão Editar no canto superior direito */}
-        {userRole && userRole !== "psychologist" && (
+        {/* Canto superior direito: informação de GUIA sempre visível; botão Editar apenas para não-psicólogos */}
+        {userRole && (
           <div className="flex flex-col items-end gap-2">
-            {/* Exibir guia acima do botão Editar: ALERTA (numero_prestador + existe_guia_assinada) ou fallback do appointment.guia */}
-            <div className="text-xs font-medium">
-              <span className={guiaDisplay.className}>{guiaDisplay.text}</span>
-              {guiaDisplay.suffix != null && <span className={guiaDisplay.suffixClassName}>{guiaDisplay.suffix}</span>}
-            </div>
-            <button
-              onClick={handleEdit}
-              disabled={isUpdating}
-              className="text-sm text-purple-600 hover:text-purple-800 disabled:text-gray-400 px-2 py-1 rounded-md transition-colors duration-200 focus:outline-none focus:ring-1 focus:ring-purple-400 disabled:cursor-not-allowed"
-              aria-label={`Editar agendamento de ${getPatientName(
-                appointment.patient_id
-              )}`}
-            >
-              {isUpdating ? (
-                <div className="flex items-center">
-                  <Loader2 className="animate-spin h-3 w-3 mr-1" />
-                  Editando...
-                </div>
-              ) : (
-                "Editar"
+            {/* Exibir guia: ALERTA (numero_prestador + existe_guia_assinada) ou fallback do appointment.guia */}
+            <div className="text-xs font-medium text-right">
+              <div className={guiaDisplay.className}>{guiaDisplay.text}</div>
+              {guiaDisplay.suffix != null && (
+                <div className={guiaDisplay.suffixClassName}>{guiaDisplay.suffix}</div>
               )}
-            </button>
+            </div>
+
+            {/* Botão Editar apenas para admin/recepção */}
+            {userRole !== "psychologist" && (
+              <button
+                onClick={handleEdit}
+                disabled={isUpdating}
+                className="text-sm text-purple-600 hover:text-purple-800 disabled:text-gray-400 px-2 py-1 rounded-md transition-colors duration-200 focus:outline-none focus:ring-1 focus:ring-purple-400 disabled:cursor-not-allowed"
+                aria-label={`Editar agendamento de ${getPatientName(
+                  appointment.patient_id
+                )}`}
+              >
+                {isUpdating ? (
+                  <div className="flex items-center">
+                    <Loader2 className="animate-spin h-3 w-3 mr-1" />
+                    Editando...
+                  </div>
+                ) : (
+                  "Editar"
+                )}
+              </button>
+            )}
           </div>
         )}
       </div>
