@@ -47,21 +47,23 @@ const PendingConfirmations = () => {
       setLoading(true);
       setError(null);
       
-      // Calcular o próximo dia útil
+      // Calcular o próximo dia útil apenas para exibição (o backend já filtra hoje + amanhã)
       const targetDate = getNextBusinessDay();
       setNextBusinessDay(targetDate);
       
-      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/appointmens');
+      // Backend agora retorna diretamente hoje + amanhã via GET /confirmacao
+      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/confirmacao');
       
       if (!response.ok) {
         throw new Error(`Erro ao buscar dados: ${response.status}`);
       }
       
-      const data: WebhookAppointment[] = await response.json();
+      const rawData = await response.json();
+      const data: WebhookAppointment[] = Array.isArray(rawData) ? rawData : (rawData.data || []);
       
-      // Filtrar apenas appointments do próximo dia útil com status pending
+      // Backend já traz hoje + amanhã; aqui filtramos apenas por status pending
       const filteredAppointments = data.filter(
-        (app) => app.status === "pending" && app.date === targetDate
+        (app) => app.status === "pending"
       );
       
       // Remover duplicatas baseado no ID para evitar chaves duplicadas

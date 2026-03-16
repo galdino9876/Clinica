@@ -75,13 +75,15 @@ const AppointmentsDashboard = () => {
     try {
       setLoading(true);
       
-      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/appointmens');
+      // Usar o mesmo endpoint de confirmações, que já retorna hoje + amanhã
+      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/confirmacao');
       
       if (!response.ok) {
         throw new Error(`Erro ao buscar dados: ${response.status}`);
       }
       
-      const appointments: any[] = await response.json();
+      const raw = await response.json();
+      const appointments: any[] = Array.isArray(raw) ? raw : (raw.data || []);
       
       const todayDate = getTodayDate();
       const tomorrowDate = getTomorrowDate();
