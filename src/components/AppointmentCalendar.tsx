@@ -166,14 +166,10 @@ const useAppointmentData = (user: any, viewingDate: Date) => {
       const isUserPsychologist = isPsychologist(user?.role);
       const psychologistId = isUserPsychologist ? user.id : null;
 
-      // URLs baseadas no role do usuário
-      const appointmentsUrl = psychologistId
-        ? `${baseUrl}/d52c9494-5de9-4444-877e-9e8d01662962/appointmens/${psychologistId}`
-        : `${baseUrl}/appointmens`;
+      // URLs fixas da API (sem caminhos específicos por psicólogo para evitar erros de rota)
+      const appointmentsUrl = `${baseUrl}/appointmens`;
       const urls = {
-        workingHours: psychologistId
-          ? `${baseUrl}/d52c9494-5de9-4444-877e-9e8d01662962/working_hours/${psychologistId}`
-          : `${baseUrl}/working_hours`,
+        workingHours: `${baseUrl}/working_hours`,
         patients: `${baseUrl}/patients`,
         users: `${baseUrl}/users`,
         rooms: `${baseUrl}/consulting_rooms`
@@ -186,7 +182,11 @@ const useAppointmentData = (user: any, viewingDate: Date) => {
         fetch(appointmentsUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ date: viewingYearMonth }),
+          body: JSON.stringify({
+            date: viewingYearMonth,
+            // Quando for psicólogo, envia o ID para filtrar no backend (quando suportado)
+            psychologist_id: psychologistId ?? undefined
+          }),
           signal: abortControllerRef.current.signal
         }),
         fetch(urls.workingHours, { signal: abortControllerRef.current.signal }),
@@ -212,7 +212,7 @@ const useAppointmentData = (user: any, viewingDate: Date) => {
       ]);
 
       // Validar e normalizar os dados dos agendamentos
-      const normalizedAppointments = (Array.isArray(appointmentsData) ? appointmentsData : appointmentsData.data || [])
+      let normalizedAppointments = (Array.isArray(appointmentsData) ? appointmentsData : appointmentsData.data || [])
         .filter(apt => apt && apt.id) // Filtrar dados inválidos
         .map(apt => {
           return {
@@ -229,6 +229,13 @@ const useAppointmentData = (user: any, viewingDate: Date) => {
             value: Math.max(0, parseFloat(String(apt.value || apt.price || 0)) || 0)
           };
         });
+
+      // Se o usuário for psicólogo, garantir filtro por ID do psicólogo no frontend
+      if (isUserPsychologist && psychologistId) {
+        normalizedAppointments = normalizedAppointments.filter(
+          (apt: any) => String(apt.psychologist_id) === String(psychologistId)
+        );
+      }
 
       // Verificar se há duplicação por ID
       const appointmentIds = normalizedAppointments.map(apt => apt.id);
