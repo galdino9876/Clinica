@@ -80,7 +80,7 @@ const FinanceCharts = () => {
   const { toast } = useToast();
   
   // Estados para relatórios
-  const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>("year");
+  const [filterPeriod, setFilterPeriod] = useState<FilterPeriod>("month");
   const [selectedPsychologist, setSelectedPsychologist] = useState<string>("all");
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date());
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
