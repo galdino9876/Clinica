@@ -344,15 +344,17 @@ const GuideControl: React.FC = () => {
           const parsed = JSON.parse(patient.prestadores);
           const prestadoresData: PrestadorData[] = normalizePrestadoresData(parsed);
           hasGuide = prestadoresData.length > 0;
+
+          // Mesma regra do filtro "guias-nao-assinadas": pacientes com todas as guias sem assinatura do psicólogo
+          if (prestadoresData.length > 0 && prestadoresData.every(p => p.existe_guia_assinada_psicologo === 0)) {
+            totalGuiasSemAssinatura++;
+          }
           
           // Filtrar prestadores pelo mês selecionado
           const prestadoresDoMes = filterPrestadoresByMonth(prestadoresData, patient);
           
-          // Contar guias sem assinatura, prontas para faturar e faturadas apenas do mês selecionado
+          // Contar prontas para faturar e faturadas apenas do mês selecionado
           prestadoresDoMes.forEach(prestador => {
-            if (prestador.existe_guia_assinada_psicologo === 0) {
-              totalGuiasSemAssinatura++; // Conta apenas as sem assinatura (=== 0)
-            }
             if (prestador.existe_guia_assinada_psicologo === 1 && prestador.faturado === 0) {
               totalGuiasAssinadasPsicologo++; // Conta apenas as assinadas pelo psicólogo e não faturadas (prontas para faturar)
             }
