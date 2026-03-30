@@ -42,6 +42,10 @@ const getShortName = (fullName: string | null | undefined): string => {
   return `${names[0]} ${names[1]}`;
 };
 
+const normalizeInsuranceType = (insuranceType?: string | null): string => {
+  return (insuranceType || "").trim().toUpperCase();
+};
+
 const PatientsTable = () => {
   const { user } = useAuth(); // Adicionado para obter o usuário autenticado
   const [patients, setPatients] = useState([]);
@@ -230,6 +234,31 @@ const PatientsTable = () => {
   const totalPatients = filteredPatients.length;
   const activePatients = filteredPatients.filter(p => p.active !== 0 && p.active !== false).length;
   const inactivePatients = filteredPatients.filter(p => p.active === 0 || p.active === false).length;
+  const insurancePlanCounts = isPsychologist
+    ? []
+    : (() => {
+        const map = new Map<string, { displayLabel: string; count: number }>();
+        for (const p of filteredPatients) {
+          const isActive = p.active !== 0 && p.active !== false;
+          if (!isActive) continue;
+          const raw = (p.insurance_type ?? "").trim();
+          const key = raw ? normalizeInsuranceType(raw) : "__EMPTY__";
+          const displayLabel = raw || "Sem plano";
+          const existing = map.get(key);
+          if (existing) {
+            existing.count += 1;
+          } else {
+            map.set(key, { displayLabel, count: 1 });
+          }
+        }
+        return Array.from(map.values()).sort((a, b) =>
+          a.displayLabel.localeCompare(b.displayLabel, "pt", { sensitivity: "base" })
+        );
+      })();
+  const insurancePlanSummary =
+    !isPsychologist && insurancePlanCounts.length > 0
+      ? `Ativos por plano — ${insurancePlanCounts.map((item) => `${item.displayLabel}: ${item.count}`).join(" | ")}`
+      : "";
 
   const actions = [
     {
@@ -582,6 +611,7 @@ const PatientsTable = () => {
               <h2 className="text-lg md:text-xl font-semibold text-gray-800">Pacientes</h2>
               <div className="text-xs md:text-sm text-gray-600 mt-1">
                 Total: {totalPatients} | Ativos: {activePatients}
+                {insurancePlanSummary ? ` | ${insurancePlanSummary}` : ""}
               </div>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
@@ -629,6 +659,7 @@ const PatientsTable = () => {
                   </div>
                 </th>
                 {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">CPF</th> */}
+                <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Plano</th>
                 <th className="px-3 md:px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Telefone</th>
                 {/* <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Email</th> */}
                 {isAdmin && (
@@ -642,7 +673,7 @@ const PatientsTable = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {filteredPatients.length === 0 ? (
                 <tr>
-                  <td colSpan={isAdmin ? 6 : 5} className="px-6 py-4 text-center text-gray-500">Nenhum paciente encontrado</td>
+                  <td colSpan={isAdmin ? 7 : 6} className="px-6 py-4 text-center text-gray-500">Nenhum paciente encontrado</td>
                 </tr>
               ) : (
                 sortedFilteredPatients.map((patient, index) => {
@@ -659,7 +690,7 @@ const PatientsTable = () => {
                     <>
                       {isFirstInactive && inactivePatients > 0 && (
                         <tr key={`inactive-header-${index}`} className="bg-gray-100">
-                          <td colSpan={isAdmin ? 6 : 5} className="px-6 py-3 text-center">
+                          <td colSpan={isAdmin ? 7 : 6} className="px-6 py-3 text-center">
                             <div className="text-sm font-semibold text-gray-700">
                               Pacientes Inativos: {inactivePatients}
                             </div>
@@ -669,6 +700,9 @@ const PatientsTable = () => {
                       <tr key={patient.id || index} className={`hover:bg-gray-50 ${isInactive ? "bg-gray-200 opacity-75" : ""}`}>
                     <td className={`px-3 md:px-6 py-4 whitespace-nowrap text-xs md:text-sm font-medium ${isInactive ? "text-gray-500" : "text-gray-900"}`}>{patient.name || patient.nome || "N/A"}</td>
                     {/* <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{patient.cpf || "N/A"}</td> */}
+                    <td className={`px-3 md:px-6 py-4 whitespace-nowrap text-xs md:text-sm ${isInactive ? "text-gray-500" : "text-gray-900"}`}>
+                      {patient.insurance_type || "N/A"}
+                    </td>
                     <td className={`px-3 md:px-6 py-4 whitespace-nowrap text-xs md:text-sm ${isInactive ? "text-gray-500" : "text-gray-900"}`}>
                       {(patient.phone || patient.telefone) ? (
                         <div className="flex items-center gap-2">
@@ -772,6 +806,12 @@ const PatientsTable = () => {
                           {patient.name || patient.nome || "N/A"}
                         </h3>
                         <div className="mt-1 space-y-1">
+                          <div>
+                            <span className="text-xs text-gray-500">Insurance: </span>
+                            <span className={`text-sm ${isInactive ? "text-gray-500" : "text-gray-900"}`}>
+                              {patient.insurance_type || "N/A"}
+                            </span>
+                          </div>
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-gray-500">Telefone:</span>
                             {(patient.phone || patient.telefone) ? (
@@ -846,6 +886,7 @@ const PatientsTable = () => {
         <div className="bg-gray-50 px-3 md:px-6 py-3 border-t border-gray-200">
           <div className="text-xs md:text-sm text-gray-700 text-center md:text-left">
             Total de pacientes: {totalPatients} | Ativos: {activePatients} | Inativos: {inactivePatients}
+            {insurancePlanSummary ? ` | ${insurancePlanSummary}` : ""}
           </div>
         </div>
       </div>
