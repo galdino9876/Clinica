@@ -186,6 +186,21 @@ const GuideControl: React.FC = () => {
     }));
   };
 
+  /**
+   * Filtro "Falta guia Ass. do Psic." (guias-nao-assinadas):
+   * - Lista: paciente entra se algum prestador (no mês) tem número válido e existe_guia_assinada_psicologo === 0.
+   * - Card: só blocos com === 0; sem número de prestador não entra.
+   * Valor numérico === 0 = falta assinatura; === 1 = ok para este critério.
+   */
+  const faltaAssinaturaGuiaPsicologo = (existe: unknown): boolean => Number(existe) === 0;
+
+  const hasNumeroPrestadorValido = (prestador: PrestadorData): boolean => {
+    const n = prestador.numero_prestador;
+    if (n === null || n === undefined) return false;
+    const s = String(n).trim();
+    return s !== "" && s !== "null" && s !== "undefined";
+  };
+
   // Função para obter a cor do badge baseado no status da guia
   const getStatusGuiaColor = (status: string | null | undefined): string => {
     if (!status) return "bg-gray-100 text-gray-700";
@@ -259,7 +274,7 @@ const GuideControl: React.FC = () => {
 
   // Função para filtrar prestadores com base no mês selecionado
   const filterPrestadoresByMonth = (prestadoresData: PrestadorData[], patient: PatientData): PrestadorData[] => {
-    return prestadoresData.filter(prestador => {
+    return prestadoresData.filter((prestador) => {
       // Verificar se alguma data do prestador está no mês selecionado
       // IMPORTANTE: Só considera datas que têm o numero_prestador IGUAL ao prestador atual
       const hasDataInSelectedMonth = patient.datas?.some(data => {
@@ -276,6 +291,42 @@ const GuideControl: React.FC = () => {
     });
   };
 
+  /** Prestadores do mês (mesma lógica do card: mês + fallback por datas em patient.datas). */
+  const resolvePrestadoresNoMes = (prestadoresData: PrestadorData[], patient: PatientData): PrestadorData[] => {
+    let prestadoresNoMes = filterPrestadoresByMonth(prestadoresData, patient);
+    if (prestadoresNoMes.length === 0 && patient.datas && patient.datas.length > 0) {
+      const prestadoresComDatasNoMes = new Set<string>();
+      patient.datas.forEach((data) => {
+        const prestadorStr = String(data.numero_prestador || "");
+        if (prestadorStr && prestadorStr !== "null" && prestadorStr !== "" && isDateInSelectedMonth(data.data)) {
+          prestadoresComDatasNoMes.add(prestadorStr);
+        }
+      });
+      if (prestadoresComDatasNoMes.size > 0) {
+        prestadoresNoMes = prestadoresData.filter((prestador) => {
+          const prestadorStr = String(prestador.numero_prestador);
+          return prestadoresComDatasNoMes.has(prestadorStr);
+        });
+      }
+    }
+    return prestadoresNoMes;
+  };
+
+  /** Critério único do card/filtro "Falta guia Ass. do Psic." (com número de prestador e mês). */
+  const patientTemFaltaAssinaturaPsicologoComPrestador = (patient: PatientData): boolean => {
+    if (!patient.prestadores) return false;
+    try {
+      const parsed = JSON.parse(patient.prestadores);
+      const prestadoresData = normalizePrestadoresData(parsed);
+      const prestadoresNoMes = resolvePrestadoresNoMes(prestadoresData, patient);
+      return prestadoresNoMes.some(
+        (p) => hasNumeroPrestadorValido(p) && faltaAssinaturaGuiaPsicologo(p.existe_guia_assinada_psicologo)
+      );
+    } catch {
+      return false;
+    }
+  };
+
   // Função para filtrar datas que pertencem a um prestador específico
   const filterDatasByPrestador = (prestadorNumero: number | string, datas: GuideData[]): GuideData[] => {
     return datas.filter(data => {
@@ -290,18 +341,28 @@ const GuideControl: React.FC = () => {
 
   // Função para obter todas as datas que devem ser exibidas para um prestador
   // Inclui as datas do prestador + datas do mês selecionado que estão sem prestador (como sugestões)
-  const getAllDatasForPrestador = (prestadorNumero: number | string, datas: GuideData[]): GuideData[] => {
+  const getAllDatasForPrestador = (
+    prestadorNumero: number | string,
+    datas: GuideData[],
+    includeDatasSemPrestadorNoMes: boolean = true
+  ): GuideData[] => {
     // Primeiro pega as datas que pertencem ao prestador
     const prestadorDatas = filterDatasByPrestador(prestadorNumero, datas);
-    
+
+    if (!includeDatasSemPrestadorNoMes) {
+      return prestadorDatas.filter(
+        (data, index, self) => index === self.findIndex((d) => d.data === data.data)
+      );
+    }
+
     // Depois pega as datas do mês selecionado que estão sem prestador (numero_prestador null ou "null")
-    const datasSemPrestadorNoMes = datas.filter(data => {
-      const prestadorStr = String(data.numero_prestador || '');
-      const isNullPrestador = !prestadorStr || prestadorStr === 'null' || prestadorStr === '';
+    const datasSemPrestadorNoMes = datas.filter((data) => {
+      const prestadorStr = String(data.numero_prestador || "");
+      const isNullPrestador = !prestadorStr || prestadorStr === "null" || prestadorStr === "";
       const isInSelectedMonth = isDateInSelectedMonth(data.data);
       return isNullPrestador && isInSelectedMonth;
     });
-    
+
     // Combina e remove duplicatas
     const allDatas = [...prestadorDatas, ...datasSemPrestadorNoMes];
     
@@ -345,8 +406,7 @@ const GuideControl: React.FC = () => {
           const prestadoresData: PrestadorData[] = normalizePrestadoresData(parsed);
           hasGuide = prestadoresData.length > 0;
 
-          // Mesma regra do filtro "guias-nao-assinadas": pacientes com todas as guias sem assinatura do psicólogo
-          if (prestadoresData.length > 0 && prestadoresData.every(p => p.existe_guia_assinada_psicologo === 0)) {
+          if (patientTemFaltaAssinaturaPsicologoComPrestador(patient)) {
             totalGuiasSemAssinatura++;
           }
           
@@ -482,16 +542,7 @@ const GuideControl: React.FC = () => {
       }
 
       if (filterType === 'guias-nao-assinadas') {
-        // Pacientes com TODAS as guias sem assinatura pelo psicólogo (nenhuma com existe_guia_assinada_psicologo === 1)
-        if (!patient.prestadores) return false;
-        try {
-          const parsed = JSON.parse(patient.prestadores);
-          const prestadoresData: PrestadorData[] = normalizePrestadoresData(parsed);
-          // Retorna true apenas se TODAS as guias têm existe_guia_assinada_psicologo === 0
-          return prestadoresData.length > 0 && prestadoresData.every(prestador => prestador.existe_guia_assinada_psicologo === 0);
-        } catch (error) {
-          return false;
-        }
+        return patientTemFaltaAssinaturaPsicologoComPrestador(patient);
       }
 
       if (filterType === 'guias-assinadas') {
@@ -1645,29 +1696,7 @@ const GuideControl: React.FC = () => {
                           </div>
                         </div>
                       ) : (() => {
-                        // Verificar se há prestadores no mês selecionado
-                        let prestadoresNoMes = filterPrestadoresByMonth(prestadoresData, patient);
-                        
-                        // Se não encontrou prestadores, verificar se há datas com prestador no mês selecionado
-                        // e incluir esses prestadores mesmo que não tenham sido encontrados inicialmente
-                        if (prestadoresNoMes.length === 0 && patient.datas && patient.datas.length > 0) {
-                          // Encontrar todos os numero_prestador únicos que têm datas no mês selecionado
-                          const prestadoresComDatasNoMes = new Set<string>();
-                          patient.datas.forEach(data => {
-                            const prestadorStr = String(data.numero_prestador || '');
-                            if (prestadorStr && prestadorStr !== 'null' && prestadorStr !== '' && isDateInSelectedMonth(data.data)) {
-                              prestadoresComDatasNoMes.add(prestadorStr);
-                            }
-                          });
-                          
-                          // Incluir prestadores que têm datas no mês selecionado
-                          if (prestadoresComDatasNoMes.size > 0) {
-                            prestadoresNoMes = prestadoresData.filter(prestador => {
-                              const prestadorStr = String(prestador.numero_prestador);
-                              return prestadoresComDatasNoMes.has(prestadorStr);
-                            });
-                          }
-                        }
+                        const prestadoresNoMes = resolvePrestadoresNoMes(prestadoresData, patient);
                         
                         // Verificar se há datas sem prestador no mês selecionado
                         const datasSemPrestadorNoMes = patient.datas?.filter(data => {
@@ -1682,6 +1711,13 @@ const GuideControl: React.FC = () => {
                               {/* Prestadores do mês */}
                               {prestadoresNoMes
                                 .filter(prestador => {
+                              // Filtro "Falta guia Ass. do Psic.": só blocos com existe_guia_assinada_psicologo === 0 (por número de prestador)
+                              if (filterType === 'guias-nao-assinadas') {
+                                return (
+                                  hasNumeroPrestadorValido(prestador) &&
+                                  faltaAssinaturaGuiaPsicologo(prestador.existe_guia_assinada_psicologo)
+                                );
+                              }
                               // Se o filtro "guias-assinadas" estiver ativo, mostrar apenas prestadores prontos para faturar (assinados mas não faturados)
                               if (filterType === 'guias-assinadas') {
                                 return prestador.existe_guia_assinada_psicologo === 1 && prestador.faturado === 0;
@@ -1958,7 +1994,11 @@ const GuideControl: React.FC = () => {
                                       </div>
                                       <div className="flex flex-wrap gap-2">
                                         {(() => {
-                                          const datasDoPrestador = getAllDatasForPrestador(prestador.numero_prestador, patient.datas || []);
+                                          const datasDoPrestador = getAllDatasForPrestador(
+                                            prestador.numero_prestador,
+                                            patient.datas || [],
+                                            filterType !== "guias-nao-assinadas"
+                                          );
                                           return datasDoPrestador.map((data, dataIdx) => {
                                             const colorClass = getDateColor(data, patient, 'agendamentos');
                                             return (
@@ -1979,7 +2019,11 @@ const GuideControl: React.FC = () => {
                                       </div>
                                       <div className="flex flex-wrap gap-2">
                                         {(() => {
-                                          const datasDoPrestador = getAllDatasForPrestador(prestador.numero_prestador, patient.datas || []);
+                                          const datasDoPrestador = getAllDatasForPrestador(
+                                            prestador.numero_prestador,
+                                            patient.datas || [],
+                                            filterType !== "guias-nao-assinadas"
+                                          );
                                           return datasDoPrestador.map((data, dataIdx) => {
                                             const colorClass = getDateColor(data, patient, 'guias');
                                             return (
@@ -2026,8 +2070,8 @@ const GuideControl: React.FC = () => {
                           );
                           })}
                               
-                              {/* Se há datas sem prestador no mês, mostrar seção "Agendamentos sem GUIA" */}
-                              {datasSemPrestadorNoMes.length > 0 && (
+                              {/* Se há datas sem prestador no mês, mostrar seção "Agendamentos sem GUIA" (não exibir neste filtro) */}
+                              {datasSemPrestadorNoMes.length > 0 && filterType !== "guias-nao-assinadas" && (
                                 <div className="bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200 rounded-xl p-5 shadow-sm">
                                   <div className="flex items-center justify-between mb-5">
                                     <div className="flex items-center gap-3">
@@ -2109,7 +2153,7 @@ const GuideControl: React.FC = () => {
                         }
                         
                         // Se há datas sem prestador no mês (mas não há prestadores no mês), mostrar seção "Agendamentos sem GUIA"
-                        if (datasSemPrestadorNoMes.length > 0) {
+                        if (datasSemPrestadorNoMes.length > 0 && filterType !== "guias-nao-assinadas") {
                           return (
                             <div className="space-y-4">
                               {/* Seção para agendamentos sem GUIA */}
@@ -2192,8 +2236,8 @@ const GuideControl: React.FC = () => {
                           );
                         }
                         
-                        // Caso padrão: mostrar seção original (quando não há prestadores)
-                        if (patient.datas && patient.datas.length > 0) {
+                        // Caso padrão: mostrar seção original (quando não há prestadores) — não usar no filtro "Falta guia Ass. do Psic."
+                        if (patient.datas && patient.datas.length > 0 && filterType !== "guias-nao-assinadas") {
                           return (
                         <div className="space-y-4">
                           {/* Seção para agendamentos sem GUIA */}
