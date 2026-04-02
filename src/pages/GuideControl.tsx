@@ -148,6 +148,8 @@ const GuideControl: React.FC = () => {
   });
   const [excludeGuiaConfirmOpen, setExcludeGuiaConfirmOpen] = useState(false);
   const [excludeGuiaPending, setExcludeGuiaPending] = useState<{ numeroPrestador: number | string; command: string } | null>(null);
+  const [desfaturarConfirmOpen, setDesfaturarConfirmOpen] = useState(false);
+  const [desfaturarNumeroPrestador, setDesfaturarNumeroPrestador] = useState<number | null>(null);
 
   // Função para salvar posição de scroll
   const saveScrollPosition = () => {
@@ -789,6 +791,32 @@ const GuideControl: React.FC = () => {
     } catch (error) {
       console.error("Erro ao excluir guia:", error);
       alert("Erro ao excluir guia. Tente novamente.");
+    }
+  };
+
+  const openDesfaturarConfirm = (numeroPrestador: number) => {
+    setDesfaturarNumeroPrestador(numeroPrestador);
+    setDesfaturarConfirmOpen(true);
+  };
+
+  const handleDesfaturar = async (numeroPrestador: number) => {
+    try {
+      const response = await fetch(
+        "https://n8n.essenciasaudeintegrada.com.br/webhook/edit_faturar",
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ numero_prestador: numeroPrestador }),
+        }
+      );
+      if (!response.ok) {
+        throw new Error(`Erro ao desfaturar: ${response.status}`);
+      }
+      await fetchData();
+      toast.success("Desfaturamento registrado com sucesso.");
+    } catch (error) {
+      console.error("Erro ao desfaturar:", error);
+      toast.error("Erro ao desfaturar. Tente novamente.");
     }
   };
 
@@ -1955,17 +1983,35 @@ const GuideControl: React.FC = () => {
                                     </div>
                                   </div>
 
-                                  {/* Botão Faturar */}
-                                  <Button 
-                                    size="sm" 
-                                    variant="default"
-                                    className="text-xs px-3 py-2 bg-green-700 text-white hover:bg-white hover:text-green-700 hover:border-green-700 border border-green-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-700 disabled:hover:text-white"
-                                    onClick={() => handleFaturar(prestador.numero_prestador)}
-                                    disabled={prestador.faturado === 1}
-                                  >
-                                    <DollarSign className="h-3 w-3 mr-1" />
-                                    {prestador.faturado ? "Faturado ✓" : "Faturar"}
-                                  </Button>
+                                  {/* Botão Faturar + X para desfaturar no hover (apenas quando faturado === 1) */}
+                                  <div className="relative group flex flex-col items-center">
+                                    {prestador.faturado === 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          openDesfaturarConfirm(prestador.numero_prestador);
+                                        }}
+                                        className="opacity-0 group-hover:opacity-100 transition-opacity absolute bottom-full left-1/2 -translate-x-1/2 mb-1 z-20 p-1 rounded-full bg-white border-2 border-red-500 text-red-600 hover:bg-red-50 shadow cursor-pointer"
+                                        title="Desfaturar"
+                                      >
+                                        <X className="h-4 w-4" />
+                                      </button>
+                                    )}
+                                    <div className="relative">
+                                      <Button
+                                        size="sm"
+                                        variant="default"
+                                        className="text-xs px-3 py-2 bg-green-700 text-white hover:bg-white hover:text-green-700 hover:border-green-700 border border-green-700 transition-all duration-300 ease-in-out cursor-pointer [&>*]:cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-green-700 disabled:hover:text-white"
+                                        onClick={() => handleFaturar(prestador.numero_prestador)}
+                                        disabled={prestador.faturado === 1}
+                                      >
+                                        <DollarSign className="h-3 w-3 mr-1" />
+                                        {prestador.faturado ? "Faturado ✓" : "Faturar"}
+                                      </Button>
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
 
@@ -2617,6 +2663,38 @@ const GuideControl: React.FC = () => {
               className="bg-red-600 hover:bg-red-700"
             >
               Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Modal de confirmação para desfaturar */}
+      <AlertDialog
+        open={desfaturarConfirmOpen}
+        onOpenChange={(open) => {
+          setDesfaturarConfirmOpen(open);
+          if (!open) setDesfaturarNumeroPrestador(null);
+        }}
+      >
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desfaturar</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja prosseguir com o desfaturamento? Esta ação será enviada ao sistema.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                if (desfaturarNumeroPrestador == null) return;
+                await handleDesfaturar(desfaturarNumeroPrestador);
+                setDesfaturarConfirmOpen(false);
+                setDesfaturarNumeroPrestador(null);
+              }}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Confirmar desfaturamento
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
