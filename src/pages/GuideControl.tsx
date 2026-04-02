@@ -1337,7 +1337,7 @@ const GuideControl: React.FC = () => {
               className="flex items-center gap-2 bg-yellow-600 hover:bg-yellow-700 cursor-pointer [&>*]:cursor-pointer"
             >
               <Upload className="h-4 w-4 mr-2" />
-              {downloadingEverything ? 'Baixando...' : 'Todas faturar+documentos'}
+              {downloadingEverything ? 'Baixando...' : 'Baixar Docs Faturamento'}
             </Button>
             <Button 
               onClick={handleDownloadSignedGuides} 
