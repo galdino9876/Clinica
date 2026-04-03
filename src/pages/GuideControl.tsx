@@ -94,6 +94,71 @@ interface PatientData {
   active?: number; // Campo para indicar se o paciente está ativo (1) ou desativado (0)
 }
 
+const GET_GUIA_COMPLETED_URL =
+  "https://webhook.essenciasaudeintegrada.com.br/webhook/get_guia_completed";
+
+/** Extrai nome do arquivo do header Content-Disposition (fallback se ausente). */
+function parseFilenameFromContentDisposition(
+  header: string | null,
+  fallback: string
+): string {
+  if (!header) return fallback;
+  const utf8 = /filename\*=(?:UTF-8''|)([^;\s]+)/i.exec(header);
+  if (utf8?.[1]) {
+    try {
+      return decodeURIComponent(utf8[1].replace(/^"|"$/g, "").trim());
+    } catch {
+      return utf8[1].replace(/^"|"$/g, "").trim();
+    }
+  }
+  const simple = /filename="?([^";\n]+)"?/i.exec(header);
+  return (simple?.[1] || fallback).trim();
+}
+
+/**
+ * Lê o corpo da resposta em stream (equivalente a blob(), mas permite progresso).
+ * O tempo total é o mesmo; o usuário vê % quando o servidor envia Content-Length.
+ */
+async function readResponseBodyAsBlob(
+  response: Response,
+  onProgress?: (percent: number | null) => void
+): Promise<Blob> {
+  if (!response.body) {
+    return response.blob();
+  }
+  const lenHeader = response.headers.get("Content-Length");
+  const total = lenHeader ? parseInt(lenHeader, 10) : NaN;
+  const hasTotal = Number.isFinite(total) && total > 0;
+
+  const reader = response.body.getReader();
+  const chunks: BlobPart[] = [];
+  let loaded = 0;
+  let lastPct = -1;
+
+  if (onProgress && !hasTotal) {
+    onProgress(null);
+  }
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value?.byteLength) {
+      chunks.push(value);
+      loaded += value.byteLength;
+      if (onProgress && hasTotal) {
+        const pct = Math.min(100, Math.floor((loaded / total!) * 100));
+        if (pct >= lastPct + 2 || pct === 100) {
+          lastPct = pct;
+          onProgress(pct);
+        }
+      }
+    }
+  }
+
+  const type = response.headers.get("Content-Type") || "application/pdf";
+  return new Blob(chunks, { type });
+}
+
 const GuideControl: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -108,6 +173,8 @@ const GuideControl: React.FC = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [prestadorToDelete, setPrestadorToDelete] = useState<number | null>(null);
   const [downloadingFile, setDownloadingFile] = useState<string | null>(null);
+  /** null = indeterminado ou sem Content-Length; 0–100 quando o download reporta tamanho */
+  const [downloadProgressPercent, setDownloadProgressPercent] = useState<number | null>(null);
   const [downloadingEverything, setDownloadingEverything] = useState(false);
   const [downloadEverythingProgress, setDownloadEverythingProgress] = useState({
     total: 0,
@@ -720,19 +787,21 @@ const GuideControl: React.FC = () => {
     }
   };
 
-  // Função para fazer download do arquivo
+  // Função para fazer download do arquivo (POST + stream do PDF; tempo total ≈ servidor + transferência do corpo)
   const handleDownloadGuia = async (numeroPrestador: number, command: string) => {
+    const label = `${command}_${numeroPrestador}`;
+    const fallbackName = `${command}_${numeroPrestador}.pdf`;
+
     try {
-      setDownloadingFile(`${command}_${numeroPrestador}`);
-      
-      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/get_guia_completed', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+      setDownloadingFile(label);
+      setDownloadProgressPercent(null);
+
+      const response = await fetch(GET_GUIA_COMPLETED_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           numero_prestador: numeroPrestador,
-          command: command
+          command,
         }),
       });
 
@@ -740,26 +809,29 @@ const GuideControl: React.FC = () => {
         throw new Error(`Erro ao baixar arquivo: ${response.status}`);
       }
 
-      // Criar blob e fazer download
-      const blob = await response.blob();
+      const blob = await readResponseBodyAsBlob(response, (pct) => {
+        setDownloadProgressPercent(pct);
+      });
+
+      const filename = parseFilenameFromContentDisposition(
+        response.headers.get("Content-Disposition"),
+        fallbackName
+      );
+
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
+      const a = document.createElement("a");
       a.href = url;
-      a.download = `${command}_${numeroPrestador}.pdf`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
-      window.URL.revokeObjectURL(url);
       document.body.removeChild(a);
-      
-      // Esconder indicador após download iniciar
-      setTimeout(() => {
-        setDownloadingFile(null);
-      }, 1000); // 1 segundo de delay para mostrar que o download foi iniciado
-      
+      setTimeout(() => window.URL.revokeObjectURL(url), 250);
     } catch (error) {
-      console.error('Erro ao baixar arquivo:', error);
-      alert('Erro ao baixar arquivo. Tente novamente.');
+      console.error("Erro ao baixar arquivo:", error);
+      alert("Erro ao baixar arquivo. Tente novamente.");
+    } finally {
       setDownloadingFile(null);
+      setDownloadProgressPercent(null);
     }
   };
 
@@ -1252,7 +1324,7 @@ const GuideControl: React.FC = () => {
             currentStep: `Baixando guia assinada - ${guide.paciente_nome}`
           }));
 
-          const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/get_guia_completed', {
+          const response = await fetch(GET_GUIA_COMPLETED_URL, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1262,14 +1334,14 @@ const GuideControl: React.FC = () => {
           });
 
           if (response.ok) {
-            const blob = await response.blob();
+            const blob = await readResponseBodyAsBlob(response);
             const url = window.URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            const contentDisposition = response.headers.get('Content-Disposition');
-            const filename = contentDisposition 
-              ? contentDisposition.split('filename=')[1]?.replace(/"/g, '') 
-              : `Guia-Assinada-${guide.paciente_nome}-${guide.numero_prestador}.pdf`;
+            const filename = parseFilenameFromContentDisposition(
+              response.headers.get('Content-Disposition'),
+              `Guia-Assinada-${guide.paciente_nome}-${guide.numero_prestador}.pdf`
+            );
             link.download = filename;
             document.body.appendChild(link);
             link.click();
@@ -2455,10 +2527,11 @@ const GuideControl: React.FC = () => {
 
       {/* Indicador de Download */}
       {downloadingFile && (
-        <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3">
-          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
+        <div className="fixed bottom-4 right-4 bg-blue-600 text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-3 max-w-sm">
+          <div className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent flex-shrink-0"></div>
           <span className="text-sm font-medium">
-            Baixando {downloadingFile}...
+            Baixando {downloadingFile}
+            {downloadProgressPercent != null ? ` — ${downloadProgressPercent}%` : "..."}
           </span>
         </div>
       )}
