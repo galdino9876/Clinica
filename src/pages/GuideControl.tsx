@@ -341,6 +341,22 @@ const GuideControl: React.FC = () => {
     return date.getFullYear() === parseInt(year) && date.getMonth() === parseInt(month) - 1;
   };
 
+  // Função para verificar se uma data está no mês selecionado ou em meses futuros
+  const isDateInOrAfterSelectedMonth = (dateStr: string): boolean => {
+    if (!dateStr || !selectedMonth) return false;
+    const date = parseDate(dateStr);
+    const [year, month] = selectedMonth.split('-');
+    const selectedYear = parseInt(year);
+    const selectedMonthIndex = parseInt(month) - 1;
+
+    const dateYear = date.getFullYear();
+    const dateMonthIndex = date.getMonth();
+    return (
+      dateYear > selectedYear ||
+      (dateYear === selectedYear && dateMonthIndex >= selectedMonthIndex)
+    );
+  };
+
   // Função para filtrar prestadores com base no mês selecionado
   const filterPrestadoresByMonth = (prestadoresData: PrestadorData[], patient: PatientData): PrestadorData[] => {
     return prestadoresData.filter((prestador) => {
@@ -964,17 +980,19 @@ const GuideControl: React.FC = () => {
     });
   };
 
-  // Função para obter datas sem prestador no mês selecionado
+  // Função para obter datas sem prestador no mês selecionado e meses futuros
+  // Considera ausência de guia (guia !== "ok") para incluir também datas futuras
+  // que chegam como agendamento "falta" no retorno return_date_guias.
   const getDatesWithoutPrestadorInMonth = (patient: PatientData): string[] => {
     if (!patient.datas || patient.datas.length === 0) return [];
     
     return patient.datas
       .filter(data => {
-        const hasAgendamento = data.agendamento === "ok";
+        const hasGuia = data.guia === "ok" || data.guia === "OK";
         const hasPrestador = data.numero_prestador !== null && data.numero_prestador !== "null";
-        const isInSelectedMonth = isDateInSelectedMonth(data.data);
+        const isInSelectedMonthOrFuture = isDateInOrAfterSelectedMonth(data.data);
         
-        return hasAgendamento && !hasPrestador && isInSelectedMonth;
+        return !hasGuia && !hasPrestador && isInSelectedMonthOrFuture;
       })
       .map(data => data.data); // Retorna no formato DD/MM/YYYY
   };

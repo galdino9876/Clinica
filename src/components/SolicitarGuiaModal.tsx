@@ -332,38 +332,39 @@ const SolicitarGuiaModal: React.FC<SolicitarGuiaModalProps> = ({
                           (codSessao === "50000462" && !isSelected && selectedDates.length >= 1);
                         
                         return (
-                          <div
+                          <button
                             key={date}
+                            type="button"
                             onClick={() => !isDisabled && handleDateToggle(date)}
+                            disabled={isDisabled}
                             className={`
-                              flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer transition-all
+                              w-full flex items-center gap-3 p-3 rounded-lg border-2 text-left transition-all
                               ${isSelected 
                                 ? 'bg-green-50 border-green-400 shadow-md' 
                                 : isDisabled
                                 ? 'bg-gray-100 border-gray-200 cursor-not-allowed opacity-50'
-                                : 'bg-white border-gray-200 hover:border-green-300 hover:bg-green-50/50'
+                                : 'bg-white border-gray-200 hover:border-green-300 hover:bg-green-50/50 cursor-pointer'
                               }
                             `}
                           >
                             <Checkbox
                               id={`date-${date}`}
                               checked={isSelected}
-                              onCheckedChange={() => handleDateToggle(date)}
+                              onCheckedChange={() => undefined}
                               disabled={isDisabled}
-                              className="data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                              className="pointer-events-none data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
                             />
-                            <label
-                              htmlFor={`date-${date}`}
+                            <span
                               className={`flex-1 text-sm font-medium cursor-pointer ${
                                 isSelected ? 'text-green-800' : 'text-gray-700'
                               }`}
                             >
                               {date}
-                            </label>
+                            </span>
                             {isSelected && (
                               <CheckCircle2 className="h-5 w-5 text-green-600" />
                             )}
-                          </div>
+                          </button>
                         );
                       })}
                     </div>
