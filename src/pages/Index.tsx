@@ -14,6 +14,10 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { toast } from "sonner";
 import { toYearMonth } from "@/utils/dateUtils";
+import {
+  fetchPatientAppointmentsBulk,
+  fetchPatientAppointmentsForOne,
+} from "@/lib/apointmentPatientWebhook";
 
 type AlertWebhookItem = {
   paciente_nome: string;
@@ -559,40 +563,12 @@ const Index = () => {
     }
   };
 
-  // Função para buscar agendamentos anteriores do paciente
+  // Agendamentos anteriores do paciente (POST em lote com ids — ver fetchPatientAppointmentsBulk)
   const fetchPatientAppointments = async (patientId: number) => {
     try {
-      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/apointment_patient', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ id: patientId })
-      });
-
-      if (!response.ok) {
-        console.error('Erro ao buscar agendamentos:', response.status);
-        return [];
-      }
-
-      const data = await response.json();
-      // Filtrar objetos vazios e ordenar por data (mais recente primeiro)
-      const validAppointments = Array.isArray(data) 
-        ? data.filter(appointment => 
-            appointment && 
-            Object.keys(appointment).length > 0 && 
-            appointment.date
-          )
-        : [];
-      
-      // Ordenar por data (mais recente primeiro)
-      return validAppointments.sort((a: any, b: any) => {
-        const dateA = new Date(a.date);
-        const dateB = new Date(b.date);
-        return dateB.getTime() - dateA.getTime();
-      });
+      return await fetchPatientAppointmentsForOne(patientId);
     } catch (error) {
-      console.error('Erro ao buscar agendamentos do paciente:', error);
+      console.error("Erro ao buscar agendamentos do paciente:", error);
       return [];
     }
   };
@@ -653,21 +629,16 @@ const Index = () => {
           psychologistId = appointment.psychologist_id || appointment.psychologistId || null;
         }
       }
-      
-      // Se não encontrou pelo appointment_id, buscar nos agendamentos anteriores do paciente
-      if (!psychologistId) {
-        const appointments = await fetchPatientAppointments(patientId);
-        const lastAppointment = appointments.length > 0 ? appointments[0] : null;
-        
-        if (lastAppointment) {
-          // Tentar diferentes formatos de psychologist_id
-          psychologistId = lastAppointment.psychologist_id || lastAppointment.psychologistId || null;
-        }
-      }
-      
-      // Buscar agendamentos anteriores do paciente para outros dados (horários, tipo, etc)
+
       const appointments = await fetchPatientAppointments(patientId);
       const lastAppointment = appointments.length > 0 ? appointments[0] : null;
+
+      if (!psychologistId && lastAppointment) {
+        psychologistId =
+          (lastAppointment as any).psychologist_id ||
+          (lastAppointment as any).psychologistId ||
+          null;
+      }
 
       // Converter data do formato DD/MM/YYYY para Date
       const [day, month, year] = dataItem.data.split('/');
@@ -697,40 +668,37 @@ const Index = () => {
     }
   };
 
-  // Função para buscar horário do último agendamento de cada paciente
+  // Último horário por paciente: uma única requisição com todos os ids
   const fetchLastAppointmentTimes = async (patientIds: number[]) => {
     try {
+      const uniqueIds = [...new Set(patientIds.filter((id) => id))];
+      if (uniqueIds.length === 0) return;
+
+      const byPatient = await fetchPatientAppointmentsBulk(uniqueIds);
       const timesMap = new Map<number, { start_time: string; end_time: string }>();
-      
-      // Buscar último agendamento para cada paciente
-      await Promise.all(patientIds.map(async (patientId) => {
-        try {
-          const appointments = await fetchPatientAppointments(patientId);
-          
-          // Pegar o primeiro agendamento (já está ordenado por data, mais recente primeiro)
-          if (appointments.length > 0) {
-            const lastAppointment = appointments[0];
-            
-            if (lastAppointment.start_time && lastAppointment.end_time) {
-              // Formatar horário (remover segundos se houver)
-              const startTime = lastAppointment.start_time.includes(':') 
-                ? lastAppointment.start_time.substring(0, 5) 
-                : lastAppointment.start_time;
-              const endTime = lastAppointment.end_time.includes(':') 
-                ? lastAppointment.end_time.substring(0, 5) 
-                : lastAppointment.end_time;
-              
-              timesMap.set(patientId, { start_time: startTime, end_time: endTime });
-            }
-          }
-        } catch (error) {
-          console.error(`Erro ao buscar horário para paciente ${patientId}:`, error);
-        }
-      }));
-      
+
+      for (const patientId of uniqueIds) {
+        const appointments = byPatient.get(patientId) ?? [];
+        if (appointments.length === 0) continue;
+
+        const lastAppointment = appointments[0] as Record<string, unknown>;
+        const st = lastAppointment.start_time ?? lastAppointment.startTime;
+        const et = lastAppointment.end_time ?? lastAppointment.endTime;
+        if (st == null || et == null) continue;
+
+        const startStr = String(st);
+        const endStr = String(et);
+        const startTime = startStr.includes(":")
+          ? startStr.substring(0, 5)
+          : startStr;
+        const endTime = endStr.includes(":") ? endStr.substring(0, 5) : endStr;
+
+        timesMap.set(patientId, { start_time: startTime, end_time: endTime });
+      }
+
       setLastAppointmentTimes(timesMap);
     } catch (error) {
-      console.error('Erro ao buscar horários dos agendamentos:', error);
+      console.error("Erro ao buscar horários dos agendamentos:", error);
     }
   };
 

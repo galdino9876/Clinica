@@ -15,6 +15,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { fetchPatientAppointmentsForOne } from "@/lib/apointmentPatientWebhook";
 
 interface PatientAppointmentHistoryProps {
   patient: Patient;
@@ -71,55 +72,21 @@ const PatientAppointmentHistory = ({ patient, onPatientDetailsLoaded }: PatientA
     setError(null);
     
     try {
-      const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/apointment_patient', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ id: patient.id })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Erro ao buscar agendamentos: ${response.status}`);
-      }
-
-      const data = await response.json();
-      let validAppointments: PatientAppointment[] = [];
+      const rows = await fetchPatientAppointmentsForOne(Number(patient.id));
+      let validAppointments: PatientAppointment[] = rows as PatientAppointment[];
       let details: { birthdate?: string | null; nome_responsavel?: string | null; telefone_responsavel?: string | null } = {};
 
-      if (Array.isArray(data)) {
-        validAppointments = data.filter((appointment: any) => 
-          appointment && 
-          Object.keys(appointment).length > 0 && 
-          appointment.date
-        );
-        const first = validAppointments[0] as any;
-        if (first && (first.birthdate != null || first.nome_responsavel != null || first.telefone_responsavel != null)) {
-          details = {
-            birthdate: first.birthdate ?? null,
-            nome_responsavel: first.nome_responsavel ?? null,
-            telefone_responsavel: first.telefone_responsavel ?? null,
-          };
-          setPatientDetailsFromApi(details);
-          onPatientDetailsLoaded?.(details);
-        }
-      } else if (data && typeof data === 'object') {
-        const list = data.appointments ?? data.data ?? data;
-        validAppointments = Array.isArray(list)
-          ? list.filter((appointment: any) => appointment && appointment.date)
-          : [];
-        const source = data.patient ?? data;
-        if (source.birthdate != null || source.nome_responsavel != null || source.telefone_responsavel != null) {
-          details = {
-            birthdate: source.birthdate ?? null,
-            nome_responsavel: source.nome_responsavel ?? null,
-            telefone_responsavel: source.telefone_responsavel ?? null,
-          };
-          setPatientDetailsFromApi(details);
-          onPatientDetailsLoaded?.(details);
-        }
+      const first = validAppointments[0] as any;
+      if (first && (first.birthdate != null || first.nome_responsavel != null || first.telefone_responsavel != null)) {
+        details = {
+          birthdate: first.birthdate ?? null,
+          nome_responsavel: first.nome_responsavel ?? null,
+          telefone_responsavel: first.telefone_responsavel ?? null,
+        };
+        setPatientDetailsFromApi(details);
+        onPatientDetailsLoaded?.(details);
       }
-      
+
       setAppointments(validAppointments);
     } catch (err) {
       console.error('Erro ao buscar agendamentos do paciente:', err);
@@ -192,10 +159,10 @@ const PatientAppointmentHistory = ({ patient, onPatientDetailsLoaded }: PatientA
 
   // Função auxiliar para extrair o ID do agendamento
   const getAppointmentId = (appointment: PatientAppointment, index: number): number | string | null => {
-    // Tentar diferentes variações de nome de campo
+    // Preferir appointment_id quando existir (evita confundir com outro campo "id" no JSON)
     const possibleIds = [
-      appointment.id,
       appointment.appointment_id,
+      appointment.id,
       appointment.id_appointment,
       (appointment as any).ID,
       (appointment as any).appointmentId,
