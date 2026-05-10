@@ -56,6 +56,8 @@ import {
 
 interface PrestadorData {
   numero_prestador: number;
+  /** Número da guia na operadora (API `prestadores` JSON). */
+  numero_guia_operadora?: string | number | null;
   datas: string[];
   existe_guia_autorizada: number;
   existe_guia_assinada: number;
@@ -243,6 +245,7 @@ const GuideControl: React.FC = () => {
     
     return parsed.map((p: any) => ({
       numero_prestador: p.numero_prestador,
+      numero_guia_operadora: p.numero_guia_operadora ?? null,
       datas: p.datas || [],
       existe_guia_autorizada: p.existe_guia_autorizada || 0,
       existe_guia_assinada: p.existe_guia_assinada || 0,
@@ -268,6 +271,17 @@ const GuideControl: React.FC = () => {
     if (n === null || n === undefined) return false;
     const s = String(n).trim();
     return s !== "" && s !== "null" && s !== "undefined";
+  };
+
+  const labelPrestadorOperadora = (prestador: PrestadorData): string => {
+    const np = prestador.numero_prestador;
+    const rawOp = prestador.numero_guia_operadora;
+    const op =
+      rawOp != null && String(rawOp).trim() !== "" && String(rawOp).toLowerCase() !== "null"
+        ? String(rawOp).trim()
+        : null;
+    const base = `Nº.Prestador: ${np}`;
+    return op ? `${base} - Nº.Operadora: ${op}` : base;
   };
 
   // Função para obter a cor do badge baseado no status da guia
@@ -1869,8 +1883,8 @@ const GuideControl: React.FC = () => {
                                     <FileText className="h-5 w-5 text-blue-600" />
                                   </div>
                                   <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="font-semibold text-lg text-gray-800 whitespace-nowrap">
-                                      Número de Prestador: {prestador.numero_prestador}
+                                    <span className="font-semibold text-lg text-gray-800">
+                                      {labelPrestadorOperadora(prestador)}
                                     </span>
                                     {prestador.status_guia && 
                                      prestador.status_guia.trim() !== "" && 
