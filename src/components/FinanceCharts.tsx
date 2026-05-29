@@ -90,6 +90,8 @@ const FinanceCharts = () => {
   const [patientSearchTerm, setPatientSearchTerm] = useState("");
   const [editingPatientHeader, setEditingPatientHeader] = useState(false);
   const [showReportTable, setShowReportTable] = useState(false);
+  const [reportTablePage, setReportTablePage] = useState(1);
+  const REPORT_ROWS_PER_PAGE = 30;
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
   const [editTransactionValue, setEditTransactionValue] = useState<number>(0);
   const [editTransactionInsuranceType, setEditTransactionInsuranceType] = useState<string>("");
@@ -858,6 +860,36 @@ const FinanceCharts = () => {
     const status = String(a.status || '').toLowerCase().trim();
     return (status === "completed" || status === "confirmed") && Number(a.value) > 0;
   });
+
+  const reportTableTotalPages = Math.ceil(filteredAppointmentsForReports.length / REPORT_ROWS_PER_PAGE);
+  const reportTableStartIndex = (reportTablePage - 1) * REPORT_ROWS_PER_PAGE;
+  const paginatedAppointmentsForReports = filteredAppointmentsForReports.slice(
+    reportTableStartIndex,
+    reportTableStartIndex + REPORT_ROWS_PER_PAGE
+  );
+
+  const getReportTablePaginationRange = (current: number, total: number): (number | "ellipsis")[] => {
+    if (total <= 7) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    if (current <= 4) {
+      return [1, 2, 3, 4, 5, "ellipsis", total];
+    }
+    if (current >= total - 3) {
+      return [1, "ellipsis", total - 4, total - 3, total - 2, total - 1, total];
+    }
+    return [1, "ellipsis", current - 1, current, current + 1, "ellipsis", total];
+  };
+
+  useEffect(() => {
+    setReportTablePage(1);
+  }, [filterPeriod, selectedPsychologist, selectedMonth, selectedYear, effectivePsychologist]);
+
+  useEffect(() => {
+    if (reportTablePage > reportTableTotalPages && reportTableTotalPages > 0) {
+      setReportTablePage(reportTableTotalPages);
+    }
+  }, [reportTablePage, reportTableTotalPages]);
 
   const calculateFinancialsFrom = (list: Appointment[]) => {
     // console.log('=== CÁLCULO DE RECEITAS ===');
@@ -2423,7 +2455,7 @@ const FinanceCharts = () => {
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filteredAppointmentsForReports.map((appointment) => {
+                    paginatedAppointmentsForReports.map((appointment) => {
                       const commissionPercentage = 50;
                       const commission = ((Number(appointment.value) || 0) * commissionPercentage) / 100;
                       const patient = patients.find((p) => String(p.id) === String(appointment.patient_id));
@@ -2486,6 +2518,50 @@ const FinanceCharts = () => {
                   )}
                 </TableBody>
               </Table>
+              {reportTableTotalPages > 1 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t bg-gray-50">
+                  <p className="text-sm text-gray-600">
+                    Mostrando {reportTableStartIndex + 1} a{" "}
+                    {Math.min(reportTableStartIndex + REPORT_ROWS_PER_PAGE, filteredAppointmentsForReports.length)} de{" "}
+                    {filteredAppointmentsForReports.length} atendimentos
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setReportTablePage((p) => Math.max(1, p - 1))}
+                      disabled={reportTablePage === 1}
+                    >
+                      Anterior
+                    </Button>
+                    {getReportTablePaginationRange(reportTablePage, reportTableTotalPages).map((page, index) =>
+                      page === "ellipsis" ? (
+                        <span key={`ellipsis-${index}`} className="px-2 text-gray-500">
+                          ...
+                        </span>
+                      ) : (
+                        <Button
+                          key={page}
+                          variant={reportTablePage === page ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setReportTablePage(page)}
+                          className="min-w-[2.25rem]"
+                        >
+                          {page}
+                        </Button>
+                      )
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setReportTablePage((p) => Math.min(reportTableTotalPages, p + 1))}
+                      disabled={reportTablePage === reportTableTotalPages}
+                    >
+                      Próxima
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
