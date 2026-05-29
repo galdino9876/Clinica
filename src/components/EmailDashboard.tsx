@@ -101,6 +101,21 @@ const groupEmailsByDay = (emails: EmailData[]): Array<{ day: string; dayNumber: 
   return grouped;
 };
 
+const SENT_EMAILS_PER_PAGE = 30;
+
+const getPaginationRange = (current: number, total: number): (number | "ellipsis")[] => {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  if (current <= 4) {
+    return [1, 2, 3, 4, 5, "ellipsis", total];
+  }
+  if (current >= total - 3) {
+    return [1, "ellipsis", total - 4, total - 3, total - 2, total - 1, total];
+  }
+  return [1, "ellipsis", current - 1, current, current + 1, "ellipsis", total];
+};
+
 const EmailDashboard = () => {
   const [allPendingEmails, setAllPendingEmails] = useState<EmailData[]>([]);
   const [allSentEmails, setAllSentEmails] = useState<EmailData[]>([]);
@@ -110,6 +125,7 @@ const EmailDashboard = () => {
   const [sendingEmails, setSendingEmails] = useState(false);
   const [notSendingEmail, setNotSendingEmail] = useState<number | null>(null);
   const [showPresential, setShowPresential] = useState(false);
+  const [sentEmailsPage, setSentEmailsPage] = useState(1);
   const [progressAlert, setProgressAlert] = useState({
     isVisible: false,
     total: 0,
@@ -128,6 +144,23 @@ const EmailDashboard = () => {
     if (showPresential) return true; // Mostrar todos
     return email.appointment_type === "online";
   });
+
+  const sentEmailsTotalPages = Math.ceil(sentEmails.length / SENT_EMAILS_PER_PAGE);
+  const sentEmailsStartIndex = (sentEmailsPage - 1) * SENT_EMAILS_PER_PAGE;
+  const paginatedSentEmails = sentEmails.slice(
+    sentEmailsStartIndex,
+    sentEmailsStartIndex + SENT_EMAILS_PER_PAGE
+  );
+
+  useEffect(() => {
+    setSentEmailsPage(1);
+  }, [showPresential, sentEmails.length]);
+
+  useEffect(() => {
+    if (sentEmailsPage > sentEmailsTotalPages && sentEmailsTotalPages > 0) {
+      setSentEmailsPage(sentEmailsTotalPages);
+    }
+  }, [sentEmailsPage, sentEmailsTotalPages]);
 
   useEffect(() => {
     fetchEmailData();
@@ -516,7 +549,7 @@ const EmailDashboard = () => {
             </div>
             
             <div className="space-y-1">
-              {groupEmailsByDay(sentEmails).map((group) => (
+              {groupEmailsByDay(paginatedSentEmails).map((group) => (
                 <div key={group.day} className="space-y-1">
                   {/* Cabeçalho do grupo */}
                   <div className="px-4 py-2 bg-green-100 border-l-4 border-green-500">
@@ -558,6 +591,50 @@ const EmailDashboard = () => {
                 </div>
               ))}
             </div>
+            {sentEmailsTotalPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t bg-gray-50">
+                <p className="text-sm text-gray-600">
+                  Mostrando {sentEmailsStartIndex + 1} a{" "}
+                  {Math.min(sentEmailsStartIndex + SENT_EMAILS_PER_PAGE, sentEmails.length)} de{" "}
+                  {sentEmails.length} emails
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSentEmailsPage((p) => Math.max(1, p - 1))}
+                    disabled={sentEmailsPage === 1}
+                  >
+                    Anterior
+                  </Button>
+                  {getPaginationRange(sentEmailsPage, sentEmailsTotalPages).map((page, index) =>
+                    page === "ellipsis" ? (
+                      <span key={`ellipsis-${index}`} className="px-2 text-gray-500">
+                        ...
+                      </span>
+                    ) : (
+                      <Button
+                        key={page}
+                        variant={sentEmailsPage === page ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSentEmailsPage(page)}
+                        className="min-w-[2.25rem]"
+                      >
+                        {page}
+                      </Button>
+                    )
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setSentEmailsPage((p) => Math.min(sentEmailsTotalPages, p + 1))}
+                    disabled={sentEmailsPage === sentEmailsTotalPages}
+                  >
+                    Próxima
+                  </Button>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
