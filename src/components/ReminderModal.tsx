@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import { Send, X, GripVertical } from "lucide-react";
+import { Send, X, GripVertical, User, Clock, Calendar, MessageSquare, CheckSquare2, Loader2 } from "lucide-react";
 import { formatDateForDisplay } from "@/utils/dateUtils";
 import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -52,12 +52,14 @@ const ReminderModal = ({ isOpen, onClose, appointments, onSend }: ReminderModalP
   const [cursorPositions, setCursorPositions] = useState<{ [templateId: string]: number }>({});
   const [selectedMessages, setSelectedMessages] = useState<{ [templateId: string]: boolean }>({});
   const { toast } = useToast();
+  const wasOpenRef = useRef(false);
 
   useEffect(() => {
-    if (isOpen && appointments.length > 0) {
+    if (isOpen && appointments.length > 0 && !wasOpenRef.current) {
       initializeTemplates();
     }
-  }, [isOpen, appointments]);
+    wasOpenRef.current = isOpen;
+  }, [isOpen]);
 
   const initializeTemplates = () => {
     const templates: MessageTemplate[] = appointments.map((appointment, index) => {
@@ -188,6 +190,28 @@ Caso não haja retorno até o final do dia, o agendamento será cancelado automa
     }));
   };
 
+  const handleToggleSelectAll = () => {
+    const allSelected = messageTemplates.every(template => selectedMessages[template.id]);
+    const newSelection: { [templateId: string]: boolean } = {};
+    messageTemplates.forEach(template => {
+      newSelection[template.id] = !allSelected;
+    });
+    setSelectedMessages(newSelection);
+  };
+
+  const selectedCount = Object.values(selectedMessages).filter(Boolean).length;
+  const allSelected = messageTemplates.length > 0 && selectedCount === messageTemplates.length;
+
+  const renderFailedPatientsToast = (failures: Array<{ name: string }>) => (
+    <div className="mt-1 flex flex-col gap-1.5">
+      {failures.map((failure, index) => (
+        <span key={`${failure.name}-${index}`} className="block text-sm font-semibold text-white">
+          {failure.name}
+        </span>
+      ))}
+    </div>
+  );
+
   const renderFormattedText = (template: MessageTemplate, appointmentIndex: number) => {
     const appointment = appointments[appointmentIndex];
     if (!appointment) return template.text;
@@ -301,8 +325,8 @@ Caso não haja retorno até o final do dia, o agendamento será cancelado automa
 
   const handleSend = async () => {
     setSending(true);
+
     try {
-      // Filtrar apenas as mensagens selecionadas
       const selectedTemplates = messageTemplates.filter(template => selectedMessages[template.id]);
       
       if (selectedTemplates.length === 0) {
@@ -314,52 +338,94 @@ Caso não haja retorno até o final do dia, o agendamento será cancelado automa
         return;
       }
 
-      // Fazer requests individuais para cada paciente selecionado
-      const promises = selectedTemplates.map(async (template) => {
-        const appointment = appointments.find(app => `template-${app.id}` === template.id);
-        if (!appointment) return;
+      const results = await Promise.allSettled(
+        selectedTemplates.map(async (template) => {
+          const appointment = appointments.find(app => `template-${app.id}` === template.id);
+          if (!appointment) {
+            throw new Error("Agendamento não encontrado");
+          }
 
-        const payload = {
-          id: appointment.id, // id do appointment (ex: 107)
-          patient_id: appointment.patient_id, // id do paciente (ex: 106)
-          patient_name: appointment.patient_name,
-          psychologist_id: appointment.psychologist_id, // id do psicólogo (ex: 21)
-          psychologist_name: appointment.psychologist_name,
-          start_time: appointment.start_time,
-          end_time: appointment.end_time,
-          date: appointment.date, // data do appointment (dia seguinte)
-          status: appointment.status,
-          appointment_type: appointment.appointment_type,
-          room_id: appointment.room_id,
-          value: appointment.value,
-          insurance_type: appointment.insurance_type,
-          message: template.text
-        };
+          const payload = {
+            id: appointment.id,
+            patient_id: appointment.patient_id,
+            patient_name: appointment.patient_name,
+            psychologist_id: appointment.psychologist_id,
+            psychologist_name: appointment.psychologist_name,
+            start_time: appointment.start_time,
+            end_time: appointment.end_time,
+            date: appointment.date,
+            status: appointment.status,
+            appointment_type: appointment.appointment_type,
+            room_id: appointment.room_id,
+            value: appointment.value,
+            insurance_type: appointment.insurance_type,
+            message: template.text
+          };
 
-        const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/lembrete', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(payload)
-        });
+          const response = await fetch('https://webhook.essenciasaudeintegrada.com.br/webhook/lembrete', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(payload)
+          });
 
-        if (!response.ok) {
-          throw new Error(`Erro ao enviar lembrete para ${appointment.patient_name}: ${response.status}`);
+          if (!response.ok) {
+            throw new Error(`Erro HTTP ${response.status}`);
+          }
+
+          return appointment.patient_name;
+        })
+      );
+
+      const failures: Array<{ id: number; name: string; error: string }> = [];
+      let successCount = 0;
+
+      results.forEach((result, index) => {
+        const appointment = appointments.find(
+          app => `template-${app.id}` === selectedTemplates[index].id
+        );
+        const patientName = appointment?.patient_name ?? "Paciente desconhecido";
+        const patientId = appointment?.id ?? -1;
+
+        if (result.status === "fulfilled") {
+          successCount++;
+        } else {
+          const errorMessage = result.reason instanceof Error
+            ? result.reason.message
+            : "Erro desconhecido";
+          failures.push({ id: patientId, name: patientName, error: errorMessage });
         }
-
-        return { success: true, patient: appointment.patient_name };
       });
 
-      const results = await Promise.all(promises);
-      const successCount = results.filter(r => r?.success).length;
-      
-      toast({
-        title: "Lembretes enviados!",
-        description: `${successCount} de ${selectedTemplates.length} pacientes selecionados receberam o lembrete.`,
-        variant: "default",
-      });
-      onClose();
+      if (successCount === selectedTemplates.length) {
+        toast({
+          title: "Lembretes enviados!",
+          description: `${successCount} paciente(s) receberam o lembrete com sucesso.`,
+          variant: "default",
+        });
+        onClose();
+      } else if (successCount > 0) {
+        toast({
+          title: "Envio parcial",
+          description: (
+            <div>
+              <p className="mb-2 text-sm text-white/90">
+                {successCount} paciente(s) receberam o lembrete.
+              </p>
+              <p className="mb-1 text-sm font-medium text-white">Falha no envio para:</p>
+              {renderFailedPatientsToast(failures)}
+            </div>
+          ),
+          variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "Falha no envio",
+          description: renderFailedPatientsToast(failures),
+          variant: "destructive",
+        });
+      }
     } catch (error) {
       console.error('Erro ao enviar lembretes:', error);
       toast({
@@ -374,159 +440,234 @@ Caso não haja retorno até o final do dia, o agendamento será cancelado automa
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto bg-gradient-to-br from-blue-50 to-indigo-50">
-        <DialogHeader className="pb-6">
-          <DialogTitle className="flex items-center gap-3 text-2xl font-bold text-gray-800">
-            <div className="p-2 bg-blue-600 rounded-lg">
-              <Send className="h-6 w-6 text-white" />
-            </div>
-            Enviar Lembretes Personalizados
-          </DialogTitle>
-          <p className="text-gray-600 mt-2">
-            Personalize as mensagens para cada paciente e visualize o resultado final
-          </p>
-        </DialogHeader>
+      <DialogContent className="flex max-w-5xl max-h-[92vh] flex-col overflow-hidden p-0 gap-0 border-0 shadow-2xl bg-slate-50/95 backdrop-blur-xl sm:rounded-2xl">
+        {/* Header */}
+        <div className="relative overflow-hidden border-b border-slate-200/80 bg-white px-6 py-5 sm:px-8">
+          <div className="absolute inset-0 bg-gradient-to-br from-violet-500/[0.04] via-transparent to-sky-500/[0.06]" />
+          <DialogHeader className="relative space-y-3 pb-0">
+            <DialogTitle className="flex items-center gap-3 text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-600 shadow-lg shadow-violet-500/25">
+                <Send className="h-5 w-5 text-white" />
+              </div>
+              <div className="text-left">
+                <span className="block">Enviar Lembretes Personalizados</span>
+                <span className="mt-1 block text-sm font-normal text-slate-500">
+                  Personalize as mensagens para cada paciente e visualize o resultado final
+                </span>
+              </div>
+            </DialogTitle>
+          </DialogHeader>
+        </div>
 
-        <div className="space-y-8">
+        {/* Toolbar */}
+        <div className="flex flex-col gap-3 border-b border-slate-200/80 bg-white/80 px-6 py-4 backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between sm:px-8">
+          <div className="flex items-center gap-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-100 text-slate-600">
+              <CheckSquare2 className="h-4 w-4" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-slate-800">
+                {selectedCount} de {messageTemplates.length} selecionado(s)
+              </p>
+              <div className="mt-1.5 h-1.5 w-36 overflow-hidden rounded-full bg-slate-200">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-violet-500 to-indigo-500 transition-all duration-300"
+                  style={{
+                    width: messageTemplates.length
+                      ? `${(selectedCount / messageTemplates.length) * 100}%`
+                      : "0%",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={handleToggleSelectAll}
+            className="group h-9 rounded-full border-slate-200 bg-white px-4 text-slate-700 shadow-sm transition-all duration-200 hover:border-violet-300 hover:bg-violet-50 hover:text-violet-700 hover:shadow-md"
+          >
+            <span className="group-hover:hidden">
+              {allSelected ? "Desmarcar todos" : "Marcar todos"}
+            </span>
+            <span className="hidden group-hover:inline">
+              {allSelected ? "Marcar todos" : "Desmarcar todos"}
+            </span>
+          </Button>
+        </div>
+
+        {/* Lista de pacientes */}
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-6 py-5 sm:px-8">
           {messageTemplates.map((template, index) => {
             const appointment = appointments[index];
+            const isSelected = selectedMessages[template.id] || false;
+
             return (
-              <div key={template.id} className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+              <div
+                key={template.id}
+                className={`group/card overflow-hidden rounded-2xl border bg-white shadow-sm transition-all duration-200 hover:shadow-md ${
+                  isSelected
+                    ? "border-violet-200 ring-1 ring-violet-100"
+                    : "border-slate-200/80 opacity-80 hover:opacity-100"
+                }`}
+              >
                 {/* Header do Card */}
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-white/20 rounded-lg">
-                        <Send className="h-4 w-4 text-white" />
+                <div className="border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-5 py-4">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="flex items-start gap-3">
+                      <div className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-colors ${
+                        isSelected
+                          ? "bg-violet-100 text-violet-600"
+                          : "bg-slate-100 text-slate-400"
+                      }`}>
+                        <User className="h-4 w-4" />
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Badge 
-                          variant="secondary" 
-                          className="bg-white/20 text-white border-white/30 cursor-pointer hover:bg-white/30 transition-colors"
-                          onClick={() => insertValue(template.id, appointment.patient_name)}
-                          title="Clique para inserir o nome do paciente"
-                        >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-base font-semibold text-slate-900">
                           {appointment.patient_name}
-                        </Badge>
-                        <Badge 
-                          variant="secondary" 
-                          className="bg-white/20 text-white border-white/30 cursor-pointer hover:bg-white/30 transition-colors"
-                          onClick={() => insertValue(template.id, appointment.psychologist_name)}
-                          title="Clique para inserir o nome do psicólogo"
-                        >
+                        </p>
+                        <p className="mt-0.5 text-sm text-slate-500">
                           {appointment.psychologist_name}
-                        </Badge>
-                        <Badge 
-                          variant="secondary" 
-                          className="bg-white/20 text-white border-white/30 cursor-pointer hover:bg-white/30 transition-colors"
-                          onClick={() => insertValue(template.id, appointment.start_time)}
-                          title="Clique para inserir o horário"
-                        >
-                          {appointment.start_time}
-                        </Badge>
-                        <Badge 
-                          variant="secondary" 
-                          className="bg-white/20 text-white border-white/30 cursor-pointer hover:bg-white/30 transition-colors"
-                          onClick={() => insertValue(template.id, formatDateWithWeekday(appointment.date))}
-                          title="Clique para inserir a data"
-                        >
-                          {formatDateWithWeekday(appointment.date)}
-                        </Badge>
+                        </p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => insertValue(template.id, appointment.patient_name)}
+                        title="Clique para inserir o nome do paciente"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-all hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
+                      >
+                        <User className="h-3 w-3" />
+                        Paciente
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => insertValue(template.id, appointment.psychologist_name)}
+                        title="Clique para inserir o nome do psicólogo"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-all hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700"
+                      >
+                        <User className="h-3 w-3" />
+                        Psicólogo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => insertValue(template.id, appointment.start_time)}
+                        title="Clique para inserir o horário"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-all hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700"
+                      >
+                        <Clock className="h-3 w-3" />
+                        {appointment.start_time}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => insertValue(template.id, formatDateWithWeekday(appointment.date))}
+                        title="Clique para inserir a data"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-sm transition-all hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"
+                      >
+                        <Calendar className="h-3 w-3" />
+                        Data
+                      </button>
+                    </div>
+
+                    <label
+                      htmlFor={`checkbox-${template.id}`}
+                      className={`flex cursor-pointer items-center gap-2.5 rounded-xl border px-3 py-2 transition-all ${
+                        isSelected
+                          ? "border-violet-200 bg-violet-50 text-violet-700"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300"
+                      }`}
+                    >
                       <Checkbox
                         id={`checkbox-${template.id}`}
-                        checked={selectedMessages[template.id] || false}
+                        checked={isSelected}
                         onCheckedChange={(checked) => handleCheckboxChange(template.id, checked as boolean)}
-                        className="border-white/50 data-[state=checked]:bg-white data-[state=checked]:text-blue-600"
+                        className="border-slate-300 data-[state=checked]:border-violet-600 data-[state=checked]:bg-violet-600"
                       />
-                      <label 
-                        htmlFor={`checkbox-${template.id}`}
-                        className="text-white text-sm font-medium cursor-pointer"
-                      >
-                        Enviar
-                      </label>
-                    </div>
+                      <span className="text-sm font-medium">Enviar</span>
+                    </label>
                   </div>
                 </div>
 
-                <div className="p-6 space-y-4">
-
-                  {/* Mensagem Personalizada */}
-                  <div>
-                    <label className="text-sm font-semibold text-gray-700 mb-2 block">
+                <div className="p-5">
+                  <div className="mb-3 flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-slate-400" />
+                    <label className="text-sm font-medium text-slate-700">
                       Mensagem Personalizada
                     </label>
-                    <div className="border-2 border-gray-300 rounded-lg p-3 bg-white min-h-[120px]">
-                      <div 
-                        contentEditable
-                        suppressContentEditableWarning={true}
-                        onInput={(e) => {
-                          const target = e.target as HTMLElement;
-                          updateTemplateText(template.id, target.textContent || '');
-                        }}
-                        onSelect={(e) => {
-                          const target = e.target as HTMLElement;
-                          const selection = window.getSelection();
-                          if (selection) {
-                            handleCursorPosition(template.id, selection.anchorOffset || 0);
+                  </div>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50/50 p-1 transition-colors focus-within:border-violet-300 focus-within:bg-white focus-within:ring-2 focus-within:ring-violet-100">
+                    <div
+                      contentEditable
+                      suppressContentEditableWarning={true}
+                      onInput={(e) => {
+                        const target = e.target as HTMLElement;
+                        updateTemplateText(template.id, target.textContent || '');
+                      }}
+                      onSelect={(e) => {
+                        const target = e.target as HTMLElement;
+                        const selection = window.getSelection();
+                        if (selection) {
+                          handleCursorPosition(template.id, selection.anchorOffset || 0);
+                        }
+                      }}
+                      onClick={(e) => {
+                        const target = e.target as HTMLElement;
+                        const selection = window.getSelection();
+                        if (selection) {
+                          handleCursorPosition(template.id, selection.anchorOffset || 0);
+                        }
+                      }}
+                      className="min-h-[130px] w-full rounded-lg bg-white px-4 py-3 text-sm leading-relaxed text-slate-700 focus:outline-none whitespace-pre-wrap"
+                    >
+                      {renderFormattedText(template, index).map((part, partIndex) => (
+                        <span
+                          key={partIndex}
+                          className={
+                            part.isHighlight
+                              ? "rounded-md bg-violet-100 px-1 py-0.5 font-medium text-violet-800"
+                              : ""
                           }
-                        }}
-                        onClick={(e) => {
-                          const target = e.target as HTMLElement;
-                          const selection = window.getSelection();
-                          if (selection) {
-                            handleCursorPosition(template.id, selection.anchorOffset || 0);
-                          }
-                        }}
-                        className="w-full text-sm focus:outline-none whitespace-pre-wrap"
-                        style={{ minHeight: '120px' }}
-                      >
-                        {renderFormattedText(template, index).map((part, partIndex) => (
-                          <span
-                            key={partIndex}
-                            className={part.isHighlight ? "bg-purple-100 text-purple-800 px-1 rounded" : ""}
-                          >
-                            {part.text}
-                          </span>
-                        ))}
-                      </div>
+                        >
+                          {part.text}
+                        </span>
+                      ))}
                     </div>
                   </div>
-
-
                 </div>
               </div>
             );
           })}
         </div>
 
-        <DialogFooter className="pt-6 border-t border-gray-200 bg-white/50 backdrop-blur-sm">
-          <div className="flex gap-3 w-full">
-            <Button 
-              variant="outline" 
-              onClick={onClose} 
+        {/* Footer */}
+        <DialogFooter className="shrink-0 border-t border-slate-200/80 bg-white/90 px-6 py-4 backdrop-blur-sm sm:px-8">
+          <div className="flex w-full gap-3">
+            <Button
+              variant="outline"
+              onClick={onClose}
               disabled={sending}
-              className="flex-1 h-12 border-2 border-gray-300 hover:border-gray-400"
+              className="h-11 flex-1 rounded-xl border-slate-200 bg-white text-slate-700 shadow-sm hover:bg-slate-50"
             >
-              <X className="h-4 w-4 mr-2" />
+              <X className="mr-2 h-4 w-4" />
               Cancelar
             </Button>
-            <Button 
-              onClick={handleSend} 
+            <Button
+              onClick={handleSend}
               disabled={sending}
-              className="flex-1 h-12 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
+              className="h-11 flex-1 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-lg shadow-violet-500/20 transition-all hover:from-violet-700 hover:to-indigo-700 hover:shadow-violet-500/30"
             >
               {sending ? (
                 <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Enviando...
                 </>
               ) : (
                 <>
-                  <Send className="h-4 w-4 mr-2" />
-                  Enviar Lembretes ({Object.values(selectedMessages).filter(Boolean).length}/{messageTemplates.length})
+                  <Send className="mr-2 h-4 w-4" />
+                  Enviar Lembretes ({selectedCount}/{messageTemplates.length})
                 </>
               )}
             </Button>
