@@ -51,7 +51,9 @@ import {
   Trash2,
   Edit,
   Search,
-  X
+  X,
+  Video,
+  MapPin
 } from "lucide-react";
 
 interface PrestadorData {
@@ -208,7 +210,7 @@ const GuideControl: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingPrestador, setEditingPrestador] = useState<PrestadorData | null>(null);
   const [scrollPosition, setScrollPosition] = useState(0);
-  const [filterType, setFilterType] = useState<'all' | 'no-guide' | 'no-appointment' | 'guias-nao-assinadas' | 'guias-assinadas' | 'faturado' | 'falta-importar-guia'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'no-guide' | 'no-appointment' | 'guias-nao-assinadas' | 'guias-assinadas' | 'faturado' | 'falta-importar-guia' | 'online' | 'presential'>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMonth, setSelectedMonth] = useState<string>(() => {
     // Inicializar com o mês atual no formato YYYY-MM
@@ -557,7 +559,9 @@ const GuideControl: React.FC = () => {
       totalGuiasSemAssinatura: totalGuiasSemAssinatura,
       totalGuiasAssinadasPsicologo: totalGuiasAssinadasPsicologo, // Prontas para faturar
       totalGuiasFaturadas: totalGuiasFaturadas,
-      totalFaltaImportarGuia: totalFaltaImportarGuia
+      totalFaltaImportarGuia: totalFaltaImportarGuia,
+      online: patientsWithInsurance.filter((p) => p.appointment_type === "online").length,
+      presential: patientsWithInsurance.filter((p) => p.appointment_type === "presential").length,
     };
   };
 
@@ -687,6 +691,14 @@ const GuideControl: React.FC = () => {
         } catch (error) {
           return false;
         }
+      }
+
+      if (filterType === 'online') {
+        return patient.appointment_type === 'online';
+      }
+
+      if (filterType === 'presential') {
+        return patient.appointment_type === 'presential';
       }
 
       return true;
@@ -1517,7 +1529,7 @@ const GuideControl: React.FC = () => {
 
         {/* Dashboard de Estatísticas */}
         {!loading && !error && patientsData.length > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 sm:gap-3 mb-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-9 gap-2 sm:gap-3 mb-6">
             {/* Card Total de Pacientes */}
             <Card 
               className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${
@@ -1686,6 +1698,46 @@ const GuideControl: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Card Pacientes Online */}
+            <Card
+              className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${
+                filterType === 'online'
+                  ? 'ring-2 ring-teal-500 bg-teal-50'
+                  : 'hover:bg-gray-50'
+              }`}
+              onClick={() => setFilterType('online')}
+            >
+              <CardContent className="p-3">
+                <div className="flex flex-col items-center justify-center text-center gap-1">
+                  <div className="p-2 bg-teal-100 rounded-full mb-1">
+                    <Video className="h-4 w-4 text-teal-600" />
+                  </div>
+                  <p className="text-xs font-medium text-gray-600 leading-tight">Pac. Online</p>
+                  <p className="text-xl sm:text-2xl font-bold text-teal-600">{getDashboardStats().online}</p>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Card Pacientes Presencial */}
+            <Card
+              className={`cursor-pointer transition-all duration-200 hover:shadow-lg ${
+                filterType === 'presential'
+                  ? 'ring-2 ring-indigo-500 bg-indigo-50'
+                  : 'hover:bg-gray-50'
+              }`}
+              onClick={() => setFilterType('presential')}
+            >
+              <CardContent className="p-3">
+                <div className="flex flex-col items-center justify-center text-center gap-1">
+                  <div className="p-2 bg-indigo-100 rounded-full mb-1">
+                    <MapPin className="h-4 w-4 text-indigo-600" />
+                  </div>
+                  <p className="text-xs font-medium text-gray-600 leading-tight">Pac. Presencial</p>
+                  <p className="text-xl sm:text-2xl font-bold text-indigo-600">{getDashboardStats().presential}</p>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
@@ -1728,6 +1780,8 @@ const GuideControl: React.FC = () => {
                     {filterType === 'guias-assinadas' && <CheckCircle className="h-8 w-8 text-gray-400" />}
                     {filterType === 'faturado' && <DollarSign className="h-8 w-8 text-gray-400" />}
                     {filterType === 'falta-importar-guia' && <Upload className="h-8 w-8 text-gray-400" />}
+                    {filterType === 'online' && <Video className="h-8 w-8 text-gray-400" />}
+                    {filterType === 'presential' && <MapPin className="h-8 w-8 text-gray-400" />}
                   </div>
                   <h3 className="text-lg font-medium text-gray-700 mb-2">
                     {filterType === 'no-guide' && 'Nenhum paciente sem guia encontrado'}
@@ -1736,6 +1790,8 @@ const GuideControl: React.FC = () => {
                     {filterType === 'guias-assinadas' && 'Nenhuma guia pronta para faturar encontrada'}
                     {filterType === 'faturado' && 'Nenhuma guia faturada encontrada'}
                     {filterType === 'falta-importar-guia' && 'Nenhuma guia para importar encontrada'}
+                    {filterType === 'online' && 'Nenhum paciente online encontrado'}
+                    {filterType === 'presential' && 'Nenhum paciente presencial encontrado'}
                   </h3>
                   <p className="text-gray-500 mb-4">
                     {filterType === 'no-guide' && 'Todos os pacientes possuem número de guia.'}
@@ -1744,6 +1800,8 @@ const GuideControl: React.FC = () => {
                     {filterType === 'guias-assinadas' && 'Não há guias prontas para faturar no momento.'}
                     {filterType === 'faturado' && 'Não há guias faturadas no período selecionado.'}
                     {filterType === 'falta-importar-guia' && 'Todas as guias assinadas já foram importadas.'}
+                    {filterType === 'online' && 'Não há pacientes com atendimento online no período.'}
+                    {filterType === 'presential' && 'Não há pacientes com atendimento presencial no período.'}
                   </p>
                   <Button 
                     variant="outline" 
