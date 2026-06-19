@@ -23,9 +23,7 @@ import {
 } from "@/components/ui/select";
 import { format, subDays, startOfWeek, startOfMonth, startOfYear, endOfWeek, endOfMonth, endOfYear } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { jsPDF } from "jspdf";
-import "jspdf-autotable";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -35,11 +33,12 @@ import { PaymentBatch, PaymentItem } from "@/types/payment";
 import { Appointment } from "@/types/appointment";
 import { DateRange } from "react-day-picker";
 
-import { Download, Edit, Save, Loader, DollarSign, CheckSquare, XSquare, Eye, AlertTriangle, Search, CalendarRange, Users, Calendar as CalendarIcon, TrendingUp, Trash2, Check, Upload } from "lucide-react";
+import { Download, Edit, Save, Loader, DollarSign, CheckSquare, XSquare, Eye, AlertTriangle, Search, CalendarRange, Users, Calendar as CalendarIcon, TrendingUp, Trash2, Check, Upload, User, KeyRound, ClipboardList } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/components/ui/use-toast";
 import { cn } from "@/lib/utils";
+import { generatePaymentLotPdf } from "@/utils/paymentLotPdf";
 
 type FilterPeriod = "day" | "week" | "month" | "year";
 
@@ -73,6 +72,19 @@ interface Patient {
   // Adicione outros campos conforme a resposta da API
 }
 
+const getPaginationRange = (current: number, total: number): (number | "ellipsis")[] => {
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  if (current <= 4) {
+    return [1, 2, 3, 4, 5, "ellipsis", total];
+  }
+  if (current >= total - 3) {
+    return [1, "ellipsis", total - 4, total - 3, total - 2, total - 1, total];
+  }
+  return [1, "ellipsis", current - 1, current, current + 1, "ellipsis", total];
+};
+
 const FinanceCharts = () => {
   const { user, users } = useAuth();
   const { appointments } = useAppointments();
@@ -92,6 +104,9 @@ const FinanceCharts = () => {
   const [showReportTable, setShowReportTable] = useState(false);
   const [reportTablePage, setReportTablePage] = useState(1);
   const REPORT_ROWS_PER_PAGE = 30;
+  const [paymentLotsPage, setPaymentLotsPage] = useState(1);
+  const [psychologistPaymentLotsPage, setPsychologistPaymentLotsPage] = useState(1);
+  const PAYMENT_LOTS_PER_PAGE = 20;
   const [editingTransactionId, setEditingTransactionId] = useState<string | null>(null);
   const [editTransactionValue, setEditTransactionValue] = useState<number>(0);
   const [editTransactionInsuranceType, setEditTransactionInsuranceType] = useState<string>("");
@@ -333,84 +348,142 @@ const FinanceCharts = () => {
     }
   };
 
-  // Função para agrupar lotes por payment_id e calcular totais
-  const getGroupedPaymentLots = () => {
-    console.log('=== AGRUPANDO LOTES ===');
-    console.log('paymentLots recebidos:', paymentLots);
-    console.log('Quantidade de paymentLots:', paymentLots.length);
-    
+  const groupedPaymentLots = useMemo(() => {
     const grouped: { [key: string]: any } = {};
-    
-    paymentLots.forEach((lot, index) => {
-      console.log(`Processando lote ${index + 1}:`, lot);
-      const key = lot.payment_id; // Usar payment_id para agrupar
-      console.log(`payment_id (chave): ${key}`);
-      
+
+    paymentLots.forEach((lot) => {
+      const key = lot.payment_id;
+
       if (!grouped[key]) {
-        console.log(`Criando novo grupo para payment_id: ${key}`);
         grouped[key] = {
           id: lot.payment_id,
-          payment_id: lot.payment_id, // Manter payment_id para exclusão
+          payment_id: lot.payment_id,
           psychologist_name: lot.psychologist_name,
-          psychologist_id: lot.psychologist_id, // Adicionar psychologist_id
-          payment_created_at: lot.created_at, // Usar created_at da API
-          status: lot.control, // Usar control como status
-          pix: lot.pix, // Campo PIX da API
-          comprovante: lot.comprovante, // Campo comprovante da API
+          psychologist_id: lot.psychologist_id,
+          payment_created_at: lot.created_at,
+          status: lot.control,
+          pix: lot.pix,
+          comprovante: lot.comprovante,
           appointments: [],
-          total_value: 0
+          total_value: 0,
         };
       }
-      
-      const appointment = {
-        patient_name: lot.name, // Usar 'name' em vez de 'patient_name'
+
+      grouped[key].appointments.push({
+        patient_name: lot.name,
         date: lot.date,
-        value: parseFloat(lot.value || 0), // Converter string para number
-        commission: parseFloat(lot.value || 0) * 0.5, // 50% de comissão
-        insurance_type: lot.insurance_type || 'Particular',
-        appointment_type: lot.appointment_type || 'presential',
+        value: parseFloat(lot.value || 0),
+        commission: parseFloat(lot.value || 0) * 0.5,
+        insurance_type: lot.insurance_type || "Particular",
+        appointment_type: lot.appointment_type || "presential",
         patient_id: lot.patient_id,
-        appointment_id: lot.appointment_id
-      };
-      
-      console.log(`Adicionando atendimento ao grupo ${key}:`, appointment);
-      grouped[key].appointments.push(appointment);
+        appointment_id: lot.appointment_id,
+      });
       grouped[key].total_value += parseFloat(lot.value || 0);
     });
-    
-    const result = Object.values(grouped);
-    console.log('Lotes agrupados (resultado):', result);
-    console.log('Quantidade de grupos:', result.length);
-    console.log('=== FIM AGRUPAMENTO ===');
 
-    return result;
-  };
+    return Object.values(grouped).sort(
+      (a, b) =>
+        new Date(b.payment_created_at).getTime() - new Date(a.payment_created_at).getTime()
+    );
+  }, [paymentLots]);
 
-  // Função para filtrar lotes de pagamento por psicólogo
-  const getPsychologistPaymentLots = (psychologistId: string) => {
-    console.log('=== FILTRANDO LOTES POR PSICÓLOGO ===');
-    console.log('psychologistId recebido:', psychologistId);
-    console.log('Tipo do psychologistId:', typeof psychologistId);
-    
-    const allLots = getGroupedPaymentLots();
-    console.log('Total de lotes agrupados:', allLots.length);
-    console.log('Lotes agrupados:', allLots);
-    
-    const filteredLots = allLots.filter(lot => {
-      console.log(`Comparando lot.psychologist_id (${lot.psychologist_id}, tipo: ${typeof lot.psychologist_id}) com psychologistId (${psychologistId}, tipo: ${typeof psychologistId})`);
-      console.log(`Status do lote: ${lot.status}`);
-      console.log(`Lote completo:`, lot);
-      
-      const matches = String(lot.psychologist_id) === String(psychologistId);
-      console.log(`Match: ${matches}`);
-      return matches;
-    });
-    
-    console.log('Lotes filtrados para o psicólogo:', filteredLots);
-    console.log('Quantidade de lotes filtrados:', filteredLots.length);
-    console.log('=== FIM FILTRO POR PSICÓLOGO ===');
-    
-    return filteredLots;
+  const psychologistPaymentLots = useMemo(() => {
+    if (!user?.id) return [];
+    return groupedPaymentLots.filter(
+      (lot) => String(lot.psychologist_id) === String(user.id)
+    );
+  }, [groupedPaymentLots, user?.id]);
+
+  const adminPaymentLotsTotalPages = Math.ceil(groupedPaymentLots.length / PAYMENT_LOTS_PER_PAGE);
+  const adminPaymentLotsStartIndex = (paymentLotsPage - 1) * PAYMENT_LOTS_PER_PAGE;
+  const paginatedGroupedPaymentLots = groupedPaymentLots.slice(
+    adminPaymentLotsStartIndex,
+    adminPaymentLotsStartIndex + PAYMENT_LOTS_PER_PAGE
+  );
+
+  const psychologistPaymentLotsTotalPages = Math.ceil(
+    psychologistPaymentLots.length / PAYMENT_LOTS_PER_PAGE
+  );
+  const psychologistPaymentLotsStartIndex =
+    (psychologistPaymentLotsPage - 1) * PAYMENT_LOTS_PER_PAGE;
+  const paginatedPsychologistPaymentLots = psychologistPaymentLots.slice(
+    psychologistPaymentLotsStartIndex,
+    psychologistPaymentLotsStartIndex + PAYMENT_LOTS_PER_PAGE
+  );
+
+  useEffect(() => {
+    setPaymentLotsPage(1);
+    setPsychologistPaymentLotsPage(1);
+  }, [paymentLots]);
+
+  useEffect(() => {
+    if (paymentLotsPage > adminPaymentLotsTotalPages && adminPaymentLotsTotalPages > 0) {
+      setPaymentLotsPage(adminPaymentLotsTotalPages);
+    }
+  }, [paymentLotsPage, adminPaymentLotsTotalPages]);
+
+  useEffect(() => {
+    if (
+      psychologistPaymentLotsPage > psychologistPaymentLotsTotalPages &&
+      psychologistPaymentLotsTotalPages > 0
+    ) {
+      setPsychologistPaymentLotsPage(psychologistPaymentLotsTotalPages);
+    }
+  }, [psychologistPaymentLotsPage, psychologistPaymentLotsTotalPages]);
+
+  const renderPaymentLotsPagination = (
+    currentPage: number,
+    totalPages: number,
+    totalItems: number,
+    startIndex: number,
+    onPageChange: (page: number) => void
+  ) => {
+    if (totalPages <= 1) return null;
+
+    return (
+      <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t bg-[#faf7f3]">
+        <p className="text-sm text-gray-600">
+          Mostrando {startIndex + 1} a {Math.min(startIndex + PAYMENT_LOTS_PER_PAGE, totalItems)} de{" "}
+          {totalItems} lote(s)
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-1">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange(Math.max(1, currentPage - 1))}
+            disabled={currentPage === 1}
+          >
+            Anterior
+          </Button>
+          {getPaginationRange(currentPage, totalPages).map((page, index) =>
+            page === "ellipsis" ? (
+              <span key={`lots-ellipsis-${index}`} className="px-2 text-gray-500">
+                ...
+              </span>
+            ) : (
+              <Button
+                key={`lots-page-${page}`}
+                variant={currentPage === page ? "default" : "outline"}
+                size="sm"
+                onClick={() => onPageChange(page)}
+                className="min-w-[2.25rem]"
+              >
+                {page}
+              </Button>
+            )
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onPageChange(Math.min(totalPages, currentPage + 1))}
+            disabled={currentPage === totalPages}
+          >
+            Próxima
+          </Button>
+        </div>
+      </div>
+    );
   };
 
   // Funções para pagamentos
@@ -868,19 +941,6 @@ const FinanceCharts = () => {
     reportTableStartIndex + REPORT_ROWS_PER_PAGE
   );
 
-  const getReportTablePaginationRange = (current: number, total: number): (number | "ellipsis")[] => {
-    if (total <= 7) {
-      return Array.from({ length: total }, (_, i) => i + 1);
-    }
-    if (current <= 4) {
-      return [1, 2, 3, 4, 5, "ellipsis", total];
-    }
-    if (current >= total - 3) {
-      return [1, "ellipsis", total - 4, total - 3, total - 2, total - 1, total];
-    }
-    return [1, "ellipsis", current - 1, current, current + 1, "ellipsis", total];
-  };
-
   useEffect(() => {
     setReportTablePage(1);
   }, [filterPeriod, selectedPsychologist, selectedMonth, selectedYear, effectivePsychologist]);
@@ -1100,69 +1160,20 @@ const FinanceCharts = () => {
     setEditingTransactionId(null);
   };
 
-  const generatePaymentLotPDF = (lotDetails: any) => {
-    const doc = new jsPDF();
-
-    const title = `Detalhes do Lote de Pagamento`;
-    doc.setFontSize(18);
-    doc.text(title, 14, 20);
-
-    doc.setFontSize(12);
-    doc.text(`Psicólogo: ${lotDetails.psychologist_name}`, 14, 30);
-    doc.text(`Status: ${lotDetails.status === 'payments_created' ? 'Pagamento Criado' : lotDetails.status === 'payments_finish' ? 'Pagamento Realizado' : lotDetails.status}`, 14, 37);
-    doc.text(`Valor Total: R$ ${lotDetails.total_value.toFixed(2)}`, 14, 44);
-    // Set text color to green for "Valor a Receber -12%"
-    doc.setTextColor(0, 128, 0);
-    doc.text(`Repasse liquido -12% (Imposto): R$ ${((lotDetails.total_value * 0.88) * 0.5).toFixed(2)}`, 14, 51);
-    // Reset text color to black
-    doc.setTextColor(0, 0, 0);
-    doc.text(`Total de Consultas: ${lotDetails.appointments.length}`, 14, 58);
-    doc.text(`Data de Criação: ${format(new Date(lotDetails.payment_created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}`, 14, 65);
-    
-    doc.text(
-      `Data de Geração: ${format(new Date(), "dd/MM/yyyy HH:mm", {
-        locale: ptBR,
-      })}`,
-      14,
-      72
-    );
-
-    const tableData = lotDetails.appointments.map((appointment: any) => {
-      return [
-        appointment.patient_name,
-        formatDate(appointment.date),
-        appointment.insurance_type || 'Particular',
-        appointment.appointment_type === 'online' ? 'Online' : 'Presencial',
-        `R$ ${appointment.value.toFixed(2)}`,
-        `R$ ${appointment.commission.toFixed(2)}`,
-        `R$ ${(appointment.commission * 0.88).toFixed(2)}`,
-      ];
-    });
-
-    (doc as any).autoTable({
-      startY: 80,
-      head: [["Paciente", "Data", "Plano", "Tipo", "Valor Bruto", "Comissão", "Valor a Receber -12%"]],
-      body: tableData,
-      theme: "grid",
-      headStyles: { fillColor: [0, 123, 255], textColor: 255 },
-      styles: { fontSize: 9 },
-      columnStyles: {
-        0: { cellWidth: 40 },
-        1: { cellWidth: 25 },
-        2: { cellWidth: 30 },
-        3: { cellWidth: 20 },
-        4: { cellWidth: 25 },
-        5: { cellWidth: 25 },
-        6: { cellWidth: 30 },
-      },
-    });
-
-    const reportName = `lote-pagamento-${lotDetails.psychologist_name.replace(/\s+/g, '-')}-${format(
-      new Date(),
-      "yyyyMMdd",
-      { locale: ptBR }
-    )}.pdf`;
-    doc.save(reportName);
+  const handleExportPaymentLotPdf = async (lotDetails: any) => {
+    try {
+      await generatePaymentLotPdf(lotDetails);
+      toast({
+        title: "PDF gerado",
+        description: "O relatório de repasse foi exportado com sucesso.",
+      });
+    } catch {
+      toast({
+        title: "Erro ao gerar PDF",
+        description: "Não foi possível exportar o relatório. Tente novamente.",
+        variant: "destructive",
+      });
+    }
   };
 
   const deletePaymentLot = async (lot: any) => {
@@ -1689,14 +1700,14 @@ const FinanceCharts = () => {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {getGroupedPaymentLots().length === 0 ? (
+                        {groupedPaymentLots.length === 0 ? (
                           <TableRow>
                             <TableCell colSpan={5} className="text-center py-4 text-gray-500">
                               Nenhum lote de pagamento encontrado
                             </TableCell>
                           </TableRow>
                         ) : (
-                          getGroupedPaymentLots().map(lot => (
+                          paginatedGroupedPaymentLots.map(lot => (
                             <TableRow 
                               key={lot.id}
                               className={lot.status === 'payments_finish' ? 'bg-green-50 hover:bg-green-100' : ''}
@@ -1772,16 +1783,23 @@ const FinanceCharts = () => {
                         )}
                       </TableBody>
                     </Table>
+                    {renderPaymentLotsPagination(
+                      paymentLotsPage,
+                      adminPaymentLotsTotalPages,
+                      groupedPaymentLots.length,
+                      adminPaymentLotsStartIndex,
+                      setPaymentLotsPage
+                    )}
                   </div>
 
                   {/* Mobile Card View */}
                   <div className="md:hidden space-y-3">
-                    {getGroupedPaymentLots().length === 0 ? (
+                    {groupedPaymentLots.length === 0 ? (
                       <div className="text-center py-4 text-gray-500">
                         Nenhum lote de pagamento encontrado
                       </div>
                     ) : (
-                      getGroupedPaymentLots().map(lot => (
+                      paginatedGroupedPaymentLots.map(lot => (
                         <div 
                           key={lot.id}
                           className={`border rounded-lg p-4 ${lot.status === 'payments_finish' ? 'bg-green-50' : ''}`}
@@ -1868,6 +1886,13 @@ const FinanceCharts = () => {
                         </div>
                       ))
                     )}
+                    {renderPaymentLotsPagination(
+                      paymentLotsPage,
+                      adminPaymentLotsTotalPages,
+                      groupedPaymentLots.length,
+                      adminPaymentLotsStartIndex,
+                      setPaymentLotsPage
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -1889,10 +1914,10 @@ const FinanceCharts = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold text-blue-600">
-                      R$ {getPsychologistPaymentLots(String(user?.id) || "").filter(p => p.status === 'payments_created').reduce((sum, p) => sum + p.total_value, 0).toFixed(2)}
+                      R$ {psychologistPaymentLots.filter(p => p.status === 'payments_created').reduce((sum, p) => sum + p.total_value, 0).toFixed(2)}
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
-                      {getPsychologistPaymentLots(String(user?.id) || "").filter(p => p.status === 'payments_created').length} lote(s) aguardando aprovação
+                      {psychologistPaymentLots.filter(p => p.status === 'payments_created').length} lote(s) aguardando aprovação
                     </p>
                   </CardContent>
                 </Card>
@@ -1903,10 +1928,10 @@ const FinanceCharts = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold text-green-600">
-                      R$ {getPsychologistPaymentLots(String(user?.id) || "").filter(p => p.status === 'payments_finish').reduce((sum, p) => sum + p.total_value, 0).toFixed(2)}
+                      R$ {psychologistPaymentLots.filter(p => p.status === 'payments_finish').reduce((sum, p) => sum + p.total_value, 0).toFixed(2)}
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
-                      {getPsychologistPaymentLots(String(user?.id) || "").filter(p => p.status === 'payments_finish').length} lote(s) aprovado(s)
+                      {psychologistPaymentLots.filter(p => p.status === 'payments_finish').length} lote(s) aprovado(s)
                     </p>
                   </CardContent>
                 </Card>
@@ -1917,7 +1942,7 @@ const FinanceCharts = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="text-2xl font-bold text-purple-600">
-                      {getPsychologistPaymentLots(String(user?.id) || "").reduce((sum, p) => sum + p.appointments.length, 0)}
+                      {psychologistPaymentLots.reduce((sum, p) => sum + p.appointments.length, 0)}
                     </div>
                     <p className="text-xs text-gray-500 mt-1">
                       atendimentos nos lotes
@@ -1932,7 +1957,7 @@ const FinanceCharts = () => {
                   <CardTitle>Meus Lotes de Pagamento</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {getPsychologistPaymentLots(String(user?.id) || "").length === 0 ? (
+                  {psychologistPaymentLots.length === 0 ? (
                     <div className="text-center py-8 text-gray-500">
                       Nenhum lote de pagamento encontrado
                     </div>
@@ -1952,7 +1977,7 @@ const FinanceCharts = () => {
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {getPsychologistPaymentLots(String(user?.id) || "").map(lot => (
+                            {paginatedPsychologistPaymentLots.map(lot => (
                               <TableRow 
                                 key={lot.id}
                                 className={lot.status === 'payments_finish' ? 'bg-green-50 hover:bg-green-100' : ''}
@@ -2026,11 +2051,18 @@ const FinanceCharts = () => {
                             ))}
                           </TableBody>
                         </Table>
+                        {renderPaymentLotsPagination(
+                          psychologistPaymentLotsPage,
+                          psychologistPaymentLotsTotalPages,
+                          psychologistPaymentLots.length,
+                          psychologistPaymentLotsStartIndex,
+                          setPsychologistPaymentLotsPage
+                        )}
                       </div>
 
                       {/* Mobile Card View */}
                       <div className="md:hidden space-y-3">
-                        {getPsychologistPaymentLots(String(user?.id) || "").map(lot => (
+                        {paginatedPsychologistPaymentLots.map(lot => (
                           <div 
                             key={lot.id}
                             className={`border rounded-lg p-4 ${lot.status === 'payments_finish' ? 'bg-green-50' : ''}`}
@@ -2111,6 +2143,13 @@ const FinanceCharts = () => {
                             </div>
                           </div>
                         ))}
+                        {renderPaymentLotsPagination(
+                          psychologistPaymentLotsPage,
+                          psychologistPaymentLotsTotalPages,
+                          psychologistPaymentLots.length,
+                          psychologistPaymentLotsStartIndex,
+                          setPsychologistPaymentLotsPage
+                        )}
                       </div>
                     </>
                     )}
@@ -2534,7 +2573,7 @@ const FinanceCharts = () => {
                     >
                       Anterior
                     </Button>
-                    {getReportTablePaginationRange(reportTablePage, reportTableTotalPages).map((page, index) =>
+                    {getPaginationRange(reportTablePage, reportTableTotalPages).map((page, index) =>
                       page === "ellipsis" ? (
                         <span key={`ellipsis-${index}`} className="px-2 text-gray-500">
                           ...
@@ -2722,106 +2761,182 @@ const FinanceCharts = () => {
 
       {/* Payment Lot Details Dialog */}
       <Dialog open={!!selectedLotDetails} onOpenChange={() => setSelectedLotDetails(null)}>
-        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <div className="flex items-center justify-between">
-              <DialogTitle>Detalhes do Lote de Pagamento</DialogTitle>
-            </div>
-          </DialogHeader>
-          
-          {/* Banner destacado com botão de exportar PDF */}
+        <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto p-0 gap-0">
+          <div className="h-1.5 bg-[#b99f7e]" />
+
           {selectedLotDetails && (
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-lg p-4 mb-4 shadow-md">
-              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 bg-blue-100 rounded-full">
-                    <Download className="h-6 w-6 text-blue-600" />
+            <div className="p-6 space-y-6">
+              <DialogHeader className="space-y-1 text-left">
+                <DialogTitle className="text-xl font-bold text-gray-900">
+                  Detalhes do Lote de Pagamento
+                </DialogTitle>
+                <p className="text-sm text-gray-500">
+                  Relatório de repasse · {selectedLotDetails.psychologist_name}
+                </p>
+              </DialogHeader>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="rounded-xl bg-gradient-to-br from-green-600 to-green-700 p-5 text-white shadow-md">
+                  <div className="flex items-center gap-2 text-green-100">
+                    <DollarSign className="h-4 w-4" />
+                    <p className="text-xs font-semibold uppercase tracking-wide">Repasse Líquido (-12%)</p>
                   </div>
-                  <div>
-                    <p className="font-semibold text-gray-800 text-sm sm:text-base">Gerar Documento PDF</p>
-                    <p className="text-xs sm:text-sm text-gray-600">Exporte os detalhes do lote de pagamento em PDF</p>
-                  </div>
-                </div>
-                <Button
-                  onClick={() => generatePaymentLotPDF(selectedLotDetails)}
-                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-lg hover:shadow-xl transition-all duration-200 px-5 py-2.5 whitespace-nowrap"
-                  size="default"
-                >
-                  <Download className="h-5 w-5" /> 
-                  <span className="text-sm sm:text-base">Exportar PDF</span>
-                </Button>
-              </div>
-            </div>
-          )}
-          
-          {selectedLotDetails && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <p className="text-sm text-gray-500">Psicólogo</p>
-                  <p className="font-medium">{selectedLotDetails.psychologist_name}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Status</p>
-                  <Badge className="bg-blue-100 text-blue-800">
-                    {selectedLotDetails.status === 'payments_created' ? 'Pagamento Criado' : selectedLotDetails.status === 'payments_finish' ? 'Pagamento Realizado' : selectedLotDetails.status}
-                  </Badge>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Valor Total</p>
-                  <p className="font-medium">R$ {selectedLotDetails.total_value.toFixed(2)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Data de Criação</p>
-                  <p className="font-medium">
-                    {format(new Date(selectedLotDetails.payment_created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                  <p className="text-3xl font-bold mt-2">
+                    R$ {((selectedLotDetails.total_value * 0.88) * 0.5).toFixed(2)}
                   </p>
                 </div>
-                <div>
-                  <p className="text-sm text-gray-500">Valor a Receber -12% (Imposto)</p>
-                  <p className="font-medium text-green-600">R$ {((selectedLotDetails.total_value * 0.88) * 0.5).toFixed(2)}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Total de Consultas</p>
-                  <p className="font-medium">{selectedLotDetails.appointments.length}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">Chave PIX</p>
-                  <p className="font-medium break-all">{selectedLotDetails.pix || "—"}</p>
+                <div className="rounded-xl border border-[#e5ddd2] bg-[#faf7f3] p-5">
+                  <div className="flex items-center gap-2 text-gray-500">
+                    <ClipboardList className="h-4 w-4" />
+                    <p className="text-xs font-semibold uppercase tracking-wide">Total de Consultas</p>
+                  </div>
+                  <p className="text-3xl font-bold text-gray-900 mt-2">
+                    {selectedLotDetails.appointments.length}
+                  </p>
                 </div>
               </div>
-              
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Paciente</TableHead>
-                      <TableHead>Data</TableHead>
-                      <TableHead>Plano</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Valor Bruto</TableHead>
-                      <TableHead>Comissão</TableHead>
-                      <TableHead>-12% (Imposto)</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {selectedLotDetails.appointments.map((appointment: any, index: number) => (
-                      <TableRow key={index}>
-                        <TableCell>{appointment.patient_name}</TableCell>
-                        <TableCell>{formatDate(appointment.date)}</TableCell>
-                        <TableCell>{appointment.insurance_type}</TableCell>
-                        <TableCell>
-                          <Badge variant="secondary" className={appointment.appointment_type === 'online' ? 'bg-green-100 text-green-800' : 'bg-blue-100 text-blue-800'}>
-                            {appointment.appointment_type === 'online' ? 'Online' : 'Presencial'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>R$ {appointment.value.toFixed(2)}</TableCell>
-                        <TableCell>R$ {appointment.commission.toFixed(2)}</TableCell>
-                        <TableCell className="text-green-600 font-medium">R$ {(appointment.commission * 0.88).toFixed(2)}</TableCell>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="flex items-start gap-3 rounded-lg border border-[#e5ddd2] bg-white p-4">
+                  <div className="rounded-lg bg-[#faf7f3] p-2 text-[#b99f7e]">
+                    <User className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Profissional</p>
+                    <p className="font-semibold text-gray-900 mt-0.5">{selectedLotDetails.psychologist_name}</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 rounded-lg border border-[#e5ddd2] bg-white p-4">
+                  <div className="rounded-lg bg-[#faf7f3] p-2 text-[#b99f7e]">
+                    <CheckSquare className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Status</p>
+                    <Badge
+                      className={cn(
+                        "mt-1",
+                        selectedLotDetails.status === "payments_finish"
+                          ? "bg-green-100 text-green-800"
+                          : selectedLotDetails.status === "payments_created"
+                          ? "bg-amber-100 text-amber-800"
+                          : "bg-gray-100 text-gray-800"
+                      )}
+                    >
+                      {selectedLotDetails.status === "payments_created"
+                        ? "Pagamento Criado"
+                        : selectedLotDetails.status === "payments_finish"
+                        ? "Pagamento Realizado"
+                        : selectedLotDetails.status}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 rounded-lg border border-[#e5ddd2] bg-white p-4">
+                  <div className="rounded-lg bg-[#faf7f3] p-2 text-[#b99f7e]">
+                    <CalendarIcon className="h-4 w-4" />
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Data de Criação</p>
+                    <p className="font-semibold text-gray-900 mt-0.5">
+                      {format(new Date(selectedLotDetails.payment_created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-3 rounded-lg border border-[#e5ddd2] bg-white p-4">
+                  <div className="rounded-lg bg-[#faf7f3] p-2 text-[#b99f7e]">
+                    <KeyRound className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Chave PIX</p>
+                    <p className="font-semibold text-gray-900 mt-0.5 break-all">
+                      {selectedLotDetails.pix || "Não informada"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[#e5ddd2] bg-[#faf7f3] p-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="rounded-lg bg-[#b99f7e] p-2.5 text-white">
+                      <Download className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="font-semibold text-gray-800">Exportar Relatório PDF</p>
+                      <p className="text-sm text-gray-600">Documento formatado para repasse</p>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => handleExportPaymentLotPdf(selectedLotDetails)}
+                    className="flex items-center gap-2 bg-[#b99f7e] hover:bg-[#a88f6e] text-white font-semibold shadow-md whitespace-nowrap"
+                  >
+                    <Download className="h-4 w-4" />
+                    Exportar PDF
+                  </Button>
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center gap-2 mb-3">
+                  <div className="h-4 w-1 rounded-full bg-[#b99f7e]" />
+                  <h3 className="font-semibold text-gray-900">Detalhamento das Consultas</h3>
+                </div>
+                <div className="rounded-lg border border-[#e5ddd2] overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-[#b99f7e] hover:bg-[#b99f7e]">
+                        <TableHead className="text-white">Paciente</TableHead>
+                        <TableHead className="text-white">Data</TableHead>
+                        <TableHead className="text-white">Plano</TableHead>
+                        <TableHead className="text-white">Tipo</TableHead>
+                        <TableHead className="text-white">Valor Bruto</TableHead>
+                        <TableHead className="text-white">Comissão</TableHead>
+                        <TableHead className="text-white">Repasse (-12%)</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedLotDetails.appointments.map((appointment: any, index: number) => (
+                        <TableRow key={index} className={index % 2 === 0 ? "bg-white" : "bg-[#faf7f3]"}>
+                          <TableCell>{appointment.patient_name}</TableCell>
+                          <TableCell>{formatDate(appointment.date)}</TableCell>
+                          <TableCell>{appointment.insurance_type}</TableCell>
+                          <TableCell>
+                            <Badge
+                              variant="secondary"
+                              className={
+                                appointment.appointment_type === "online"
+                                  ? "bg-green-100 text-green-800"
+                                  : "bg-blue-100 text-blue-800"
+                              }
+                            >
+                              {appointment.appointment_type === "online" ? "Online" : "Presencial"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>R$ {appointment.value.toFixed(2)}</TableCell>
+                          <TableCell>R$ {appointment.commission.toFixed(2)}</TableCell>
+                          <TableCell className="text-green-700 font-semibold">
+                            R$ {(appointment.commission * 0.88).toFixed(2)}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                    <TableFooter>
+                      <TableRow className="bg-[#faf7f3] border-t-2 border-[#b99f7e] hover:bg-[#faf7f3]">
+                        <TableCell colSpan={4} className="text-right font-bold text-gray-900">
+                          Totais
+                        </TableCell>
+                        <TableCell className="font-bold text-gray-900">
+                          R$ {selectedLotDetails.appointments.reduce((sum: number, a: any) => sum + (Number(a.value) || 0), 0).toFixed(2)}
+                        </TableCell>
+                        <TableCell className="font-bold text-gray-900">
+                          R$ {selectedLotDetails.appointments.reduce((sum: number, a: any) => sum + (Number(a.commission) || 0), 0).toFixed(2)}
+                        </TableCell>
+                        <TableCell className="font-bold text-green-700">
+                          R$ {selectedLotDetails.appointments.reduce((sum: number, a: any) => sum + (Number(a.commission) || 0) * 0.88, 0).toFixed(2)}
+                        </TableCell>
+                      </TableRow>
+                    </TableFooter>
+                  </Table>
+                </div>
               </div>
             </div>
           )}
