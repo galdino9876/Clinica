@@ -1111,9 +1111,9 @@ const FinanceCharts = () => {
     doc.text(`Psicólogo: ${lotDetails.psychologist_name}`, 14, 30);
     doc.text(`Status: ${lotDetails.status === 'payments_created' ? 'Pagamento Criado' : lotDetails.status === 'payments_finish' ? 'Pagamento Realizado' : lotDetails.status}`, 14, 37);
     doc.text(`Valor Total: R$ ${lotDetails.total_value.toFixed(2)}`, 14, 44);
-    // Set text color to green for "Valor a Receber -6%"
+    // Set text color to green for "Valor a Receber -12%"
     doc.setTextColor(0, 128, 0);
-    doc.text(`Valor a Receber -6% (Imposto): R$ ${((lotDetails.total_value * 0.94) * 0.5).toFixed(2)}`, 14, 51);
+    doc.text(`Repasse liquido -12% (Imposto): R$ ${((lotDetails.total_value * 0.88) * 0.5).toFixed(2)}`, 14, 51);
     // Reset text color to black
     doc.setTextColor(0, 0, 0);
     doc.text(`Total de Consultas: ${lotDetails.appointments.length}`, 14, 58);
@@ -1135,13 +1135,13 @@ const FinanceCharts = () => {
         appointment.appointment_type === 'online' ? 'Online' : 'Presencial',
         `R$ ${appointment.value.toFixed(2)}`,
         `R$ ${appointment.commission.toFixed(2)}`,
-        `R$ ${(appointment.commission * 0.94).toFixed(2)}`,
+        `R$ ${(appointment.commission * 0.88).toFixed(2)}`,
       ];
     });
 
     (doc as any).autoTable({
       startY: 80,
-      head: [["Paciente", "Data", "Plano", "Tipo", "Valor Bruto", "Comissão", "Valor a Receber -6%"]],
+      head: [["Paciente", "Data", "Plano", "Tipo", "Valor Bruto", "Comissão", "Valor a Receber -12%"]],
       body: tableData,
       theme: "grid",
       headStyles: { fillColor: [0, 123, 255], textColor: 255 },
@@ -1683,7 +1683,7 @@ const FinanceCharts = () => {
                         <TableRow>
                           <TableHead>Psicólogo</TableHead>
                           <TableHead>Data Criação</TableHead>
-                          <TableHead>Valor A receber (-6%)</TableHead>
+                          <TableHead>Valor A receber (-12%)</TableHead>
                           <TableHead>Status</TableHead>
                           <TableHead>Ações/Comprovante</TableHead>
                         </TableRow>
@@ -1705,7 +1705,7 @@ const FinanceCharts = () => {
                               <TableCell>
                                 {format(new Date(lot.payment_created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                               </TableCell>
-                              <TableCell>R$ {((lot.total_value * 0.94) * 0.5).toFixed(2)}</TableCell>
+                              <TableCell>R$ {((lot.total_value * 0.88) * 0.5).toFixed(2)}</TableCell>
                               <TableCell>
                                 <Badge className={
                                   lot.status === 'payments_created' 
@@ -1796,8 +1796,8 @@ const FinanceCharts = () => {
                               <p className="text-sm">{format(new Date(lot.payment_created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
                             </div>
                             <div>
-                              <span className="text-xs text-gray-500">Valor A receber (-6%):</span>
-                              <p className="font-medium text-green-600">R$ {((lot.total_value * 0.94) * 0.5).toFixed(2)}</p>
+                              <span className="text-xs text-gray-500">Valor A receber (-12%):</span>
+                              <p className="font-medium text-green-600">R$ {((lot.total_value * 0.88) * 0.5).toFixed(2)}</p>
                             </div>
                             <div>
                               <span className="text-xs text-gray-500">Status:</span>
@@ -1945,7 +1945,7 @@ const FinanceCharts = () => {
                             <TableRow>
                               <TableHead>Data Criação</TableHead>
                               <TableHead>Valor Total</TableHead>
-                              <TableHead>Valor A receber (-6%)</TableHead>
+                              <TableHead>Valor A receber (-12%)</TableHead>
                               <TableHead>Status</TableHead>
                               <TableHead>Atendimentos</TableHead>
                               <TableHead>Ações/Comprovante</TableHead>
@@ -1961,7 +1961,7 @@ const FinanceCharts = () => {
                                   {format(new Date(lot.payment_created_at), "dd/MM/yyyy HH:mm", { locale: ptBR })}
                                 </TableCell>
                                 <TableCell>R$ {lot.total_value.toFixed(2)}</TableCell>
-                                <TableCell>R$ {((lot.total_value * 0.94) * 0.5).toFixed(2)}</TableCell>
+                                <TableCell>R$ {((lot.total_value * 0.88) * 0.5).toFixed(2)}</TableCell>
                                 <TableCell>
                                   <Badge className={
                                     lot.status === 'payments_created' 
@@ -2045,8 +2045,8 @@ const FinanceCharts = () => {
                                 <p className="font-medium">R$ {lot.total_value.toFixed(2)}</p>
                               </div>
                               <div>
-                                <span className="text-xs text-gray-500">Valor A receber (-6%):</span>
-                                <p className="font-medium text-green-600">R$ {((lot.total_value * 0.94) * 0.5).toFixed(2)}</p>
+                                <span className="text-xs text-gray-500">Valor A receber (-12%):</span>
+                                <p className="font-medium text-green-600">R$ {((lot.total_value * 0.88) * 0.5).toFixed(2)}</p>
                               </div>
                               <div>
                                 <span className="text-xs text-gray-500">Status:</span>
@@ -2296,12 +2296,12 @@ const FinanceCharts = () => {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-gray-500">
-                    Receita da Clínica -6% (Imposto)
+                    Receita da Clínica -12% (Imposto)
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-green-600">
-                    R$ {(clinicRevenueCompleted * 0.94).toFixed(2)}
+                    R$ {(clinicRevenueCompleted * 0.88).toFixed(2)}
                   </div>
                 </CardContent>
               </Card>
@@ -2309,12 +2309,12 @@ const FinanceCharts = () => {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-sm text-gray-500">
-                    Comissões dos Psicólogos -6% (Imposto)
+                    Comissões dos Psicólogos -12% (Imposto)
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold text-blue-600">
-                    R$ {(psychologistCommissionCompleted * 0.94).toFixed(2)}
+                    R$ {(psychologistCommissionCompleted * 0.88).toFixed(2)}
                   </div>
                 </CardContent>
               </Card>
@@ -2325,12 +2325,12 @@ const FinanceCharts = () => {
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-gray-500">
-                  Minha Comissão -6% (Imposto)
+                  Minha Comissão -12% (Imposto)
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold text-blue-600">
-                  R$ {(psychologistCommissionCompleted * 0.94).toFixed(2)}
+                  R$ {(psychologistCommissionCompleted * 0.88).toFixed(2)}
                 </div>
                 
               </CardContent>
@@ -2602,12 +2602,12 @@ const FinanceCharts = () => {
                   <p className="font-medium">R$ {totalRevenueCompleted.toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Comissão Total -6%:</p>
-                  <p className="font-medium">R$ {(psychologistCommissionCompleted * 0.94).toFixed(2)}</p>
+                  <p className="text-sm text-gray-500">Comissão Total -12%:</p>
+                  <p className="font-medium">R$ {(psychologistCommissionCompleted * 0.88).toFixed(2)}</p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Receita da Clínica -6%:</p>
-                  <p className="font-medium">R$ {(clinicRevenueCompleted * 0.94).toFixed(2)}</p>
+                  <p className="text-sm text-gray-500">Receita da Clínica -12%:</p>
+                  <p className="font-medium">R$ {(clinicRevenueCompleted * 0.88).toFixed(2)}</p>
                 </div>
               </div>
             </div>
@@ -2778,8 +2778,8 @@ const FinanceCharts = () => {
                   </p>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">Valor a Receber -6% (Imposto)</p>
-                  <p className="font-medium text-green-600">R$ {((selectedLotDetails.total_value * 0.94) * 0.5).toFixed(2)}</p>
+                  <p className="text-sm text-gray-500">Valor a Receber -12% (Imposto)</p>
+                  <p className="font-medium text-green-600">R$ {((selectedLotDetails.total_value * 0.88) * 0.5).toFixed(2)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Total de Consultas</p>
@@ -2801,7 +2801,7 @@ const FinanceCharts = () => {
                       <TableHead>Tipo</TableHead>
                       <TableHead>Valor Bruto</TableHead>
                       <TableHead>Comissão</TableHead>
-                      <TableHead>-6% (Imposto)</TableHead>
+                      <TableHead>-12% (Imposto)</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -2817,7 +2817,7 @@ const FinanceCharts = () => {
                         </TableCell>
                         <TableCell>R$ {appointment.value.toFixed(2)}</TableCell>
                         <TableCell>R$ {appointment.commission.toFixed(2)}</TableCell>
-                        <TableCell className="text-green-600 font-medium">R$ {(appointment.commission * 0.94).toFixed(2)}</TableCell>
+                        <TableCell className="text-green-600 font-medium">R$ {(appointment.commission * 0.88).toFixed(2)}</TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
