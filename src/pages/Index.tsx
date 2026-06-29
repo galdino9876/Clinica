@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import React, { useEffect, useState } from "react";
 import { X, AlertTriangle, Calendar, ClipboardList, User, Edit, BarChart3, FileText, FileCheck, FileX } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import PsychologistAvailabilityDashboard from "@/components/PsychologistAvailabilityDashboard";
+import PsychologistAvailabilityDashboard, { AvailabilitySlotClickPayload } from "@/components/PsychologistAvailabilityDashboard";
 import AppointmentForm from "@/components/AppointmentForm";
 import SolicitarGuiaModal from "@/components/SolicitarGuiaModal";
 import { format } from "date-fns";
@@ -668,6 +668,20 @@ const Index = () => {
     }
   };
 
+  const handleOpenAppointmentFromAvailability = (slot: AvailabilitySlotClickPayload) => {
+    const [year, month, day] = slot.date.split('-').map(Number);
+    const appointmentDate = new Date(year, month - 1, day);
+
+    setAppointmentFormData({
+      psychologistId: slot.psychologistId,
+      date: appointmentDate,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      appointmentType: slot.appointmentType,
+    });
+    setShowAppointmentForm(true);
+  };
+
   // Último horário por paciente: uma única requisição com todos os ids
   const fetchLastAppointmentTimes = async (patientIds: number[]) => {
     try {
@@ -1150,7 +1164,7 @@ const Index = () => {
                 </TabsContent>
                 
                 <TabsContent value="availability" className="mt-6">
-                  <PsychologistAvailabilityDashboard />
+                  <PsychologistAvailabilityDashboard onSlotClick={handleOpenAppointmentFromAvailability} />
                 </TabsContent>
 
                 {/* Aba Controle Solicitação GUIA - Apenas para Admin */}
@@ -1317,6 +1331,7 @@ const Index = () => {
         <Dialog open={showAppointmentForm} onOpenChange={setShowAppointmentForm}>
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <AppointmentForm
+              key={`${appointmentFormData.psychologistId}-${appointmentFormData.date?.toISOString()}-${appointmentFormData.startTime}-${appointmentFormData.endTime}`}
               selectedDate={appointmentFormData.date || new Date()}
               onClose={() => {
                 setShowAppointmentForm(false);

@@ -322,11 +322,21 @@ interface AvailabilitySlot {
   psychologist_name: string;
   day_of_week: number;
   day_name: string;
+  date: string;
   start_time: string;
   end_time: string;
   is_available: boolean;
   appointment_count: number;
   appointment_type: 'presential' | 'online';
+}
+
+export interface AvailabilitySlotClickPayload {
+  psychologistId: string;
+  psychologistName: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  appointmentType: 'presential' | 'online';
 }
 
 interface DayAvailability {
@@ -373,6 +383,7 @@ interface PsychologistAvailabilityDashboardProps {
   users?: any[];
   loading?: boolean;
   error?: string | null;
+  onSlotClick?: (slot: AvailabilitySlotClickPayload) => void;
 }
 
 const PsychologistAvailabilityDashboard: React.FC<PsychologistAvailabilityDashboardProps> = ({
@@ -381,6 +392,7 @@ const PsychologistAvailabilityDashboard: React.FC<PsychologistAvailabilityDashbo
   users = [],
   loading = false,
   error = null,
+  onSlotClick,
 }) => {
   const { user } = useAuth();
   const [selectedWeek, setSelectedWeek] = useState(0); // 0 = semana atual
@@ -490,6 +502,7 @@ const PsychologistAvailabilityDashboard: React.FC<PsychologistAvailabilityDashbo
               psychologist_name: psychologist.name,
               day_of_week: day.id,
               day_name: day.name,
+              date: dateString,
               start_time: slotStartTime,
               end_time: slotEndTime,
               is_available: !hasAppointment,
@@ -735,9 +748,36 @@ const PsychologistAvailabilityDashboard: React.FC<PsychologistAvailabilityDashbo
                     .map((slot, index) => (
                     <div
                       key={index}
+                      role={slot.is_available && onSlotClick ? 'button' : undefined}
+                      tabIndex={slot.is_available && onSlotClick ? 0 : undefined}
+                      onClick={() => {
+                        if (!slot.is_available || !onSlotClick) return;
+                        onSlotClick({
+                          psychologistId: String(slot.psychologist_id),
+                          psychologistName: slot.psychologist_name,
+                          date: slot.date,
+                          startTime: slot.start_time,
+                          endTime: slot.end_time,
+                          appointmentType: slot.appointment_type,
+                        });
+                      }}
+                      onKeyDown={(e) => {
+                        if (!slot.is_available || !onSlotClick) return;
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onSlotClick({
+                            psychologistId: String(slot.psychologist_id),
+                            psychologistName: slot.psychologist_name,
+                            date: slot.date,
+                            startTime: slot.start_time,
+                            endTime: slot.end_time,
+                            appointmentType: slot.appointment_type,
+                          });
+                        }
+                      }}
                       className={`w-full px-1.5 py-2.5 rounded-sm border transition-colors ${
                         slot.is_available
-                          ? 'bg-green-50 border-green-200 hover:bg-green-100'
+                          ? `bg-green-50 border-green-200 hover:bg-green-100${onSlotClick ? ' cursor-pointer hover:ring-1 hover:ring-green-300' : ''}`
                           : 'bg-orange-50 border-orange-200 hover:bg-orange-100'
                       }`}
                     >

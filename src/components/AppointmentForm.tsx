@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useForm, UseFormReturn } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@/components/ui/button";
@@ -63,8 +63,11 @@ const AppointmentForm = ({
   const [isLoading, setIsLoading] = useState<boolean>(true); // Estado de carregamento
   // Usar propInitialDate se fornecido, senão usar initialDate
   const dateToUse = propInitialDate || initialDate;
+  const normalizeAppointmentDate = (value: Date) =>
+    new Date(value.getFullYear(), value.getMonth(), value.getDate());
+  const initialNormalizedDate = propInitialDate ? normalizeAppointmentDate(propInitialDate) : undefined;
   const [selectedDate, setSelectedDate] = useState<Date>(dateToUse); // Estado local para a data
-  const [selectedDates, setSelectedDates] = useState<Date[]>(propInitialDate ? [propInitialDate] : []); // Estado para múltiplas datas
+  const [selectedDates, setSelectedDates] = useState<Date[]>(initialNormalizedDate ? [initialNormalizedDate] : []); // Estado para múltiplas datas
   
   // Novos estados para horários do psicólogo
   const [psychologistWorkingHours, setPsychologistWorkingHours] = useState<WorkingHour[]>([]);
@@ -88,6 +91,29 @@ const AppointmentForm = ({
   // Estado para toggle solicitar guia PMDF
   const [solicitarGuia, setSolicitarGuia] = useState(false);
 
+  const hasPrefilledSlotTimes = Boolean(initialStartTime && initialEndTime);
+  const normalizeTimeValue = (time: string) => time.substring(0, 5);
+  const prefilledStartTime = initialStartTime ? normalizeTimeValue(initialStartTime) : undefined;
+  const prefilledEndTime = initialEndTime ? normalizeTimeValue(initialEndTime) : undefined;
+
+  const isPrefilledAppointmentDate = (date: Date | null | undefined) =>
+    Boolean(
+      propInitialDate &&
+      date &&
+      normalizeAppointmentDate(date).getTime() === normalizeAppointmentDate(propInitialDate).getTime()
+    );
+
+  const shouldKeepPrefilledTimes = (date: Date | null | undefined) =>
+    Boolean(prefilledStartTime && prefilledEndTime && isPrefilledAppointmentDate(date));
+
+  const allowAutoTimeAdjustmentRef = useRef(!hasPrefilledSlotTimes);
+
+  const applyPrefilledTimes = () => {
+    if (!prefilledStartTime || !prefilledEndTime) return;
+    setValue("startTime", prefilledStartTime);
+    setValue("endTime", prefilledEndTime);
+  };
+
   const formMethods: UseFormReturn<AppointmentFormData> = useForm<AppointmentFormData>({
     resolver: zodResolver(appointmentSchema),
     defaultValues: {
@@ -95,8 +121,8 @@ const AppointmentForm = ({
       psychologistId: initialPsychologistId ? String(initialPsychologistId) : "",
       appointmentType: initialAppointmentType || "presential",
       roomId: "",
-      startTime: initialStartTime || "09:00",
-      endTime: initialEndTime || "10:00",
+      startTime: prefilledStartTime || "09:00",
+      endTime: prefilledEndTime || "10:00",
       value: 200.0,
       paymentMethod: initialPaymentMethod || "",
       insuranceType: initialInsuranceType || "",
@@ -161,6 +187,8 @@ const AppointmentForm = ({
 
   // Atualizar automaticamente o horário de término quando o horário de início mudar
   useEffect(() => {
+    if (!allowAutoTimeAdjustmentRef.current) return;
+
     if (startTime) {
       try {
         // Parsear o horário de início
@@ -231,11 +259,8 @@ const AppointmentForm = ({
         timeSlots.sort((a, b) => a.localeCompare(b));
         setAvailableTimeSlots(timeSlots);
         
-        // Preencher automaticamente os campos de horário apenas se não houver horários iniciais
-        const currentStartTime = watch("startTime");
-        const currentEndTime = watch("endTime");
-        
         // Só preencher automaticamente se não houver valores iniciais definidos
+        const currentStartTime = watch("startTime");
         if (!initialStartTime && !currentStartTime) {
           if (timeSlots.length >= 2) {
             setValue("startTime", timeSlots[0]);
@@ -256,6 +281,9 @@ const AppointmentForm = ({
               setValue("endTime", endTime);
             }
           }
+        } else if (prefilledStartTime && prefilledEndTime) {
+          setValue("startTime", prefilledStartTime);
+          setValue("endTime", prefilledEndTime);
         }
       } else {
         console.error('Erro ao buscar horários do psicólogo:', response.status);
@@ -364,71 +392,74 @@ const AppointmentForm = ({
   // Monitorar mudanças na data selecionada para atualizar os horários
   useEffect(() => {
     if (selectedPsychologistId && psychologistWorkingHours.length > 0 && selectedDate) {
-      // Verificar se a nova data selecionada é um dia disponível para o psicólogo
       const selectedDayOfWeek = selectedDate.getDay();
       const isSelectedDayAvailable = psychologistWorkingHours.some(wh => wh.day_of_week === selectedDayOfWeek);
+      const dayWorkingHours = isSelectedDayAvailable
+        ? psychologistWorkingHours.filter(wh => wh.day_of_week === selectedDayOfWeek)
+        : [];
       
-      if (!isSelectedDayAvailable) {
-        // Se a data selecionada não for disponível, não definir automaticamente
-        // Deixar o usuário escolher uma data válida
-        return;
-      } else {
-        // A data selecionada é disponível, usar ela normalmente
-        const dayWorkingHours = psychologistWorkingHours.filter(wh => wh.day_of_week === selectedDayOfWeek);
+      const timeSlots: string[] = [];
+      dayWorkingHours.forEach(wh => {
+        const startHour = parseInt(wh.start_time.split(':')[0]);
+        const endHour = parseInt(wh.end_time.split(':')[0]);
         
-        // Regenerar horários quando a data mudar
-        const timeSlots: string[] = [];
-        dayWorkingHours.forEach(wh => {
-          const startHour = parseInt(wh.start_time.split(':')[0]);
-          const endHour = parseInt(wh.end_time.split(':')[0]);
+        for (let hour = startHour; hour <= endHour; hour++) {
+          const timeSlotFull = `${hour.toString().padStart(2, '0')}:00`;
+          if (!timeSlots.includes(timeSlotFull)) {
+            timeSlots.push(timeSlotFull);
+          }
           
-          // Gerar horários de 30 em 30 minutos dentro do período de trabalho
-          for (let hour = startHour; hour <= endHour; hour++) {
-            // Horário cheio (ex: 10:00)
-            const timeSlotFull = `${hour.toString().padStart(2, '0')}:00`;
-            if (!timeSlots.includes(timeSlotFull)) {
-              timeSlots.push(timeSlotFull);
-            }
-            
-            // Horário de meia hora (ex: 10:30) - exceto para o último horário
-            if (hour < endHour) {
-              const timeSlotHalf = `${hour.toString().padStart(2, '0')}:30`;
-              if (!timeSlots.includes(timeSlotHalf)) {
-                timeSlots.push(timeSlotHalf);
-              }
+          if (hour < endHour) {
+            const timeSlotHalf = `${hour.toString().padStart(2, '0')}:30`;
+            if (!timeSlots.includes(timeSlotHalf)) {
+              timeSlots.push(timeSlotHalf);
             }
           }
-        });
-        
-        // Ordenar horários
-        timeSlots.sort((a, b) => a.localeCompare(b));
-        setAvailableTimeSlots(timeSlots);
-        
-        // Resetar horários selecionados quando a data mudar
-        if (timeSlots.length >= 2) {
-          setValue("startTime", timeSlots[0]);
-          setValue("endTime", timeSlots[1]);
-        } else if (timeSlots.length === 1) {
-          setValue("startTime", timeSlots[0]);
-          const startHour = parseInt(timeSlots[0].split(':')[0]);
-          const startMinute = timeSlots[0].includes(':30') ? 30 : 0;
-          
-          if (startMinute === 0) {
-            const endTime = `${startHour.toString().padStart(2, '0')}:30`;
-            setValue("endTime", endTime);
-          } else {
-            const endHour = startHour + 1;
-            const endTime = `${endHour.toString().padStart(2, '0')}:00`;
-            setValue("endTime", endTime);
-          }
-        } else {
-          // Se não há horários disponíveis para este dia
-          setValue("startTime", "09:00");
-          setValue("endTime", "10:00");
         }
+      });
+      
+      timeSlots.sort((a, b) => a.localeCompare(b));
+      setAvailableTimeSlots(timeSlots);
+
+      if (shouldKeepPrefilledTimes(selectedDate)) {
+        applyPrefilledTimes();
+        return;
+      }
+
+      allowAutoTimeAdjustmentRef.current = true;
+
+      if (!isSelectedDayAvailable) {
+        return;
+      }
+
+      if (timeSlots.length >= 2) {
+        setValue("startTime", timeSlots[0]);
+        setValue("endTime", timeSlots[1]);
+      } else if (timeSlots.length === 1) {
+        setValue("startTime", timeSlots[0]);
+        const startHour = parseInt(timeSlots[0].split(':')[0]);
+        const startMinute = timeSlots[0].includes(':30') ? 30 : 0;
+        
+        if (startMinute === 0) {
+          const endTime = `${startHour.toString().padStart(2, '0')}:30`;
+          setValue("endTime", endTime);
+        } else {
+          const endHour = startHour + 1;
+          const endTime = `${endHour.toString().padStart(2, '0')}:00`;
+          setValue("endTime", endTime);
+        }
+      } else {
+        setValue("startTime", "09:00");
+        setValue("endTime", "10:00");
       }
     }
-  }, [selectedDate, psychologistWorkingHours, selectedPsychologistId, setValue]);
+  }, [selectedDate, psychologistWorkingHours, selectedPsychologistId, setValue, prefilledStartTime, prefilledEndTime, propInitialDate]);
+
+  useEffect(() => {
+    if (shouldKeepPrefilledTimes(selectedDate) && psychologistWorkingHours.length > 0) {
+      applyPrefilledTimes();
+    }
+  }, [psychologistWorkingHours, selectedDate, propInitialDate, prefilledStartTime, prefilledEndTime, setValue]);
 
   // Adicionar useEffect para sincronizar selectedDate com selectedDates
   useEffect(() => {
@@ -446,8 +477,9 @@ const AppointmentForm = ({
   useEffect(() => {
     // Se houver data inicial fornecida via prop, usar ela
     if (propInitialDate) {
-      setSelectedDates([propInitialDate]);
-      setSelectedDate(propInitialDate);
+      const normalizedDate = normalizeAppointmentDate(propInitialDate);
+      setSelectedDates([normalizedDate]);
+      setSelectedDate(normalizedDate);
     } else {
       // Não inicializar com a data atual, deixar vazio para o usuário selecionar
       setSelectedDates([]);
@@ -548,10 +580,10 @@ const AppointmentForm = ({
           }
         }
         if (initialStartTime) {
-          setValue("startTime", initialStartTime);
+          setValue("startTime", prefilledStartTime!);
         }
         if (initialEndTime) {
-          setValue("endTime", initialEndTime);
+          setValue("endTime", prefilledEndTime!);
         }
         if (initialPaymentMethod) {
           // Se for plano de saúde, precisamos encontrar o ID do plano
@@ -1025,7 +1057,22 @@ const AppointmentForm = ({
             date={selectedDate}
             onDateChange={(newDate: Date) => setSelectedDate(newDate)} // Atualiza o estado da data
             selectedDates={selectedDates}
-            onDatesChange={(dates: Date[]) => setSelectedDates(dates)}
+            onDatesChange={(dates: Date[]) => {
+              setSelectedDates(dates);
+              if (dates.length > 0) {
+                setSelectedDate(dates[0]);
+              }
+              if (
+                propInitialDate &&
+                !dates.some(
+                  (d) =>
+                    normalizeAppointmentDate(d).getTime() ===
+                    normalizeAppointmentDate(propInitialDate).getTime()
+                )
+              ) {
+                allowAutoTimeAdjustmentRef.current = true;
+              }
+            }}
             psychologistId={watch("psychologistId") || ""}
             disabled={isLoading}
           />
@@ -1060,7 +1107,10 @@ const AppointmentForm = ({
         <div className="space-y-2">
           <TimePicker
             value={watch("startTime") || ""}
-            onChange={(value) => setValue("startTime", value)}
+            onChange={(value) => {
+              allowAutoTimeAdjustmentRef.current = true;
+              setValue("startTime", value);
+            }}
             label="Horário de Início"
             placeholder="Selecione o horário"
             required

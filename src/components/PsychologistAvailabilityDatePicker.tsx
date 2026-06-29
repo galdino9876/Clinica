@@ -36,6 +36,50 @@ const PsychologistAvailabilityDatePicker = ({
   const [isLoadingHours, setIsLoadingHours] = useState(false);
   const [hasLoadedHours, setHasLoadedHours] = useState(false);
   const [currentPsychologistId, setCurrentPsychologistId] = useState<string | undefined>(undefined);
+  const [calendarMonth, setCalendarMonth] = useState<Date>(() => {
+    if (selectedDates.length > 0) return selectedDates[0];
+    if (date) return date;
+    return new Date();
+  });
+
+  const normalizeDate = (value: Date) =>
+    new Date(value.getFullYear(), value.getMonth(), value.getDate());
+
+  useEffect(() => {
+    if (selectedDates.length > 0) {
+      setCalendarMonth(normalizeDate(selectedDates[0]));
+    } else if (date) {
+      setCalendarMonth(normalizeDate(date));
+    }
+  }, [selectedDates, date]);
+
+  // Função para buscar horários de trabalho do psicólogo
+  const fetchWorkingHours = async () => {
+    if (!psychologistId) {
+      setWorkingHours([]);
+      return;
+    }
+
+    setIsLoadingHours(true);
+    try {
+      const response = await fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/working_hours/${psychologistId}`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        const fetchedWorkingHours = Array.isArray(data) ? data : data.data || [];
+        setWorkingHours(fetchedWorkingHours);
+        setHasLoadedHours(true);
+      } else {
+        console.error('Erro ao buscar horários de trabalho:', response.status);
+        setWorkingHours([]);
+      }
+    } catch (error) {
+      console.error('Erro ao buscar horários de trabalho:', error);
+      setWorkingHours([]);
+    } finally {
+      setIsLoadingHours(false);
+    }
+  };
 
   // Monitorar mudanças no psychologistId e limpar dados anteriores
   useEffect(() => {
@@ -53,59 +97,28 @@ const PsychologistAvailabilityDatePicker = ({
     }
   }, [psychologistId, currentPsychologistId]);
 
-  // Função para buscar horários de trabalho do psicólogo
-  const fetchWorkingHours = async () => {
-    if (!psychologistId) {
+  // Carregar horários assim que o psicólogo for definido (ex.: pré-preenchimento via disponibilidade)
+  useEffect(() => {
+    if (psychologistId) {
+      fetchWorkingHours();
+    } else {
       setWorkingHours([]);
-      return;
+      setHasLoadedHours(false);
     }
-
-    setIsLoadingHours(true);
-    try {
-      // Usar o mesmo webhook do calendário principal
-      const response = await fetch(`https://webhook.essenciasaudeintegrada.com.br/webhook/d52c9494-5de9-4444-877e-9e8d01662962/working_hours/${psychologistId}`);
-      
-      if (response.ok) {
-        const data = await response.json();
-        const fetchedWorkingHours = Array.isArray(data) ? data : data.data || [];
-        setWorkingHours(fetchedWorkingHours);
-        setHasLoadedHours(true);
-        
-        // Não definir data automaticamente - deixar o usuário escolher
-        // if (!date) {
-        //   const today = new Date();
-        //   for (let i = 0; i < 30; i++) {
-        //     const checkDate = new Date(today);
-        //     checkDate.setDate(today.getDate() + i);
-        //     
-        //     const dayOfWeek = checkDate.getDay();
-        //     const isWorkingDay = fetchedWorkingHours.some(
-        //       (wh) => wh.day_of_week === dayOfWeek
-        //     );
-        //     
-        //     if (isWorkingDay) {
-        //       onDateChange(checkDate);
-        //       break;
-        //     }
-        //   }
-        // }
-      } else {
-        console.error('Erro ao buscar horários de trabalho:', response.status);
-        setWorkingHours([]);
-      }
-    } catch (error) {
-      console.error('Erro ao buscar horários de trabalho:', error);
-      setWorkingHours([]);
-    } finally {
-      setIsLoadingHours(false);
-    }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [psychologistId]);
 
   // Função para abrir o calendário e buscar dados se necessário
   const handleOpenChange = (newOpen: boolean) => {
-    if (newOpen && psychologistId && !hasLoadedHours) {
-      // Primeira vez abrindo com este psicólogo, buscar dados
-      fetchWorkingHours();
+    if (newOpen) {
+      if (selectedDates.length > 0) {
+        setCalendarMonth(normalizeDate(selectedDates[0]));
+      } else if (date) {
+        setCalendarMonth(normalizeDate(date));
+      }
+      if (psychologistId && !hasLoadedHours) {
+        fetchWorkingHours();
+      }
     }
     setOpen(newOpen);
   };
@@ -186,12 +199,12 @@ const PsychologistAvailabilityDatePicker = ({
             <span>Selecione um psicólogo primeiro</span>
           ) : isLoadingHours ? (
             <span>Carregando disponibilidade...</span>
+          ) : selectedDates.length > 0 ? (
+            <span>{selectedDates.length} data(s) selecionada(s)</span>
           ) : !hasLoadedHours ? (
             <span>Clique para ver datas disponíveis</span>
           ) : workingHours.length === 0 ? (
             <span>Psicólogo sem horários configurados</span>
-          ) : selectedDates.length > 0 ? (
-            <span>{selectedDates.length} data(s) selecionada(s)</span>
           ) : (
             <span>Selecione a data</span>
           )}
@@ -213,10 +226,16 @@ const PsychologistAvailabilityDatePicker = ({
             </div> */}
             <Calendar
               mode="multiple"
-              selected={selectedDates}
+              selected={selectedDates.map(normalizeDate)}
+              month={calendarMonth}
+              onMonthChange={setCalendarMonth}
               onSelect={(dates) => {
                 if (dates) {
-                  onDatesChange(dates);
+                  const normalizedDates = dates.map(normalizeDate);
+                  onDatesChange(normalizedDates);
+                  if (normalizedDates.length > 0) {
+                    onDateChange(normalizedDates[0]);
+                  }
                 }
               }}
               disabled={disabledDays}
