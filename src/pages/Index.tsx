@@ -1150,17 +1150,7 @@ const Index = () => {
                 </TabsContent>
                 
                 <TabsContent value="availability" className="mt-6">
-                  <PsychologistAvailabilityDashboard 
-                    appointments={[]}
-                    workingHours={[]}
-                    users={[]}
-                    loading={false}
-                    error={null}
-                    onRefresh={() => {
-                      // Recarregar dados se necessário
-                      window.location.reload();
-                    }}
-                  />
+                  <PsychologistAvailabilityDashboard />
                 </TabsContent>
 
                 {/* Aba Controle Solicitação GUIA - Apenas para Admin */}

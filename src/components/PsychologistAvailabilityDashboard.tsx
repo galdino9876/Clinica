@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from "@/context/AuthContext";
 import { isPsychologist } from "@/utils/roleUtils";
+import { toYearMonth } from "@/utils/dateUtils";
 
 // Tipos para os dados dos webhooks
 interface Psychologist {
@@ -48,20 +49,30 @@ const useAppointmentData = (user: any) => {
     rooms: [] as any[]
   });
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchRealData = async () => {
-    setLoading(true);
+  const fetchRealData = async (isRefresh = false) => {
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     setError(null);
     
     try {
       const baseUrl = 'https://webhook.essenciasaudeintegrada.com.br/webhook';
+      const dateFilter = toYearMonth(new Date());
       
       // Buscar dados em paralelo
       const [usersRes, workingHoursRes, appointmentsRes] = await Promise.all([
         fetch(`${baseUrl}/users`),
         fetch(`${baseUrl}/working_hours`),
-        fetch(`${baseUrl}/appointmens`)
+        fetch(`${baseUrl}/appointmens`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ date: dateFilter }),
+        })
       ]);
 
       if (!usersRes.ok || !workingHoursRes.ok || !appointmentsRes.ok) {
@@ -76,9 +87,12 @@ const useAppointmentData = (user: any) => {
 
       // Filtrar apenas psicólogos
       const psychologists = usersData.filter((user: any) => user.role === 'psychologist');
+      const appointments = Array.isArray(appointmentsData)
+        ? appointmentsData
+        : (appointmentsData?.data ?? []);
 
       setData({
-        appointments: appointmentsData || [],
+        appointments: appointments || [],
         workingHours: workingHoursData || [],
         patients: [],
         users: psychologists,
@@ -89,7 +103,11 @@ const useAppointmentData = (user: any) => {
       console.error('Erro ao buscar dados:', err);
       setError('Erro ao carregar dados da API');
     } finally {
-      setLoading(false);
+      if (isRefresh) {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
     }
   };
 
@@ -288,15 +306,15 @@ const useAppointmentData = (user: any) => {
   };
 
   const refetch = async () => {
-    await fetchRealData();
+    await fetchRealData(true);
   };
 
   useEffect(() => {
     // Carregar dados iniciais da API
-    fetchRealData();
+    fetchRealData(false);
   }, [user]);
 
-  return { ...data, loading, error, refetch };
+  return { ...data, loading, refreshing, error, refetch };
 };
 
 interface AvailabilitySlot {
@@ -314,6 +332,8 @@ interface AvailabilitySlot {
 interface DayAvailability {
   day_of_week: number;
   day_name: string;
+  day_short: string;
+  day_date: string;
   total_slots: number;
   available_slots: number;
   occupied_slots: number;
@@ -329,13 +349,30 @@ const DAYS_OF_WEEK = [
   { id: 6, name: 'Sábado', short: 'Sáb' }
 ];
 
+const getSelectedWeekStart = (selectedWeek: number): Date => {
+  const today = new Date();
+  const weekStart = new Date(today);
+  weekStart.setDate(today.getDate() - today.getDay() + 1 + (selectedWeek * 7));
+  weekStart.setHours(0, 0, 0, 0);
+  return weekStart;
+};
+
+const formatDisplayDate = (date: Date): string =>
+  date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+const getShortPsychologistName = (fullName: string | null | undefined): string => {
+  if (!fullName) return 'N/A';
+  const names = fullName.trim().split(/\s+/);
+  if (names.length <= 1) return names[0];
+  return `${names[0]} ${names[names.length - 1]}`;
+};
+
 interface PsychologistAvailabilityDashboardProps {
   appointments?: any[];
   workingHours?: any[];
   users?: any[];
   loading?: boolean;
   error?: string | null;
-  onRefresh?: () => void;
 }
 
 const PsychologistAvailabilityDashboard: React.FC<PsychologistAvailabilityDashboardProps> = ({
@@ -344,14 +381,13 @@ const PsychologistAvailabilityDashboard: React.FC<PsychologistAvailabilityDashbo
   users = [],
   loading = false,
   error = null,
-  onRefresh
 }) => {
   const { user } = useAuth();
   const [selectedWeek, setSelectedWeek] = useState(0); // 0 = semana atual
   const [showOnlyAvailable, setShowOnlyAvailable] = useState(true); // Mostrar apenas horários livres por padrão
 
   // Se não receber dados como props, usar dados mock
-  const { appointments: mockAppointments, workingHours: mockWorkingHours, users: mockUsers, loading: mockLoading, error: mockError, refetch } = useAppointmentData(user);
+  const { appointments: mockAppointments, workingHours: mockWorkingHours, users: mockUsers, loading: mockLoading, refreshing, error: mockError, refetch } = useAppointmentData(user);
   
   // Usar dados recebidos como props ou dados mock
   const finalAppointments = appointments.length > 0 ? appointments : mockAppointments;
@@ -367,23 +403,28 @@ const PsychologistAvailabilityDashboard: React.FC<PsychologistAvailabilityDashbo
       : [];
   }, [finalUsers]);
 
+  const selectedWeekRange = useMemo(() => {
+    const weekStart = getSelectedWeekStart(selectedWeek);
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 5);
+
+    return {
+      label: `${formatDisplayDate(weekStart)} a ${formatDisplayDate(weekEnd)}`,
+      isCurrentWeek: selectedWeek === 0,
+    };
+  }, [selectedWeek]);
+
   // Função para calcular horários disponíveis
   const calculateAvailability = useMemo(() => {
     if (!psychologists.length || !finalWorkingHours.length) return [];
 
     const availability: DayAvailability[] = [];
 
-    // Calcular a semana atual baseada no selectedWeek
-    const today = new Date();
-    const currentWeekStart = new Date(today);
-    currentWeekStart.setDate(today.getDate() - today.getDay() + 1 + (selectedWeek * 7)); // Segunda-feira da semana
-    currentWeekStart.setHours(0, 0, 0, 0);
+    const currentWeekStart = getSelectedWeekStart(selectedWeek);
 
     // Para cada dia da semana
     DAYS_OF_WEEK.forEach(day => {
       const dayWorkingHours = finalWorkingHours.filter(wh => wh.day_of_week === day.id);
-      
-      if (dayWorkingHours.length === 0) return;
 
       // Calcular a data específica para este dia da semana
       const specificDate = new Date(currentWeekStart);
@@ -393,11 +434,18 @@ const PsychologistAvailabilityDashboard: React.FC<PsychologistAvailabilityDashbo
       const dayAvailability: DayAvailability = {
         day_of_week: day.id,
         day_name: day.name,
+        day_short: day.short,
+        day_date: formatDisplayDate(specificDate),
         total_slots: 0,
         available_slots: 0,
         occupied_slots: 0,
         psychologists: []
       };
+
+      if (dayWorkingHours.length === 0) {
+        availability.push(dayAvailability);
+        return;
+      }
 
       // Para cada psicólogo
       psychologists.forEach(psychologist => {
@@ -459,9 +507,13 @@ const PsychologistAvailabilityDashboard: React.FC<PsychologistAvailabilityDashbo
         });
       });
 
-      if (dayAvailability.total_slots > 0) {
-        availability.push(dayAvailability);
-      }
+      dayAvailability.psychologists.sort((a, b) => {
+        const byTime = a.start_time.localeCompare(b.start_time);
+        if (byTime !== 0) return byTime;
+        return a.psychologist_name.localeCompare(b.psychologist_name);
+      });
+
+      availability.push(dayAvailability);
     });
 
     // Ordenar por dia da semana (Segunda a Sábado)
@@ -509,7 +561,7 @@ const PsychologistAvailabilityDashboard: React.FC<PsychologistAvailabilityDashbo
           <p className="font-medium">Erro ao carregar dados</p>
           <p className="text-sm">{finalError}</p>
         </div>
-        <Button onClick={onRefresh || refetch} variant="outline">
+        <Button onClick={refetch} variant="outline">
           Tentar Novamente
         </Button>
       </div>
@@ -596,6 +648,12 @@ const PsychologistAvailabilityDashboard: React.FC<PsychologistAvailabilityDashbo
             <h3 className="text-lg font-semibold text-gray-900">
               Disponibilidade dos Psicólogos
             </h3>
+            <p className="text-sm font-medium text-blue-700">
+              {selectedWeekRange.isCurrentWeek && (
+                <span className="text-blue-600">Semana atual · </span>
+              )}
+              {selectedWeekRange.label}
+            </p>
             <p className="text-sm text-gray-600">
               {psychologists.length} psicólogos cadastrados
             </p>
@@ -629,78 +687,78 @@ const PsychologistAvailabilityDashboard: React.FC<PsychologistAvailabilityDashbo
           <Button
             variant="outline"
             size="sm"
-            onClick={onRefresh || refetch}
+            onClick={refetch}
+            disabled={refreshing}
             className="flex items-center space-x-2"
           >
-            <Calendar className="h-4 w-4" />
-            <span>Atualizar</span>
+            {refreshing ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Calendar className="h-4 w-4" />
+            )}
+            <span>{refreshing ? 'Atualizando...' : 'Atualizar'}</span>
           </Button>
         </div>
       </div>
 
       {/* Grid de disponibilidade por dia */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-1.5 lg:gap-1">
         {calculateAvailability.map((day) => (
-          <Card key={day.day_of_week} className="hover:shadow-lg transition-shadow">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Calendar className="h-5 w-5 text-blue-600" />
-                  <span className="text-lg">{day.day_name}</span>
+          <Card key={day.day_of_week} className="hover:shadow-md transition-shadow">
+            <CardHeader className="px-1.5 py-3">
+              <CardTitle className="flex flex-col gap-1.5">
+                <div className="flex items-center space-x-1.5 min-w-0">
+                  <Calendar className="h-5 w-5 text-blue-600 shrink-0" />
+                  <span className="text-base font-semibold truncate leading-tight">
+                    {day.day_short} {day.day_date}
+                  </span>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Badge variant="outline" className="text-green-600 border-green-200">
+                <div className="flex flex-wrap gap-1.5">
+                  <Badge variant="outline" className="text-xs px-2 py-0.5 text-green-600 border-green-200">
                     {day.available_slots} livres
                   </Badge>
-                  <Badge variant="outline" className="text-orange-600 border-orange-200">
-                    {day.occupied_slots} ocupados
+                  <Badge variant="outline" className="text-xs px-2 py-0.5 text-orange-600 border-orange-200">
+                    {day.occupied_slots} ocup.
                   </Badge>
                 </div>
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent className="px-0 pb-2 pt-0 max-h-96 overflow-y-auto">
               {day.psychologists.length === 0 ? (
-                <p className="text-gray-500 text-center py-4">
-                  Nenhum psicólogo disponível neste dia
+                <p className="text-gray-500 text-center py-4 text-sm px-1">
+                  Sem horários
                 </p>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-1.5 w-full">
                   {day.psychologists
                     .filter(slot => showOnlyAvailable ? slot.is_available : true)
                     .map((slot, index) => (
                     <div
                       key={index}
-                      className={`p-3 rounded-lg border transition-colors ${
+                      className={`w-full px-1.5 py-2.5 rounded-sm border transition-colors ${
                         slot.is_available
                           ? 'bg-green-50 border-green-200 hover:bg-green-100'
                           : 'bg-orange-50 border-orange-200 hover:bg-orange-100'
                       }`}
                     >
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-3">
-                          <div className="p-1 bg-white rounded-full">
-                            <User className="h-4 w-4 text-gray-600" />
-                          </div>
-                          <div>
-                            <p className="font-medium text-sm text-gray-900">
-                              {slot.psychologist_name}
-                            </p>
-                            <p className="text-xs text-gray-600">
-                              {slot.start_time} - {slot.end_time}
-                            </p>
-                            <p className="text-xs text-blue-600 font-medium">
-                              {slot.appointment_type === 'online' ? '🌐 Online' : '🏢 Presencial'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center space-x-2">
+                      <div className="space-y-1.5">
+                        <p className="font-medium text-sm text-gray-900 truncate" title={slot.psychologist_name}>
+                          {getShortPsychologistName(slot.psychologist_name)}
+                        </p>
+                        <p className="text-xs text-gray-600">
+                          {slot.start_time} - {slot.end_time}
+                        </p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-xs text-blue-600 font-medium truncate">
+                            {slot.appointment_type === 'online' ? '🌐 Online' : '🏢 Presencial'}
+                          </p>
                           {slot.is_available ? (
-                            <Badge variant="outline" className="text-green-600 border-green-200 bg-green-100">
-                              Disponível
+                            <Badge variant="outline" className="text-xs px-2 py-0.5 text-green-600 border-green-200 bg-green-100 shrink-0">
+                              Livre
                             </Badge>
                           ) : (
-                            <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-100">
-                              {slot.appointment_count} agendamento(s)
+                            <Badge variant="outline" className="text-xs px-2 py-0.5 text-orange-600 border-orange-200 bg-orange-100 shrink-0">
+                              {slot.appointment_count}
                             </Badge>
                           )}
                         </div>
@@ -708,8 +766,8 @@ const PsychologistAvailabilityDashboard: React.FC<PsychologistAvailabilityDashbo
                     </div>
                   ))}
                   {day.psychologists.filter(slot => showOnlyAvailable ? slot.is_available : true).length === 0 && (
-                    <div className="text-center py-4 text-gray-500">
-                      {showOnlyAvailable ? 'Nenhum horário livre disponível' : 'Nenhum horário encontrado'}
+                    <div className="text-center py-3 text-gray-500 text-xs">
+                      {showOnlyAvailable ? 'Nenhum horário livre' : 'Nenhum horário'}
                     </div>
                   )}
                 </div>
@@ -748,7 +806,7 @@ const PsychologistAvailabilityDashboard: React.FC<PsychologistAvailabilityDashbo
                       <User className="h-4 w-4 text-blue-600" />
                     </div>
                     <div>
-                      <p className="font-medium text-gray-900">{psychologist.name}</p>
+                      <p className="font-medium text-gray-900">{getShortPsychologistName(psychologist.name)}</p>
                       <p className="text-sm text-gray-600">ID: {psychologist.id}</p>
                     </div>
                   </div>
