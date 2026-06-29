@@ -273,19 +273,19 @@ const SolicitarGuiaModal: React.FC<SolicitarGuiaModalProps> = ({
                     <SelectItem value="50000470" className="text-base py-3">
                       <div className="flex items-center gap-2">
                         <Hash className="h-4 w-4" />
-                        <span>50000470</span>
+                        <span>50000470 - Continuado</span>
                       </div>
                     </SelectItem>
                     <SelectItem value="50000462" className="text-base py-3">
                       <div className="flex items-center gap-2">
                         <Hash className="h-4 w-4" />
-                        <span>50000462</span>
+                        <span>50000462- Avaliação</span>
                       </div>
                     </SelectItem>
                     <SelectItem value="50000491" className="text-base py-3">
                       <div className="flex items-center gap-2">
                         <Hash className="h-4 w-4" />
-                        <span>50000491</span>
+                        <span>50000491- Criança</span>
                       </div>
                     </SelectItem>
                   </SelectContent>

@@ -1343,9 +1343,9 @@ const AppointmentForm = ({
                     }}
                   >
                     <option value="">Selecione o código</option>
-                    <option value="50000470">50000470</option>
-                    <option value="50000462">50000462</option>
-                    <option value="50000491">50000491</option>
+                    <option value="50000470">50000470 - Continuado</option>
+                    <option value="50000462">50000462 - Avaliação</option>
+                    <option value="50000491">50000491 - Criança</option>
                   </select>
                   {errors.codSessao && (
                     <p className="text-red-500 text-xs mt-1">{errors.codSessao.message}</p>

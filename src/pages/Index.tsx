@@ -81,6 +81,24 @@ const getDayOfWeekNumber = (dateString: string): number => {
   }
 };
 
+const normalizeAlertStatus = (status?: string) => (status || "").trim().toLowerCase();
+
+const hasAgendamento = (status?: string) => {
+  const normalized = normalizeAlertStatus(status);
+  return normalized === "ok" || normalized === "tem agend." || normalized === "tem agend";
+};
+
+const getAgendamentoLabel = (status?: string) =>
+  hasAgendamento(status) ? "tem agend." : "falta agend.";
+
+const hasGuia = (status?: string) => {
+  const normalized = normalizeAlertStatus(status);
+  return normalized === "ok" || normalized === "tem guia." || normalized === "tem guia";
+};
+
+const getGuiaLabel = (status?: string) =>
+  hasGuia(status) ? "tem guia." : "falta solic guia.";
+
 // Função para agrupar alertas por dia da semana da data mais próxima
 const groupAlertsByDay = (alerts: AlertWebhookItem[]): Array<{ day: string; dayNumber: number; alerts: AlertWebhookItem[] }> => {
   const hoje = new Date();
@@ -255,8 +273,8 @@ const Index = () => {
 
       const datesWithoutGuide = alert.datas
         .filter(dataItem => 
-          dataItem.agendamento === "ok" && 
-          (dataItem.guia !== "ok" && dataItem.guia !== "OK")
+          hasAgendamento(dataItem.agendamento) && 
+          !hasGuia(dataItem.guia)
         )
         .map(dataItem => dataItem.data);
 
@@ -905,7 +923,7 @@ const Index = () => {
                                 }
                                 
                                 // Verificar se todas as guias estão "ok"
-                                const todasGuiasOk = alert.datas && alert.datas.every(dataItem => dataItem.guia === "ok");
+                                const todasGuiasOk = alert.datas && alert.datas.every(dataItem => hasGuia(dataItem.guia));
                                 
                                 // Se todas as guias estão ok, não mostrar
                                 if (todasGuiasOk) {
@@ -1071,18 +1089,20 @@ const Index = () => {
                                           const isHoje = dataObj.getTime() === hojeCompare.getTime();
                                           
                                           // Determinar cores para agendamento
-                                          const agendamentoColor = dataItem.agendamento === "ok" ? "bg-green-200 text-green-900" : 
+                                          const agendamentoColor = hasAgendamento(dataItem.agendamento) ? "bg-green-200 text-green-900" : 
                                                                  dataItem.agendamento === "warning" ? "bg-yellow-200 text-yellow-900" :
                                                                  dataItem.agendamento === "error" ? "bg-red-200 text-red-900" :
-                                                                 "bg-blue-200 text-blue-900";
+                                                                 "bg-red-200 text-red-900";
                                           
                                           // Verificar se é paciente Particular (não mostrar guias)
                                           const isParticular = alert.insurance_type === "Particular";
                                           
                                           // Determinar cores para guia
-                                          const guiaColor = dataItem.guia === "ok" ? "bg-green-200 text-green-900" : 
-                                                           dataItem.guia === "falta" ? "bg-red-200 text-red-900" :
-                                                           "bg-blue-200 text-blue-900";
+                                          const guiaColor = hasGuia(dataItem.guia) ? "bg-green-200 text-green-900" : 
+                                                           "bg-red-200 text-red-900";
+                                          
+                                          const agendamentoLabel = getAgendamentoLabel(dataItem.agendamento);
+                                          const guiaLabel = getGuiaLabel(dataItem.guia);
                                           
                                           return (
                                             <div key={idx} className={`flex flex-col sm:flex-row sm:items-center gap-2 p-2 rounded-md ${isHoje ? 'ring-2 ring-blue-500 ring-offset-1 bg-blue-50/50' : 'bg-gray-50/50'}`}>
@@ -1091,7 +1111,7 @@ const Index = () => {
                                                 {isHoje && <span className="ml-1 text-blue-600">●</span>}
                                               </span>
                                               <div className="flex flex-wrap gap-1.5 sm:gap-1">
-                                                {dataItem.agendamento === "falta" ? (
+                                                {!hasAgendamento(dataItem.agendamento) ? (
                                                   <span 
                                                     className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${agendamentoColor} cursor-pointer hover:opacity-80 transition-opacity`}
                                                     onClick={(e) => {
@@ -1100,16 +1120,16 @@ const Index = () => {
                                                     }}
                                                     title="Clique para criar agendamento"
                                                   >
-                                                    📅 falta agendamento
+                                                    📅 {agendamentoLabel}
                                                   </span>
                                                 ) : (
                                                   <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${agendamentoColor}`}>
-                                                    📅 {dataItem.agendamento}
+                                                    📅 {agendamentoLabel}
                                                   </span>
                                                 )}
                                                 {!isParticular && (
                                                 <span className={`px-2 py-1 rounded text-xs font-medium whitespace-nowrap ${guiaColor}`}>
-                                                  📋 {dataItem.guia === "falta" ? "falta guia" : dataItem.guia}
+                                                  📋 {guiaLabel}
                                                 </span>
                                                 )}
                                                 {!isParticular && (
